@@ -1,0 +1,3714 @@
+%Exp: Bars
+v := RWView new.
+shape := RWCube white height: [ :cls | cls numberOfMethods sqrt + 0.1 ].
+elements := shape elementsOn: Collection withAllSubclasses.
+
+v addAll: elements.
+
+RWXZGridLayout on: elements.
+RWAlign elements: elements abovePoint: WMVector3F zero.
+v run.
+
+
+{
+	"elements" : [
+		{
+			"position" : [
+				0.0,
+				0.0,
+				5.0
+			],
+			"id" : "<genid:0>",
+			"type" : "camera"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					6.099999904632568,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				3.049999952316284,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:1>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					14.6602201461792,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				7.3301100730896,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:3>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					10.100000381469727,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				5.050000190734863,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:4>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.756854057312012,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				2.878427028656006,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:5>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.89583158493042,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				2.44791579246521,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:6>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.572135925292969,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				2.2860679626464844,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:7>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.458899021148682,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				2.229449510574341,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:8>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					7.380109786987305,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				3.6900548934936523,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:9>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					9.319544792175293,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				4.6597723960876465,
+				10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:10>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					8.817797660827637,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				4.408898830413818,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:11>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.223105430603027,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				2.1115527153015137,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:12>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.7904157638549805,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				2.3952078819274902,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:13>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.3360679149627686,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				1.1680339574813843,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:14>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.262277603149414,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				1.631138801574707,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:15>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.099999904632568,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				2.549999952316284,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:16>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.099999904632568,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				2.049999952316284,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:17>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					6.016079902648926,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				3.008039951324463,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:18>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					9.373618125915527,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				4.686809062957764,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:19>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.89583158493042,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				2.44791579246521,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:20>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					6.42455530166626,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				3.21227765083313,
+				8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:21>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					7.099999904632568,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				3.549999952316284,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:22>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					8.644003868103027,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				4.322001934051514,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:23>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					6.733249664306641,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				3.3666248321533203,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:24>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					8.346211433410645,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				4.173105716705322,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:25>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.667764186859131,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				2.8338820934295654,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:26>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.100000023841858,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				0.550000011920929,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:27>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				0.7571067810058594,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:28>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				0.9160254001617432,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:29>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				0.7571067810058594,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:30>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.099999904632568,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				2.049999952316284,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:31>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.74575138092041,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				1.372875690460205,
+				6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:32>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.9729833602905273,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				1.9864916801452637,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:33>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				0.9160254001617432,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:34>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.8416574001312256,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				1.9208287000656128,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:35>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.74575138092041,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				1.372875690460205,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:36>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				0.9160254001617432,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:37>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.0999999046325684,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				1.0499999523162842,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:38>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.928427219390869,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				1.4642136096954346,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:39>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.89583158493042,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				2.44791579246521,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:40>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				0.7571067810058594,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:41>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.296152591705322,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				2.648076295852661,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:42>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				0.9160254001617432,
+				4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:43>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.9729833602905273,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				1.9864916801452637,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:44>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.577225685119629,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				2.7886128425598145,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:45>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.262277603149414,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				1.631138801574707,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:46>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.296152591705322,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				2.648076295852661,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:47>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.262277603149414,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				1.631138801574707,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:48>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.4166247844696045,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				1.7083123922348022,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:49>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.549489736557007,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				1.2747448682785034,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:50>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.928427219390869,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				1.4642136096954346,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:51>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					6.42455530166626,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				3.21227765083313,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:52>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					12.669805526733398,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				6.334902763366699,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:53>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					19.178783416748047,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				9.589391708374023,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:54>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.3360679149627686,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				1.1680339574813843,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:55>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.3360679149627686,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				1.1680339574813843,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:56>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.391502857208252,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				2.695751428604126,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:57>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.549489736557007,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				1.2747448682785034,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:58>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.756854057312012,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				2.878427028656006,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:59>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.3426408767700195,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				2.1713204383850098,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:60>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					9.639391899108887,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				4.819695949554443,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:61>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				0.9160254001617432,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:62>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.930952072143555,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				2.9654760360717773,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:63>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.199019432067871,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				2.5995097160339355,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:64>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.223105430603027,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				2.1115527153015137,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:65>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.89583158493042,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				2.44791579246521,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:66>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.682575702667236,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				2.341287851333618,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:67>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				0.9160254001617432,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:68>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.928427219390869,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				1.4642136096954346,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:69>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				0.7571067810058594,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:70>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.458899021148682,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				2.229449510574341,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:71>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.100000023841858,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				0.550000011920929,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:72>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				0.9160254001617432,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:73>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				0.7571067810058594,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:74>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.0999999046325684,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				1.0499999523162842,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:75>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.549489736557007,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				1.2747448682785034,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:76>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					7.448469161987305,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				3.7242345809936523,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:77>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.262277603149414,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				1.631138801574707,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:78>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.100000023841858,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				0.550000011920929,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:79>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.100000023841858,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				0.550000011920929,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:80>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.100000023841858,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				0.550000011920929,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:81>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.0999999046325684,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				1.0499999523162842,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:82>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					6.264413833618164,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				3.132206916809082,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:83>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				0.7571067810058594,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:84>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.0999999046325684,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				1.0499999523162842,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:85>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				0.9160254001617432,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:86>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.5641016960144043,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				1.7820508480072021,
+				-4.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:87>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				0.7571067810058594,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:88>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.3360679149627686,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				1.1680339574813843,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:89>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.928427219390869,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				1.4642136096954346,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:90>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					10.049874305725098,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				5.024937152862549,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:91>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					6.580740928649902,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				3.290370464324951,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:92>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.3426408767700195,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				2.1713204383850098,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:93>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.74575138092041,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				1.372875690460205,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:94>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					10.049874305725098,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				5.024937152862549,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:95>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.577225685119629,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				2.7886128425598145,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:96>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					10.298039436340332,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				5.149019718170166,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:97>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.89583158493042,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				2.44791579246521,
+				-6.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:98>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				0.9160254001617432,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:99>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.3360679149627686,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				1.1680339574813843,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:100>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.928427219390869,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				1.4642136096954346,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:101>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.3360679149627686,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				1.1680339574813843,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:102>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.0999999046325684,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				1.0499999523162842,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:103>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				0.9160254001617432,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:104>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.100000023841858,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				0.550000011920929,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:105>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				0.7571067810058594,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:106>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.8320508003234863,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				0.9160254001617432,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:107>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.928427219390869,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				1.4642136096954346,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:108>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.998979568481445,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				2.4994897842407227,
+				-8.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:109>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					15.94297981262207,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				10.0,
+				7.971489906311035,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:110>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.549489736557007,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				8.0,
+				1.2747448682785034,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:111>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					4.7904157638549805,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				6.0,
+				2.3952078819274902,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:112>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.8416574001312256,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				4.0,
+				1.9208287000656128,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:113>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.8416574001312256,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				2.0,
+				1.9208287000656128,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:114>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					5.296152591705322,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				0.0,
+				2.648076295852661,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:115>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					3.8416574001312256,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-2.0,
+				1.9208287000656128,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:116>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.0999999046325684,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-4.0,
+				1.0499999523162842,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:117>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					2.549489736557007,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-6.0,
+				1.2747448682785034,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:118>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.5142135620117188,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-8.0,
+				0.7571067810058594,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:119>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					15.133296012878418,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-10.0,
+				7.566648006439209,
+				-10.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:120>",
+			"type" : "element"
+		}
+	]
+}

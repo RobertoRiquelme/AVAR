@@ -1,0 +1,540 @@
+%Exp: Simple Tree
+v := RWView new.
+objects := { 1 . 2 . 3 . 4 . 5 . 6 . 7 . 8 }.
+associations := { 1 -> 2 . 2 -> 3 . 2 -> 4 . 3 -> 5 . 3 -> 6 . 4 -> 7 . 4 -> 8 }.
+
+elements := RWUVSphere green elementsOn: objects.
+v addAll: elements.
+
+assocWithElements := associations collect: [ :a | (v elementFromModel: a key) -> (v elementFromModel: a value)].
+v addAll: (RWEdge linesFor: assocWithElements).
+RWGridTreeLayout on: v elements.
+v run.
+
+{
+	"elements" : [
+		{
+			"position" : [
+				0.0,
+				0.0,
+				5.0
+			],
+			"id" : "<genid:0>",
+			"type" : "camera"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				0.0,
+				0.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:1>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				0.0,
+				-2.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:3>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				3.0,
+				-4.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:4>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				-3.0,
+				-4.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:5>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				4.5,
+				-6.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:6>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				1.5,
+				-6.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:7>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				-1.5,
+				-6.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:8>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "uvSphere"
+			},
+			"position" : [
+				-4.5,
+				-6.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				1.0
+			],
+			"id" : "<genid:9>",
+			"type" : "element"
+		},
+		{
+			"interactions" : [ ],
+			"from_position" : [
+				0.0,
+				0.0,
+				0.0
+			],
+			"id" : "<genid:10>",
+			"type" : "edge",
+			"from_id" : "<genid:1>",
+			"to_id" : "<genid:3>",
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:11>",
+				"extent" : [
+					0.0,
+					2.0,
+					0.0
+				],
+				"shapeDescription" : "line"
+			},
+			"to_position" : [
+				0.0,
+				0.0,
+				0.0
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"interactions" : [ ],
+			"from_position" : [
+				0.0,
+				-2.0,
+				0.0
+			],
+			"id" : "<genid:12>",
+			"type" : "edge",
+			"from_id" : "<genid:3>",
+			"to_id" : "<genid:4>",
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:13>",
+				"extent" : [
+					3.0,
+					2.0,
+					0.0
+				],
+				"shapeDescription" : "line"
+			},
+			"to_position" : [
+				0.0,
+				-2.0,
+				0.0
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"interactions" : [ ],
+			"from_position" : [
+				0.0,
+				-2.0,
+				0.0
+			],
+			"id" : "<genid:14>",
+			"type" : "edge",
+			"from_id" : "<genid:3>",
+			"to_id" : "<genid:5>",
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:15>",
+				"extent" : [
+					3.0,
+					2.0,
+					0.0
+				],
+				"shapeDescription" : "line"
+			},
+			"to_position" : [
+				0.0,
+				-2.0,
+				0.0
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"interactions" : [ ],
+			"from_position" : [
+				3.0,
+				-4.0,
+				0.0
+			],
+			"id" : "<genid:16>",
+			"type" : "edge",
+			"from_id" : "<genid:4>",
+			"to_id" : "<genid:6>",
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:17>",
+				"extent" : [
+					1.5,
+					2.0,
+					0.0
+				],
+				"shapeDescription" : "line"
+			},
+			"to_position" : [
+				3.0,
+				-4.0,
+				0.0
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"interactions" : [ ],
+			"from_position" : [
+				3.0,
+				-4.0,
+				0.0
+			],
+			"id" : "<genid:18>",
+			"type" : "edge",
+			"from_id" : "<genid:4>",
+			"to_id" : "<genid:7>",
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:19>",
+				"extent" : [
+					1.5,
+					2.0,
+					0.0
+				],
+				"shapeDescription" : "line"
+			},
+			"to_position" : [
+				3.0,
+				-4.0,
+				0.0
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"interactions" : [ ],
+			"from_position" : [
+				-3.0,
+				-4.0,
+				0.0
+			],
+			"id" : "<genid:20>",
+			"type" : "edge",
+			"from_id" : "<genid:5>",
+			"to_id" : "<genid:8>",
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:21>",
+				"extent" : [
+					1.5,
+					2.0,
+					0.0
+				],
+				"shapeDescription" : "line"
+			},
+			"to_position" : [
+				-3.0,
+				-4.0,
+				0.0
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"interactions" : [ ],
+			"from_position" : [
+				-3.0,
+				-4.0,
+				0.0
+			],
+			"id" : "<genid:22>",
+			"type" : "edge",
+			"from_id" : "<genid:5>",
+			"to_id" : "<genid:9>",
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:23>",
+				"extent" : [
+					1.5,
+					2.0,
+					0.0
+				],
+				"shapeDescription" : "line"
+			},
+			"to_position" : [
+				-3.0,
+				-4.0,
+				0.0
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		}
+	]
+}

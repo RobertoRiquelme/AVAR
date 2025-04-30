@@ -1,0 +1,1376 @@
+%Exp: "2D Radar chart:"
+	b := RTKiviatBuilder new.
+	b objects: RTAbstractCircleLayout withAllSubclasses.
+	n := RTMultiLinearColorForIdentity new objects: b objects.
+	b shape circle
+		color: [ :value | n rtValue: value kiviatNode named ];
+		size: 10.
+	b addMetric: #numberOfLinesOfCode.
+	b addMetric: #numberOfMethods.
+	b addMetric: #numberOfVariables.
+	b build.
+	b open.
+	v := b view.
+	v run.
+
+
+	{
+	"RTelements" : [
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					0,
+					0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0,
+				0
+			],
+			"color" : [
+				0.7386117577552795,
+				0.7386117577552795,
+				0.7386117577552795,
+				1.0
+			],
+			"id" : 0,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					0.0,
+					0.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				200.0,
+				0.0
+			],
+			"color" : [
+				0.7386117577552795,
+				0.7386117577552795,
+				0.7386117577552795,
+				1.0
+			],
+			"id" : 1,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					1.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0.0,
+				0.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 2,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					1.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				50.0,
+				0.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 3,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					1.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				100.0,
+				0.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 4,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					1.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				150.0,
+				0.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 5,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					1.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				200.0,
+				0.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 6,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.0,
+					16.0
+				],
+				"text" : "0.0"
+			},
+			"position" : [
+				0.0,
+				15.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 7,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					23.0,
+					16.0
+				],
+				"text" : "16.0"
+			},
+			"position" : [
+				50.0,
+				15.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 8,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					23.0,
+					16.0
+				],
+				"text" : "32.0"
+			},
+			"position" : [
+				100.0,
+				15.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 9,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					23.0,
+					16.0
+				],
+				"text" : "48.0"
+			},
+			"position" : [
+				150.0,
+				15.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 10,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					23.0,
+					16.0
+				],
+				"text" : "64.0"
+			},
+			"position" : [
+				200.0,
+				15.5
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 11,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					0,
+					0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0,
+				0
+			],
+			"color" : [
+				0.7386117577552795,
+				0.7386117577552795,
+				0.7386117577552795,
+				1.0
+			],
+			"id" : 12,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					0.0,
+					0.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-99.99999999999996,
+				173.20508075688775
+			],
+			"color" : [
+				0.7386117577552795,
+				0.7386117577552795,
+				0.7386117577552795,
+				1.0
+			],
+			"id" : 13,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.8301270189221945,
+					3.3660254037844357
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0.4330127018922195,
+				-0.2499999999999997
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 14,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922191,
+					3.366025403784434
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-23.56698729810778,
+				42.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 15,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922198,
+					3.366025403784448
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-48.56698729810778,
+				85.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 16,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922184,
+					3.366025403784434
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-73.56698729810778,
+				128.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 17,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922184,
+					3.3660254037844197
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-98.56698729810778,
+				172.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 18,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.0,
+					16.0
+				],
+				"text" : "0.0"
+			},
+			"position" : [
+				0.4330127018922195,
+				14.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 19,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					16.999999999999996,
+					16.0
+				],
+				"text" : "4.0"
+			},
+			"position" : [
+				-23.56698729810778,
+				57.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 20,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.0,
+					16.0
+				],
+				"text" : "8.0"
+			},
+			"position" : [
+				-48.56698729810778,
+				100.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 21,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					23.0,
+					16.0
+				],
+				"text" : "12.0"
+			},
+			"position" : [
+				-73.56698729810778,
+				143.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 22,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					23.0,
+					16.0
+				],
+				"text" : "16.0"
+			},
+			"position" : [
+				-98.56698729810778,
+				187.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 23,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					0,
+					0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0,
+				0
+			],
+			"color" : [
+				0.7386117577552795,
+				0.7386117577552795,
+				0.7386117577552795,
+				1.0
+			],
+			"id" : 24,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					0.0,
+					0.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-100.00000000000009,
+				-173.20508075688767
+			],
+			"color" : [
+				0.7386117577552795,
+				0.7386117577552795,
+				0.7386117577552795,
+				1.0
+			],
+			"id" : 25,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922193,
+					3.3660254037844393
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-0.4330127018922193,
+				-0.2500000000000001
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 26,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922191,
+					3.366025403784434
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-25.43301270189222,
+				-43.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 27,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922198,
+					3.366025403784448
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-50.43301270189222,
+				-86.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 28,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922184,
+					3.366025403784434
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-75.43301270189222,
+				-129.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 29,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTBox",
+				"extent" : [
+					4.830127018922184,
+					3.3660254037844197
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-100.43301270189222,
+				-173.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 30,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.0,
+					16.0
+				],
+				"text" : "0.0"
+			},
+			"position" : [
+				-0.4330127018922193,
+				14.75
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 31,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.000000000000004,
+					16.0
+				],
+				"text" : "1.0"
+			},
+			"position" : [
+				-25.43301270189222,
+				-28.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 32,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.0,
+					16.0
+				],
+				"text" : "2.0"
+			},
+			"position" : [
+				-50.43301270189222,
+				-71.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 33,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.0,
+					16.0
+				],
+				"text" : "3.0"
+			},
+			"position" : [
+				-75.43301270189222,
+				-114.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 34,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTlabel",
+				"extent" : [
+					17.0,
+					16.0
+				],
+				"text" : "4.0"
+			},
+			"position" : [
+				-100.43301270189222,
+				-158.25
+			],
+			"color" : [
+				0.21449381113052368,
+				0.21449381113052368,
+				0.21449381113052368,
+				1.0
+			],
+			"id" : 35,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				65.625,
+				0.0
+			],
+			"color" : [
+				0.2667064368724823,
+				0.6505706310272217,
+				0.5705778002738953,
+				1.0
+			],
+			"id" : 36,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					9.999999999999998,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-12.499999999999995,
+				21.65063509461097
+			],
+			"color" : [
+				0.2667064368724823,
+				0.6505706310272217,
+				0.5705778002738953,
+				1.0
+			],
+			"id" : 37,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0.0,
+				0.0
+			],
+			"color" : [
+				0.2667064368724823,
+				0.6505706310272217,
+				0.5705778002738953,
+				1.0
+			],
+			"id" : 38,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				50.0,
+				0.0
+			],
+			"color" : [
+				0.8372414708137512,
+				0.27292007207870483,
+				0.2626103162765503,
+				1.0
+			],
+			"id" : 39,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					9.999999999999998,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-12.499999999999995,
+				21.65063509461097
+			],
+			"color" : [
+				0.8372414708137512,
+				0.27292007207870483,
+				0.2626103162765503,
+				1.0
+			],
+			"id" : 40,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0.0,
+				0.0
+			],
+			"color" : [
+				0.8372414708137512,
+				0.27292007207870483,
+				0.2626103162765503,
+				1.0
+			],
+			"id" : 41,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				87.5,
+				0.0
+			],
+			"color" : [
+				0.6875050067901611,
+				0.5851113200187683,
+				0.13136611878871918,
+				1.0
+			],
+			"id" : 42,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					9.999999999999998,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-12.499999999999995,
+				21.65063509461097
+			],
+			"color" : [
+				0.6875050067901611,
+				0.5851113200187683,
+				0.13136611878871918,
+				1.0
+			],
+			"id" : 43,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0.0,
+				0.0
+			],
+			"color" : [
+				0.6875050067901611,
+				0.5851113200187683,
+				0.13136611878871918,
+				1.0
+			],
+			"id" : 44,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				71.875,
+				0.0
+			],
+			"color" : [
+				0.6436700820922852,
+				0.5452651977539063,
+				0.6453911662101746,
+				1.0
+			],
+			"id" : 45,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-6.249999999999997,
+				10.825317547305485
+			],
+			"color" : [
+				0.6436700820922852,
+				0.5452651977539063,
+				0.6453911662101746,
+				1.0
+			],
+			"id" : 46,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				0.0,
+				0.0
+			],
+			"color" : [
+				0.6436700820922852,
+				0.5452651977539063,
+				0.6453911662101746,
+				1.0
+			],
+			"id" : 47,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				200.0,
+				0.0
+			],
+			"color" : [
+				1.0,
+				0.8473007082939148,
+				0.15872827172279358,
+				1.0
+			],
+			"id" : 48,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-99.99999999999996,
+				173.20508075688775
+			],
+			"color" : [
+				1.0,
+				0.8473007082939148,
+				0.15872827172279358,
+				1.0
+			],
+			"id" : 49,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					10.0,
+					10.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				-100.00000000000009,
+				-173.20508075688767
+			],
+			"color" : [
+				1.0,
+				0.8473007082939148,
+				0.15872827172279358,
+				1.0
+			],
+			"id" : 50,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 1,
+			"from_id" : 0,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 51,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 13,
+			"from_id" : 12,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 52,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 25,
+			"from_id" : 24,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 53,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 37,
+			"from_id" : 36,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 54,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 38,
+			"from_id" : 37,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 55,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 36,
+			"from_id" : 38,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 56,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 40,
+			"from_id" : 39,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 57,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 41,
+			"from_id" : 40,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 58,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 39,
+			"from_id" : 41,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 59,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 43,
+			"from_id" : 42,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 60,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 44,
+			"from_id" : 43,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 61,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 42,
+			"from_id" : 44,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 62,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 46,
+			"from_id" : 45,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 63,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 47,
+			"from_id" : 46,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 64,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 45,
+			"from_id" : 47,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 65,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 49,
+			"from_id" : 48,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 66,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 50,
+			"from_id" : 49,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 67,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 48,
+			"from_id" : 50,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 68,
+			"type" : "RTedge"
+		}
+	]
+}

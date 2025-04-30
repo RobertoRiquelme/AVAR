@@ -1,0 +1,1410 @@
+%Exp: "2D Linked node diagram:"
+	nbOfNodes := 40.
+	nbOfRandomEdges := 40.
+	nodes := 1 to: nbOfNodes.
+	edges := (1 to: nbOfRandomEdges)
+		collect: [ :notUsed | nodes atRandom -> nodes atRandom ].
+
+	b := RTMondrian new.
+	b shape circle color: (Color black alpha: 0.5).
+	b nodes: nodes.
+	b shape line color: (Color gray alpha: 0.3).
+	b edges source: edges connectFrom: #key to: #value.
+	b layout force.
+	b open.
+
+	v := b view.
+	v run.
+
+
+	{
+	"RTelements" : [
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				258.5072540084109,
+				172.99124121781207
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 0,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				158.09742387083705,
+				179.89343497995893
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 1,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				175.5874741105272,
+				109.48558629445637
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 2,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				245.91641586964602,
+				203.91306504564116
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 3,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				172.2479345346765,
+				145.72809064468944
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 4,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				208.4823536183443,
+				169.54957105708024
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 5,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				215.95568600986275,
+				221.53671343481562
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 6,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				204.36979757286767,
+				145.29118316471454
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 7,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				150.0946842882653,
+				160.8773874162465
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 8,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				130.00857066959693,
+				161.72996001235703
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 9,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				115.16598452437822,
+				193.3159195655826
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 10,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				208.8067993748022,
+				122.5723580810932
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 11,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				217.17508105964,
+				256.46718599185397
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 12,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				252.43508468384522,
+				121.71716009041648
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 13,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				174.78698215335112,
+				169.25366800941887
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 14,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				282.7857922418486,
+				211.65118190648678
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 15,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				219.35716491375686,
+				196.28923065644705
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 16,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				194.1616890193479,
+				255.48766455718152
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 17,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				175.68385580806776,
+				243.14137248227567
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 18,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				137.25747322566204,
+				241.7936454712497
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 19,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				267.2500946669342,
+				194.60969195216205
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 20,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				222.3972879374204,
+				150.8968811705139
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 21,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				194.26118353716663,
+				216.75619044169673
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 22,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				271.6287642734408,
+				155.0683867086851
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 23,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				114.40785691241223,
+				240.5179263221703
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 24,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				144.53323322509348,
+				183.5921213626652
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 25,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				167.57567162095003,
+				197.16407791821825
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 26,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				206.87180492411278,
+				269.0139183532275
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 27,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				195.62657518001228,
+				289.3937097241477
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 28,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				192.5235765925948,
+				189.7558564960052
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 29,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				239.63500137086646,
+				259.9261732598026
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 30,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				290.38326190616897,
+				165.77739700769973
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 31,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				145.1019964843414,
+				275.0438019676774
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 32,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				199.36450706366486,
+				243.11112380002885
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 33,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				194.88693974126184,
+				267.382308411012
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 34,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				234.19584050686257,
+				169.21722455125777
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 35,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				253.76917532868327,
+				286.00672835595157
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 36,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				262.7770816012105,
+				220.52956406347639
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 37,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				128.3211992876141,
+				174.12035531561074
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 38,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : {
+				"shapeDescription" : "RTEllipse",
+				"extent" : [
+					5.0,
+					5.0
+				],
+				"text" : "nil"
+			},
+			"position" : [
+				280.04991633792065,
+				252.83070946993018
+			],
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				0.49803921580314636
+			],
+			"id" : 39,
+			"type" : "RTelement"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 27,
+			"from_id" : 33,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 40,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 22,
+			"from_id" : 33,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 41,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 28,
+			"from_id" : 34,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 42,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 15,
+			"from_id" : 20,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 43,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 0,
+			"from_id" : 35,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 44,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 7,
+			"from_id" : 11,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 45,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 10,
+			"from_id" : 38,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 46,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 34,
+			"from_id" : 33,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 47,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 25,
+			"from_id" : 8,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 48,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 14,
+			"from_id" : 29,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 49,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 29,
+			"from_id" : 16,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 50,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 37,
+			"from_id" : 15,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 51,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 1,
+			"from_id" : 8,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 52,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 16,
+			"from_id" : 3,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 53,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 23,
+			"from_id" : 31,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 54,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 6,
+			"from_id" : 22,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 55,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 14,
+			"from_id" : 8,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 56,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 12,
+			"from_id" : 30,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 57,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 33,
+			"from_id" : 12,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 58,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 21,
+			"from_id" : 5,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 59,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 26,
+			"from_id" : 29,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 60,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 26,
+			"from_id" : 1,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 61,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 27,
+			"from_id" : 28,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 62,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 5,
+			"from_id" : 35,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 63,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 0,
+			"from_id" : 20,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 64,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 3,
+			"from_id" : 20,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 65,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 25,
+			"from_id" : 9,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 66,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 33,
+			"from_id" : 18,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 67,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 34,
+			"from_id" : 12,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 68,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 5,
+			"from_id" : 29,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 69,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 4,
+			"from_id" : 14,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 70,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 22,
+			"from_id" : 29,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 71,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 23,
+			"from_id" : 0,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 72,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 8,
+			"from_id" : 9,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 73,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 38,
+			"from_id" : 8,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 74,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 37,
+			"from_id" : 3,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 75,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 25,
+			"from_id" : 26,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 76,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 7,
+			"from_id" : 5,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 77,
+			"type" : "RTedge"
+		},
+		{
+			"shape" : "RTline",
+			"to_id" : 12,
+			"from_id" : 17,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"id" : 78,
+			"type" : "RTedge"
+		}
+	]
+}

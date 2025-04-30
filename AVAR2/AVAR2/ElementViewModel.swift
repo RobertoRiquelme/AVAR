@@ -1,0 +1,221 @@
+//
+//  ElementViewModel.swift
+//  AVAR2
+//
+//  Created by Roberto Riquelme on 30-04-25.
+//
+
+import Foundation
+import RealityKit
+import RealityKitContent
+import SwiftUI
+
+@MainActor
+class ElementViewModel: ObservableObject {
+    private(set) var elements: [ElementDTO] = []
+    private var entityMap: [String: Entity] = [:]
+    private var lineEntities: [Entity] = []
+    private var selectedEntity: Entity?
+
+    func loadData(from filename: String) async {
+        do {
+            self.elements = try ElementService.loadElements(from: filename)
+        } catch {
+            print("Error loading data: \(error)")
+        }
+    }
+
+    func loadElements(in content: RealityViewContent) {
+        for element in elements {
+            guard let position = element.position else { continue }
+            let entity = createEntity(for: element)
+            //entity.position = SIMD3(Float(position[0]), Float(position[1]), position.count > 2 ? Float(position[2]) : 0)
+            let x = Float(position[0])/100.0
+            let y = Float(position[1])/100.0
+            let z = Float(position.count > 2 ? position[2] : 0) - 1.0 // 👈 Shift everything 1m forward
+            entity.position = SIMD3(x, y, z)
+            print("Entity '\(element.id)' placed at \(entity.position)")
+            content.add(entity)
+            entityMap[element.id] = entity
+        }
+        updateConnections(in: content)
+        addCoordinateGrid(to: content)
+    }
+
+//    func loadElements(in content: RealityViewContent) {
+//        guard !elements.isEmpty else { return }
+//
+//        // 1. Compute average center of all elements
+//        let positions = elements.compactMap { $0.position }
+//        let paddedPositions: [[Double]] = positions.map { $0 + [0.0, 0.0, 0.0] }
+//
+//        var total = [0.0, 0.0, 0.0]
+//        for pos in paddedPositions {
+//            for i in 0..<3 {
+//                total[i] += pos[i]
+//            }
+//        }
+//
+//        let count = Double(positions.count)
+//        let average = total.map { $0 / count }
+//
+//        let centerOffset = SIMD3<Float>(
+//            -Float(average[0]),
+//            -Float(average[1]),
+//            -Float((average.count > 2 ? average[2] : 0.0)) - 1.0 // Move 1m forward from user
+//        )
+//
+//        // 2. Add each entity relative to average center
+//        for element in elements {
+//            guard let position = element.position else { continue }
+//            let pos = SIMD3<Float>(
+//                Float(position[0]),
+//                Float(position[1]),
+//                position.count > 2 ? Float(position[2]) : 0
+//            )
+//            let entity = createEntity(for: element)
+//            entity.position = pos + centerOffset
+//            content.add(entity)
+//            entityMap[element.id] = entity
+//        }
+//
+//        updateConnections(in: content)
+//        addCoordinateGrid(to: content)
+//    }
+    
+    func updateConnections(in content: RealityViewContent) {
+        lineEntities.forEach { content.remove($0) }
+        lineEntities.removeAll()
+
+        for e1 in elements {
+            for e2 in elements {
+                if e1.id != e2.id && areConnected(e1, e2) {
+                    if let line = createLineBetween(e1.id, and: e2.id) {
+                        content.add(line)
+                        lineEntities.append(line)
+                    }
+                }
+            }
+        }
+    }
+
+    func addCoordinateGrid(to content: RealityViewContent) {
+        let axisLength: Float = 1.0
+        let lineThickness: Float = 0.002
+
+        func axis(from: SIMD3<Float>, to: SIMD3<Float>, color: UIColor) -> ModelEntity {
+            let vector = to - from
+            let length = simd_length(vector)
+            let mesh = MeshResource.generateBox(size: [length, lineThickness, lineThickness])
+            let material = SimpleMaterial(color: color, isMetallic: false)
+            let entity = ModelEntity(mesh: mesh, materials: [material])
+            entity.position = from + vector / 2
+            entity.look(at: to, from: entity.position, relativeTo: nil)
+            return entity
+        }
+
+        let origin = SIMD3<Float>(0, 0, -1)
+
+        // X Axis (Red)
+        content.add(axis(from: origin, to: origin + SIMD3(axisLength, 0, 0), color: .red))
+        // Y Axis (Green)
+        content.add(axis(from: origin, to: origin + SIMD3(0, axisLength, 0), color: .green))
+        // Z Axis (Blue)
+        content.add(axis(from: origin, to: origin + SIMD3(0, 0, axisLength), color: .blue))
+
+        // Optional: Ground grid or XY plane
+        let gridSize = 2
+        for i in -gridSize...gridSize {
+            let offset = Float(i) * 0.1
+            // X grid lines
+            content.add(axis(from: origin + SIMD3(-0.5, 0, offset), to: origin + SIMD3(0.5, 0, offset), color: .gray))
+            // Z grid lines
+            content.add(axis(from: origin + SIMD3(offset, 0, -0.5), to: origin + SIMD3(offset, 0, 0.5), color: .gray))
+        }
+    }
+
+    func handleDragChanged(_ value: EntityTargetValue<DragGesture.Value>) {
+        guard value.entity.name.components(separatedBy: "_").last != nil else { return }
+        value.entity.position += SIMD3(value.gestureValue.translation3D)
+        selectedEntity = value.entity
+    }
+
+    func handleDragEnded(_ value: EntityTargetValue<DragGesture.Value>) {
+        selectedEntity = nil
+    }
+
+    private func createEntity(for element: ElementDTO) -> Entity {
+        let mesh: MeshResource
+        let material = createMaterial(from: element)
+
+        switch element.shape?.shapeDescription?.lowercased() {
+        case "box":
+            let extent = element.shape?.extent ?? [0.1, 0.1, 0.1]
+            let size = SIMD3<Float>(
+                extent.count > 0 ? Float(extent[0]) : 0.1,
+                extent.count > 1 ? Float(extent[1]) : 0.1,
+                extent.count > 2 ? Float(extent[2]) : 0.1
+            )
+            mesh = MeshResource.generateBox(size: size)
+        case "sphere":
+            mesh = MeshResource.generateSphere(radius: 0.05)
+        default:
+            mesh = MeshResource.generateBox(size: SIMD3(0.05, 0.05, 0.05))
+        }
+
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        entity.name = "element_\(element.id)"
+
+        let text = element.shape?.text ?? element.id
+        let labelEntity = createLabelEntity(text: text)
+        labelEntity.position.y += 0.1
+        entity.addChild(labelEntity)
+
+        entity.generateCollisionShapes(recursive: true)
+        entity.components.set(InputTargetComponent())
+        return entity
+    }
+
+    private func createMaterial(from element: ElementDTO) -> SimpleMaterial {
+        let color = element.color ?? element.shape?.color ?? [0.2, 0.4, 1.0, 1.0]
+        let uiColor = UIColor(
+            red: CGFloat(color[0]),
+            green: CGFloat(color[1]),
+            blue: CGFloat(color[2]),
+            alpha: color.count > 3 ? CGFloat(color[3]) : 1.0
+        )
+        return SimpleMaterial(color: uiColor, isMetallic: false)
+    }
+
+    private func createLineBetween(_ id1: String, and id2: String) -> ModelEntity? {
+        guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { return nil }
+
+        let pos1 = entity1.position
+        let pos2 = entity2.position
+        let lineVector = pos2 - pos1
+        let length = simd_length(lineVector)
+
+        let mesh = MeshResource.generateBox(size: SIMD3(length, 0.002, 0.002))
+        let material = SimpleMaterial(color: .gray, isMetallic: false)
+
+        let lineEntity = ModelEntity(mesh: mesh, materials: [material])
+        lineEntity.position = pos1 + (lineVector / 2)
+        lineEntity.look(at: pos2, from: lineEntity.position, relativeTo: nil)
+
+        return lineEntity
+    }
+
+    private func createLabelEntity(text: String) -> Entity {
+        let mesh = MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: 0.05), containerFrame: .zero, alignment: .center, lineBreakMode: .byWordWrapping)
+        let material = SimpleMaterial(color: .white, isMetallic: false)
+        return ModelEntity(mesh: mesh, materials: [material])
+    }
+
+    private func areConnected(_ e1: ElementDTO, _ e2: ElementDTO) -> Bool {
+        // Simple heuristic: if one is type "edge" and the id references others
+        if e1.type.lowercased().contains("edge") {
+            return e1.id.contains(e2.id)
+        }
+        return false
+    }
+}

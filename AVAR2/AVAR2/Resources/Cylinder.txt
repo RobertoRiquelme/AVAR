@@ -1,0 +1,79 @@
+%Exp: Cylinder
+%v := RWView new. els:= RWCylinder new color: Color blue; elementsOn: (1 to: 2). v addAll: els. RWXZGridLayout on: els. v run.
+
+{
+	"elements" : [
+		{
+			"position" : [
+				0.0,
+				0.0,
+				5.0
+			],
+			"id" : "<genid:0>",
+			"type" : "camera"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cylinder"
+			},
+			"position" : [
+				1.0,
+				0.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				0.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:1>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cylinder"
+			},
+			"position" : [
+				-1.0,
+				0.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.0,
+				0.0,
+				1.0,
+				1.0
+			],
+			"id" : "<genid:3>",
+			"type" : "element"
+		}
+	]
+}
+

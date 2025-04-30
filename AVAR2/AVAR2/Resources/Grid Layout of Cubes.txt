@@ -1,0 +1,330 @@
+%Exp: Grid Layout of Cubes:
+%v := RWView new.
+els := RWCube new color: [:e | Color random]; elementsOn: (1 to: 10).
+v addAll: els.
+RWXZGridLayout on: els.
+v run.
+
+{
+	"elements" : [
+		{
+			"position" : [
+				0.0,
+				0.0,
+				5.0
+			],
+			"id" : "<genid:0>",
+			"type" : "camera"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-1.0,
+				0.0,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.7687793374061584,
+				0.09029387682676315,
+				0.21268649399280548,
+				1.0
+			],
+			"id" : "<genid:1>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-3.0,
+				0.0,
+				2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.3444659411907196,
+				0.14829587936401367,
+				0.3187750279903412,
+				1.0
+			],
+			"id" : "<genid:3>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				3.0,
+				0.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.42996853590011597,
+				0.0562162883579731,
+				0.529784083366394,
+				1.0
+			],
+			"id" : "<genid:4>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				1.0,
+				0.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.3638835847377777,
+				0.6181744337081909,
+				0.06002204120159149,
+				1.0
+			],
+			"id" : "<genid:5>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-1.0,
+				0.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.392890989780426,
+				0.02254151925444603,
+				0.609809160232544,
+				1.0
+			],
+			"id" : "<genid:6>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-3.0,
+				0.0,
+				0.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.21722152829170227,
+				0.2708395719528198,
+				0.001286206766963005,
+				1.0
+			],
+			"id" : "<genid:7>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				3.0,
+				0.0,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.14539095759391785,
+				0.10697337985038757,
+				0.8193112015724182,
+				1.0
+			],
+			"id" : "<genid:8>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				1.0,
+				0.0,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.3638835847377777,
+				0.21905118227005005,
+				0.12532417476177216,
+				1.0
+			],
+			"id" : "<genid:9>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-1.0,
+				0.0,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.04456575959920883,
+				0.3967704772949219,
+				0.011723404750227928,
+				1.0
+			],
+			"id" : "<genid:10>",
+			"type" : "element"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"id" : "<genid_shape:2>",
+				"extent" : [
+					1.0,
+					1.0,
+					1.0
+				],
+				"shapeDescription" : "cube"
+			},
+			"position" : [
+				-3.0,
+				0.0,
+				-2.0
+			],
+			"interactions" : [ ],
+			"color" : [
+				0.11373482644557953,
+				0.37633609771728516,
+				0.21722152829170227,
+				1.0
+			],
+			"id" : "<genid:11>",
+			"type" : "element"
+		}
+	]
+}
