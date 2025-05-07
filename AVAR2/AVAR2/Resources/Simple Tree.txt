@@ -1,16 +1,3 @@
-%Exp: Simple Tree
-v := RWView new.
-objects := { 1 . 2 . 3 . 4 . 5 . 6 . 7 . 8 }.
-associations := { 1 -> 2 . 2 -> 3 . 2 -> 4 . 3 -> 5 . 3 -> 6 . 4 -> 7 . 4 -> 8 }.
-
-elements := RWUVSphere green elementsOn: objects.
-v addAll: elements.
-
-assocWithElements := associations collect: [ :a | (v elementFromModel: a key) -> (v elementFromModel: a value)].
-v addAll: (RWEdge linesFor: assocWithElements).
-RWGridTreeLayout on: v elements.
-v run.
-
 {
 	"elements" : [
 		{

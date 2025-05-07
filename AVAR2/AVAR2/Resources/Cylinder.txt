@@ -1,5 +1,3 @@
-%Exp: Cylinder
-%v := RWView new. els:= RWCylinder new color: Color blue; elementsOn: (1 to: 2). v addAll: els. RWXZGridLayout on: els. v run.
 
 {
 	"elements" : [

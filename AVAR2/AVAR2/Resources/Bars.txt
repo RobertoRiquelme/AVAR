@@ -1,14 +1,3 @@
-%Exp: Bars
-v := RWView new.
-shape := RWCube white height: [ :cls | cls numberOfMethods sqrt + 0.1 ].
-elements := shape elementsOn: Collection withAllSubclasses.
-
-v addAll: elements.
-
-RWXZGridLayout on: elements.
-RWAlign elements: elements abovePoint: WMVector3F zero.
-v run.
-
 
 {
 	"elements" : [

@@ -1,17 +1,3 @@
-%Exp: Edges example. Fully connected network:
-%v := RWView new.
-len := 9.
-els := RWUVSphere blue elementsOn: (1 to: len).
-v addAll: els.
-RWXZGridLayout on: els.
-1 to: len do: [ :i |
-1 to: len do: [ :j |
-i ~~ j ifTrue: [ v add: (RWLine yellow edgeFrom: (els at: i) to: (els at: j))]
-].
-].
-v run.
-
-
 {
 	"elements" : [
 		{

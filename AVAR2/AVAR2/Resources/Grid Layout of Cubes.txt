@@ -1,10 +1,3 @@
-%Exp: Grid Layout of Cubes:
-%v := RWView new.
-els := RWCube new color: [:e | Color random]; elementsOn: (1 to: 10).
-v addAll: els.
-RWXZGridLayout on: els.
-v run.
-
 {
 	"elements" : [
 		{
