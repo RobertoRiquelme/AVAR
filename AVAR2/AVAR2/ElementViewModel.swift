@@ -50,47 +50,6 @@ class ElementViewModel: ObservableObject {
         updateConnections(in: content)
         addCoordinateGrid(to: content)
     }
-
-//    func loadElements(in content: RealityViewContent) {
-//        guard !elements.isEmpty else { return }
-//
-//        // 1. Compute average center of all elements
-//        let positions = elements.compactMap { $0.position }
-//        let paddedPositions: [[Double]] = positions.map { $0 + [0.0, 0.0, 0.0] }
-//
-//        var total = [0.0, 0.0, 0.0]
-//        for pos in paddedPositions {
-//            for i in 0..<3 {
-//                total[i] += pos[i]
-//            }
-//        }
-//
-//        let count = Double(positions.count)
-//        let average = total.map { $0 / count }
-//
-//        let centerOffset = SIMD3<Float>(
-//            -Float(average[0]),
-//            -Float(average[1]),
-//            -Float((average.count > 2 ? average[2] : 0.0)) - 1.0 // Move 1m forward from user
-//        )
-//
-//        // 2. Add each entity relative to average center
-//        for element in elements {
-//            guard let position = element.position else { continue }
-//            let pos = SIMD3<Float>(
-//                Float(position[0]),
-//                Float(position[1]),
-//                position.count > 2 ? Float(position[2]) : 0
-//            )
-//            let entity = createEntity(for: element)
-//            entity.position = pos + centerOffset
-//            content.add(entity)
-//            entityMap[element.id] = entity
-//        }
-//
-//        updateConnections(in: content)
-//        addCoordinateGrid(to: content)
-//    }
     
     /// Draws lines for each edge specified by fromId/toId on edge elements.
     func updateConnections(in content: RealityViewContent) {
@@ -176,22 +135,36 @@ class ElementViewModel: ObservableObject {
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {
+        // Determine mesh based on shapeDescription
         let mesh: MeshResource
         let material = createMaterial(from: element)
-
-        switch element.shape?.shapeDescription?.lowercased() {
-        case "box":
-            let extent = element.shape?.extent ?? [0.1, 0.1, 0.1]
+        let desc = element.shape?.shapeDescription?.lowercased() ?? ""
+        let extent = element.shape?.extent ?? []
+        if desc.contains("box") {
+            // Box: use 3D extents or default (scaled from data units)
             let size = SIMD3<Float>(
-                extent.count > 0 ? Float(extent[0]) : 0.1,
-                extent.count > 1 ? Float(extent[1]) : 0.1,
-                extent.count > 2 ? Float(extent[2]) : 0.1
+                extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05,
+                extent.count > 1 ? Float(extent[1]) / 100.0 : 0.05,
+                extent.count > 2 ? Float(extent[2]) / 100.0 : 0.05
             )
             mesh = MeshResource.generateBox(size: size)
-        case "sphere":
-            mesh = MeshResource.generateSphere(radius: 0.05)
-        default:
-            mesh = MeshResource.generateBox(size: SIMD3(0.05, 0.05, 0.05))
+        } else if desc.contains("sphere") {
+            // Sphere: radius scaled
+            let radius = extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05
+            mesh = MeshResource.generateSphere(radius: radius)
+        } else if desc.contains("cylinder") {
+            // Cylinder: radius and height scaled
+            let radius = extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05
+            let height = extent.count > 1 ? Float(extent[1]) / 100.0 : radius * 2
+            mesh = MeshResource.generateCylinder(height: height, radius: radius)
+        } else if desc.contains("cone") {
+            // Cone: height and base radius scaled
+            let radius = extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05
+            let height = extent.count > 1 ? Float(extent[1]) / 100.0 : radius * 2
+            mesh = MeshResource.generateCone(height: height, radius: radius)
+        } else {
+            // Default small box
+            mesh = MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.05, 0.05))
         }
 
         let entity = ModelEntity(mesh: mesh, materials: [material])
