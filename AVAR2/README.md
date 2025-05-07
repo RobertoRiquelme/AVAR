@@ -24,7 +24,7 @@ A SwiftUI + RealityKit sample app that loads 2D/3D layout data and visualizes it
 
 When the app launches, you will see a 2D launcher window:
 
-- **Select Example**: Drop-down menu listing all `.txt` example files in `AVAR2/Resources`. Choose the layout you want to visualize.
+- **Select Example**: Drop-down menu listing all example layout files (JSON or TXT) in `AVAR2/Resources`. Choose the layout you want to visualize.
 - **Enter Immersive Space**: Opens the immersive RealityKit view showing your graph in 3D.
 - **Reload Immersive Space**: After changing the selected example, tap this to reload the scene with the new file.
 
@@ -39,11 +39,11 @@ Once in the immersive space:
 
 ## Data Files
 
-All example layouts are stored as JSON in `AVAR2/Resources/*.txt`. Each file defines an array of elements with properties:
+All example layouts are stored as JSON-like files in `AVAR2/Resources/` with extension `.json` or `.txt`. Each file defines an array of elements with properties:
 - `id`, `type`, `position` (x, y, z), optional `shape` (`shapeDescription`, `extent`, `color`, `text`), and optional `from_id`/`to_id` for edges.
 
 To add a new example:
-1. Place your JSON file (with extension `.txt`) into `AVAR2/Resources/`.
+1. Place your JSON file (with extension `.json` or `.txt`) into `AVAR2/Resources/`.
 2. Rebuild the app; the file will appear in the launcher menu.
 
 ## Project Structure

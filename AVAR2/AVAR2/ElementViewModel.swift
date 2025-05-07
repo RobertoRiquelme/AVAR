@@ -10,10 +10,16 @@ import RealityKit
 import RealityKitContent
 import SwiftUI
 import simd
+import OSLog
+
+// Logger for ViewModel
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel")
 
 @MainActor
 class ElementViewModel: ObservableObject {
-    private(set) var elements: [ElementDTO] = []
+    @Published private(set) var elements: [ElementDTO] = []
+    /// A user-facing error message when loading fails
+    @Published var loadErrorMessage: String? = nil
     private var entityMap: [String: Entity] = [:]
     private var lineEntities: [Entity] = []
     /// Holds the current RealityViewContent so we can update connections on the fly
@@ -26,24 +32,40 @@ class ElementViewModel: ObservableObject {
 
     func loadData(from filename: String) async {
         do {
-            self.elements = try ElementService.loadElements(from: filename)
+            let loaded = try ElementService.loadElements(from: filename)
+            self.elements = loaded
+            logger.log("Loaded \(loaded.count, privacy: .public) elements from \(filename, privacy: .public)")
         } catch {
-            print("Error loading data: \(error)")
+            let msg = "Failed to load \(filename): \(error.localizedDescription)"
+            logger.error("\(msg, privacy: .public)")
+            self.loadErrorMessage = msg
         }
     }
 
+    /// Creates and positions all element entities in the scene.
     func loadElements(in content: RealityViewContent) {
         // Keep a reference for dynamic updates
         self.sceneContent = content
+        // Remove any existing nodes & lines
+        entityMap.values.forEach { content.remove($0) }
+        entityMap.removeAll()
+        lineEntities.forEach { content.remove($0) }
+        lineEntities.removeAll()
+
+        // Instantiate each element on a vertical plane at eye level, using data's second coordinate for height
         for element in elements {
-            guard let position = element.position else { continue }
+            guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
-            //entity.position = SIMD3(Float(position[0]), Float(position[1]), position.count > 2 ? Float(position[2]) : 0)
-            let x = Float(position[0])/100.0
-            let y = Float(position[1])/100.0
-            let z = Float(position.count > 2 ? position[2] : 0) - 1.0 // 👈 Shift everything 1m forward
+            // X axis: first coordinate
+            let x = Float(coords[0]) * Constants.worldScale
+            // Y axis (vertical): second coordinate + eye level offset
+            let yData = coords.count > 1 ? Float(coords[1]) * Constants.worldScale : 0
+            let y = yData + Constants.eyeLevel
+            // Z axis (depth): third coordinate if present, else constant offset
+            let zData = coords.count > 2 ? Float(coords[2]) * Constants.worldScale : 0
+            let z = zData + Constants.frontOffset
             entity.position = SIMD3(x, y, z)
-            print("Entity '\(element.id)' placed at \(entity.position)")
+            logger.debug("Placing entity \(element.id, privacy: .public) at \(entity.position)")
             content.add(entity)
             entityMap[element.id] = entity
         }
@@ -135,38 +157,8 @@ class ElementViewModel: ObservableObject {
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {
-        // Determine mesh based on shapeDescription
-        let mesh: MeshResource
-        let material = createMaterial(from: element)
-        let desc = element.shape?.shapeDescription?.lowercased() ?? ""
-        let extent = element.shape?.extent ?? []
-        if desc.contains("box") {
-            // Box: use 3D extents or default (scaled from data units)
-            let size = SIMD3<Float>(
-                extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05,
-                extent.count > 1 ? Float(extent[1]) / 100.0 : 0.05,
-                extent.count > 2 ? Float(extent[2]) / 100.0 : 0.05
-            )
-            mesh = MeshResource.generateBox(size: size)
-        } else if desc.contains("sphere") {
-            // Sphere: radius scaled
-            let radius = extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05
-            mesh = MeshResource.generateSphere(radius: radius)
-        } else if desc.contains("cylinder") {
-            // Cylinder: radius and height scaled
-            let radius = extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05
-            let height = extent.count > 1 ? Float(extent[1]) / 100.0 : radius * 2
-            mesh = MeshResource.generateCylinder(height: height, radius: radius)
-        } else if desc.contains("cone") {
-            // Cone: height and base radius scaled
-            let radius = extent.count > 0 ? Float(extent[0]) / 100.0 : 0.05
-            let height = extent.count > 1 ? Float(extent[1]) / 100.0 : radius * 2
-            mesh = MeshResource.generateCone(height: height, radius: radius)
-        } else {
-            // Default small box
-            mesh = MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.05, 0.05))
-        }
-
+        // Create mesh and material via shape factory
+        let (mesh, material) = element.meshAndMaterial()
         let entity = ModelEntity(mesh: mesh, materials: [material])
         entity.name = "element_\(element.id)"
 
@@ -191,16 +183,6 @@ class ElementViewModel: ObservableObject {
         return entity
     }
 
-    private func createMaterial(from element: ElementDTO) -> SimpleMaterial {
-        let color = element.color ?? element.shape?.color ?? [0.2, 0.4, 1.0, 1.0]
-        let uiColor = UIColor(
-            red: CGFloat(color[0]),
-            green: CGFloat(color[1]),
-            blue: CGFloat(color[2]),
-            alpha: color.count > 3 ? CGFloat(color[3]) : 1.0
-        )
-        return SimpleMaterial(color: uiColor, isMetallic: false)
-    }
 
     private func createLineBetween(_ id1: String, and id2: String) -> ModelEntity? {
         guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { return nil }

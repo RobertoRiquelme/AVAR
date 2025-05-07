@@ -17,30 +17,36 @@ struct ContentView: View {
 
     var body: some View {
         RealityView { content in
-            
             viewModel.loadElements(in: content)
         } update: { content in
             viewModel.updateConnections(in: content)
         }
         .task {
-            // Load the selected example file
             await viewModel.loadData(from: filename)
-            print("Loaded \(viewModel.elements.count) elements from \(filename)")
         }
-        .onAppear { print("Visible") }
         .gesture(
             DragGesture(minimumDistance: 0).targetedToAnyEntity()
-                .onChanged { value in
-                    viewModel.handleDragChanged(value)
-                }
-                .onEnded { value in
-                    viewModel.handleDragEnded(value)
-                }
+                .onChanged(viewModel.handleDragChanged)
+                .onEnded(viewModel.handleDragEnded)
         )
+        // Alert on load error
+        .alert("Error Loading Data", isPresented: Binding(
+            get: { viewModel.loadErrorMessage != nil },
+            set: { if !$0 { viewModel.loadErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { viewModel.loadErrorMessage = nil }
+        } message: {
+            Text(viewModel.loadErrorMessage ?? "Unknown error.")
+        }
     }
 }
 
-#Preview(windowStyle: .automatic) {
-    ContentView()
-        .environment(AppModel())
+// MARK: - Previews
+#if DEBUG
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView(filename: "Simple Tree")
+            .environment(AppModel())
+    }
 }
+#endif
