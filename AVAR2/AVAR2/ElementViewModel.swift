@@ -16,6 +16,8 @@ class ElementViewModel: ObservableObject {
     private(set) var elements: [ElementDTO] = []
     private var entityMap: [String: Entity] = [:]
     private var lineEntities: [Entity] = []
+    /// Holds the current RealityViewContent so we can update connections on the fly
+    private var sceneContent: RealityViewContent?
     private var selectedEntity: Entity?
 
     func loadData(from filename: String) async {
@@ -27,6 +29,8 @@ class ElementViewModel: ObservableObject {
     }
 
     func loadElements(in content: RealityViewContent) {
+        // Keep a reference for dynamic updates
+        self.sceneContent = content
         for element in elements {
             guard let position = element.position else { continue }
             let entity = createEntity(for: element)
@@ -136,13 +140,24 @@ class ElementViewModel: ObservableObject {
     }
 
     func handleDragChanged(_ value: EntityTargetValue<DragGesture.Value>) {
-        guard value.entity.name.components(separatedBy: "_").last != nil else { return }
+        // Ensure this is one of our element entities
+        guard let nameSuffix = value.entity.name.split(separator: "_").last,
+              !nameSuffix.isEmpty else { return }
+        // Move the entity
         value.entity.position += SIMD3(value.gestureValue.translation3D)
         selectedEntity = value.entity
+        // Update connection lines immediately
+        if let content = sceneContent {
+            updateConnections(in: content)
+        }
     }
 
     func handleDragEnded(_ value: EntityTargetValue<DragGesture.Value>) {
         selectedEntity = nil
+        // Finalize connection positions after drag
+        if let content = sceneContent {
+            updateConnections(in: content)
+        }
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {
