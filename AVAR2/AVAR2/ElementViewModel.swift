@@ -104,7 +104,8 @@ class ElementViewModel: ObservableObject {
             return entity
         }
 
-        let origin = SIMD3<Float>(0, 0, -1)
+        // Place grid and axes at eye level and forward offset
+        let origin = SIMD3<Float>(0, Constants.eyeLevel, Constants.frontOffset)
 
         // X Axis (Red)
         content.add(axis(from: origin, to: origin + SIMD3(axisLength, 0, 0), color: .red))

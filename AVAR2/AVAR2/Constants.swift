@@ -12,7 +12,9 @@ enum Constants {
     /// Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
     static let worldScale: Float = 0.01
     /// Vertical offset for placing content at eye level (meters).
-    static let eyeLevel: Float = 0.0
+    /// Vertical offset for placing content at eye level (meters).
+    /// Typical eye height is ~1.6 meters.
+    static let eyeLevel: Float = 1.6
     /// Forward offset to move content in front of the camera (meters).
-    static let frontOffset: Float = -1.0
+    static let frontOffset: Float = -2.0
 }
