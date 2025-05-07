@@ -10,28 +10,69 @@ import SwiftUI
 @main
 struct AVAR2: App {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+
+    // Gather all example files in the bundle (without extension)
+    let files: [String]
+    @State private var selectedFile: String
+    @State private var hasEnteredImmersive: Bool = false
+
+    init() {
+        // Find all .txt resources in the main bundle
+        let names = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil)?
+            .map { $0.deletingPathExtension().lastPathComponent }
+            .sorted() ?? []
+        self.files = names
+        // Default to first file if available
+        _selectedFile = State(initialValue: names.first ?? "")
+    }
 
     var body: some Scene {
-        
         // 1. 2D launcher
         WindowGroup {
-            VStack {
+            VStack(spacing: 20) {
                 Text("Launch Immersive Experience")
                     .font(.title)
-                    .padding()
+                    .padding(.top)
 
+                // Picker to choose which example file to load
+                Picker("Select Example", selection: $selectedFile) {
+                    ForEach(files, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .pickerStyle(.menu)
+                .padding(.horizontal)
+
+                // Enter immersive space with the selected example
                 Button("Enter Immersive Space") {
                     Task {
+                        await openImmersiveSpace(id: "MainImmersive")
+                        hasEnteredImmersive = true
+                    }
+                }
+                .font(.title2)
+                .disabled(selectedFile.isEmpty)
+
+                // Reload immersive content with the currently selected example
+                Button("Reload Immersive Space") {
+                    Task {
+                        await dismissImmersiveSpace()
                         await openImmersiveSpace(id: "MainImmersive")
                     }
                 }
                 .font(.title2)
+                .disabled(!hasEnteredImmersive)
+
+                Spacer()
             }
+            .padding()
         }
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
-            ContentView()
+            // Pass selected file to ContentView
+            ContentView(filename: selectedFile)
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }

@@ -9,7 +9,10 @@ import SwiftUI
 import RealityKit
 import RealityKitContent
 
+/// Displays an immersive graph based on a selected example file.
 struct ContentView: View {
+    /// The resource filename (without extension) to load.
+    var filename: String = "2D Tree Layout"
     @StateObject private var viewModel = ElementViewModel()
 
     var body: some View {
@@ -24,8 +27,9 @@ struct ContentView: View {
             viewModel.updateConnections(in: content)
         }
         .task {
-            await viewModel.loadData(from: "2D Tree Layout") // confirm this file exists
-            print("Loaded \(viewModel.elements.count) elements")
+            // Load the selected example file
+            await viewModel.loadData(from: filename)
+            print("Loaded \(viewModel.elements.count) elements from \(filename)")
         }
         .onAppear { print("Visible") }
         .gesture(

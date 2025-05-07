@@ -46,9 +46,12 @@ struct ElementDTO: Codable {
     let color: [Double]?        // RGBA, etc.
     let id: String              // always exposed as String
     let type: String            // e.g. "camera", "RTelement", etc.
+    let fromId: String?         // for edges: source element ID
+    let toId: String?           // for edges: destination element ID
 
     private enum CodingKeys: String, CodingKey {
         case shape, position, color, id, type
+        case fromId = "from_id", toId = "to_id"
     }
 
     init(from decoder: Decoder) throws {
@@ -76,6 +79,18 @@ struct ElementDTO: Codable {
         }
 
         self.type = try c.decode(String.self, forKey: .type)
+        // Decode from_id as Int or String
+        if let fromInt = try? c.decode(Int.self, forKey: .fromId) {
+            self.fromId = String(fromInt)
+        } else {
+            self.fromId = try c.decodeIfPresent(String.self, forKey: .fromId)
+        }
+        // Decode to_id as Int or String
+        if let toInt = try? c.decode(Int.self, forKey: .toId) {
+            self.toId = String(toInt)
+        } else {
+            self.toId = try c.decodeIfPresent(String.self, forKey: .toId)
+        }
     }
 }
 

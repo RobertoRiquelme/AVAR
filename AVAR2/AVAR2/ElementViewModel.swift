@@ -9,6 +9,7 @@ import Foundation
 import RealityKit
 import RealityKitContent
 import SwiftUI
+import simd
 
 @MainActor
 class ElementViewModel: ObservableObject {
@@ -83,18 +84,18 @@ class ElementViewModel: ObservableObject {
 //        addCoordinateGrid(to: content)
 //    }
     
+    /// Draws lines for each edge specified by fromId/toId on edge elements.
     func updateConnections(in content: RealityViewContent) {
+        // Remove existing lines
         lineEntities.forEach { content.remove($0) }
         lineEntities.removeAll()
 
-        for e1 in elements {
-            for e2 in elements {
-                if e1.id != e2.id && areConnected(e1, e2) {
-                    if let line = createLineBetween(e1.id, and: e2.id) {
-                        content.add(line)
-                        lineEntities.append(line)
-                    }
-                }
+        // For each element that defines an edge, connect fromId -> toId
+        for edge in elements {
+            if let from = edge.fromId, let to = edge.toId,
+               let line = createLineBetween(from, and: to) {
+                content.add(line)
+                lineEntities.append(line)
             }
         }
     }
@@ -166,10 +167,21 @@ class ElementViewModel: ObservableObject {
         let entity = ModelEntity(mesh: mesh, materials: [material])
         entity.name = "element_\(element.id)"
 
-        let text = element.shape?.text ?? element.id
-        let labelEntity = createLabelEntity(text: text)
-        labelEntity.position.y += 0.1
-        entity.addChild(labelEntity)
+        // Add a label if meaningful: skip if shape.text is "nil" or empty
+        let rawText = element.shape?.text
+        let labelText: String? = {
+            if let t = rawText, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               t.lowercased() != "nil" {
+                return t
+            }
+            // Fallback to id if available
+            return element.id.isEmpty ? nil : element.id
+        }()
+        if let text = labelText {
+            let labelEntity = createLabelEntity(text: text)
+            labelEntity.position.y += 0.1
+            entity.addChild(labelEntity)
+        }
 
         entity.generateCollisionShapes(recursive: true)
         entity.components.set(InputTargetComponent())
@@ -200,7 +212,12 @@ class ElementViewModel: ObservableObject {
 
         let lineEntity = ModelEntity(mesh: mesh, materials: [material])
         lineEntity.position = pos1 + (lineVector / 2)
-        lineEntity.look(at: pos2, from: lineEntity.position, relativeTo: nil)
+        // Orient the line along the vector: rotate +X axis to match the direction
+        if length > 0 {
+            let direction = lineVector / length
+            let quat = simd_quatf(from: SIMD3<Float>(1, 0, 0), to: direction)
+            lineEntity.orientation = quat
+        }
 
         return lineEntity
     }
@@ -211,11 +228,4 @@ class ElementViewModel: ObservableObject {
         return ModelEntity(mesh: mesh, materials: [material])
     }
 
-    private func areConnected(_ e1: ElementDTO, _ e2: ElementDTO) -> Bool {
-        // Simple heuristic: if one is type "edge" and the id references others
-        if e1.type.lowercased().contains("edge") {
-            return e1.id.contains(e2.id)
-        }
-        return false
-    }
 }
