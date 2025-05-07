@@ -19,6 +19,10 @@ class ElementViewModel: ObservableObject {
     /// Holds the current RealityViewContent so we can update connections on the fly
     private var sceneContent: RealityViewContent?
     private var selectedEntity: Entity?
+    /// Tracks which entity is currently being dragged
+    private var draggingEntity: Entity?
+    /// The world-space position at the start of the current drag
+    private var draggingStartPosition: SIMD3<Float>?
 
     func loadData(from filename: String) async {
         do {
@@ -140,21 +144,32 @@ class ElementViewModel: ObservableObject {
     }
 
     func handleDragChanged(_ value: EntityTargetValue<DragGesture.Value>) {
-        // Ensure this is one of our element entities
-        guard let nameSuffix = value.entity.name.split(separator: "_").last,
-              !nameSuffix.isEmpty else { return }
-        // Move the entity
-        value.entity.position += SIMD3(value.gestureValue.translation3D)
-        selectedEntity = value.entity
-        // Update connection lines immediately
-        if let content = sceneContent {
-            updateConnections(in: content)
+        // Only allow dragging of our element entities
+        guard value.entity.name.hasPrefix("element_") else { return }
+        // Initialize drag state if needed
+        if draggingEntity !== value.entity {
+            draggingEntity = value.entity
+            draggingStartPosition = value.entity.position
+        }
+        // Compute new position based on start + translation
+        if let start = draggingStartPosition {
+            // translation3D already yields SIMD3<Float>
+            let translation3D = value.gestureValue.translation3D
+            value.entity.position = start + translation3D
+            selectedEntity = value.entity
+            // Update connection lines immediately
+            if let content = sceneContent {
+                updateConnections(in: content)
+            }
         }
     }
 
     func handleDragEnded(_ value: EntityTargetValue<DragGesture.Value>) {
+        // Clear drag state
+        draggingEntity = nil
+        draggingStartPosition = nil
         selectedEntity = nil
-        // Finalize connection positions after drag
+        // Final update of connection lines
         if let content = sceneContent {
             updateConnections(in: content)
         }

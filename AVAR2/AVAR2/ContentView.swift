@@ -18,10 +18,6 @@ struct ContentView: View {
     var body: some View {
         RealityView { content in
             
-            let testBox = ModelEntity(mesh: .generateBox(size: 0.2), materials: [SimpleMaterial(color: .red, isMetallic: true)])
-            testBox.position = SIMD3(1, 1, -1) // 1 meter in front of user
-            content.add(testBox)
-            
             viewModel.loadElements(in: content)
         } update: { content in
             viewModel.updateConnections(in: content)
