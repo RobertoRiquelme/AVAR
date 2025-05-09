@@ -24,10 +24,39 @@ struct ContentView: View {
         .task {
             await viewModel.loadData(from: filename)
         }
+        // Combined drag gesture: element drag vs background pan
         .gesture(
             DragGesture(minimumDistance: 0).targetedToAnyEntity()
-                .onChanged(viewModel.handleDragChanged)
-                .onEnded(viewModel.handleDragEnded)
+                .onChanged { value in
+                    let name = value.entity.name
+                    if name.starts(with: "element_") {
+                        viewModel.handleDragChanged(value)
+                    } else if name == "graphBackground" {
+                        viewModel.handlePanChanged(value)
+                    }
+                }
+                .onEnded { value in
+                    let name = value.entity.name
+                    if name.starts(with: "element_") {
+                        viewModel.handleDragEnded(value)
+                    } else if name == "graphBackground" {
+                        viewModel.handlePanEnded(value)
+                    }
+                }
+        )
+        // Pinch gesture on background to zoom whole diagram
+        .simultaneousGesture(
+            MagnificationGesture().targetedToAnyEntity()
+                .onChanged { value in
+                    if value.entity.name == "graphBackground" {
+                        viewModel.handleZoomChanged(value)
+                    }
+                }
+                .onEnded { value in
+                    if value.entity.name == "graphBackground" {
+                        viewModel.handleZoomEnded(value)
+                    }
+                }
         )
         // Alert on load error
         .alert("Error Loading Data", isPresented: Binding(

@@ -44,25 +44,18 @@ struct AVAR2: App {
                 .pickerStyle(.menu)
                 .padding(.horizontal)
 
-                // Enter immersive space with the selected example
-                Button("Enter Immersive Space") {
+                // Load immersive content with the currently selected example
+                Button("Load Immersive Space") {
                     Task {
-                        await openImmersiveSpace(id: "MainImmersive")
-                        hasEnteredImmersive = true
-                    }
-                }
-                .font(.title2)
-                .disabled(selectedFile.isEmpty)
-
-                // Reload immersive content with the currently selected example
-                Button("Reload Immersive Space") {
-                    Task {
-                        await dismissImmersiveSpace()
+                        if(!hasEnteredImmersive){
+                            hasEnteredImmersive = true
+                        } else {
+                            await dismissImmersiveSpace()
+                        }
                         await openImmersiveSpace(id: "MainImmersive")
                     }
                 }
                 .font(.title2)
-                .disabled(!hasEnteredImmersive)
 
                 Spacer()
             }

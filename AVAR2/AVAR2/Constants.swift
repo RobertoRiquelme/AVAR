@@ -14,7 +14,10 @@ enum Constants {
     /// Vertical offset for placing content at eye level (meters).
     /// Vertical offset for placing content at eye level (meters).
     /// Typical eye height is ~1.6 meters.
-    static let eyeLevel: Float = 1.6
-    /// Forward offset to move content in front of the camera (meters).
+    static let eyeLevel: Float = 1.0
+    /// Forward offset to move
+    ///  content in front of the camera (meters).
     static let frontOffset: Float = -2.0
+    /// Scale factor for 3D drag translation: smaller values reduce sensitivity.
+    static let dragTranslationScale: Float = 0.001
 }

@@ -24,6 +24,14 @@ class ElementViewModel: ObservableObject {
     private var lineEntities: [Entity] = []
     /// Holds the current RealityViewContent so we can update connections on the fly
     private var sceneContent: RealityViewContent?
+    /// Root container for all graph entities (so we can scale/transform as a group)
+    private var rootEntity: Entity?
+    /// Background entity to capture pan/zoom gestures
+    private var backgroundEntity: Entity?
+    /// Starting uniform scale for the container when zoom begins
+    private var zoomStartScale: Float?
+    /// Starting position for root container when panning begins
+    private var panStartPosition: SIMD3<Float>?
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
     private var draggingEntity: Entity?
@@ -44,55 +52,79 @@ class ElementViewModel: ObservableObject {
 
     /// Creates and positions all element entities in the scene.
     func loadElements(in content: RealityViewContent) {
-        // Keep a reference for dynamic updates
+        // Keep reference for dynamic updates
         self.sceneContent = content
-        // Remove any existing nodes & lines
-        entityMap.values.forEach { content.remove($0) }
+        // Remove previous graph container and background
+        if let existing = rootEntity {
+            content.remove(existing)
+        }
+        if let bg = backgroundEntity {
+            content.remove(bg)
+        }
+        // Pivot for graph origin and background plane
+        let pivot = SIMD3<Float>(0, Constants.eyeLevel, Constants.frontOffset)
+        // Add invisible background to capture pan and zoom
+        let background = Entity()
+        background.name = "graphBackground"
+        let bgShape = ShapeResource.generateBox(size: [10, 10, 0.01])
+        background.components.set(CollisionComponent(shapes: [bgShape]))
+        background.components.set(InputTargetComponent())
+        background.position = pivot
+        content.add(background)
+        self.backgroundEntity = background
+        // Create new root container under pivot
+        let container = Entity()
+        container.name = "graphRoot"
+        container.position = pivot
+        content.add(container)
+        self.rootEntity = container
+        // Clear any existing entities and lines
         entityMap.removeAll()
-        lineEntities.forEach { content.remove($0) }
         lineEntities.removeAll()
-
-        // Instantiate each element on a vertical plane at eye level, using data's second coordinate for height
+        // Instantiate each element and add under root
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
-            // X axis: first coordinate
+            // Compute world position
             let x = Float(coords[0]) * Constants.worldScale
-            // Y axis (vertical): second coordinate + eye level offset
             let yData = coords.count > 1 ? Float(coords[1]) * Constants.worldScale : 0
             let y = yData + Constants.eyeLevel
-            // Z axis (depth): third coordinate if present, else constant offset
             let zData = coords.count > 2 ? Float(coords[2]) * Constants.worldScale : 0
             let z = zData + Constants.frontOffset
-            entity.position = SIMD3(x, y, z)
-            logger.debug("Placing entity \(element.id, privacy: .public) at \(entity.position)")
-            content.add(entity)
+            let worldPos = SIMD3<Float>(x, y, z)
+            // Position relative to pivot
+            entity.position = worldPos - pivot
+            logger.debug("Placing entity \(element.id, privacy: .public) at \(worldPos)")
+            container.addChild(entity)
             entityMap[element.id] = entity
         }
+        // Draw connections and grid under root
         updateConnections(in: content)
-        addCoordinateGrid(to: content)
+        addCoordinateGrid()
     }
     
     /// Draws lines for each edge specified by fromId/toId on edge elements.
+    /// Rebuilds all connection lines under the root container
     func updateConnections(in content: RealityViewContent) {
+        guard let container = rootEntity else { return }
         // Remove existing lines
-        lineEntities.forEach { content.remove($0) }
+        lineEntities.forEach { $0.removeFromParent() }
         lineEntities.removeAll()
-
         // For each element that defines an edge, connect fromId -> toId
         for edge in elements {
             if let from = edge.fromId, let to = edge.toId,
                let line = createLineBetween(from, and: to) {
-                content.add(line)
+                container.addChild(line)
                 lineEntities.append(line)
             }
         }
     }
 
-    func addCoordinateGrid(to content: RealityViewContent) {
+    /// Adds XYZ axes and optional grid lines under the root container
+    private func addCoordinateGrid() {
+        guard let container = rootEntity else { return }
         let axisLength: Float = 1.0
         let lineThickness: Float = 0.002
-
         func axis(from: SIMD3<Float>, to: SIMD3<Float>, color: UIColor) -> ModelEntity {
             let vector = to - from
             let length = simd_length(vector)
@@ -103,25 +135,18 @@ class ElementViewModel: ObservableObject {
             entity.look(at: to, from: entity.position, relativeTo: nil)
             return entity
         }
-
-        // Place grid and axes at eye level and forward offset
-        let origin = SIMD3<Float>(0, Constants.eyeLevel, Constants.frontOffset)
-
-        // X Axis (Red)
-        content.add(axis(from: origin, to: origin + SIMD3(axisLength, 0, 0), color: .red))
-        // Y Axis (Green)
-        content.add(axis(from: origin, to: origin + SIMD3(0, axisLength, 0), color: .green))
-        // Z Axis (Blue)
-        content.add(axis(from: origin, to: origin + SIMD3(0, 0, axisLength), color: .blue))
-
-        // Optional: Ground grid or XY plane
+        // Local origin for axes and grid
+        let originLocal = SIMD3<Float>(0, 0, 0)
+        // Axes at container origin
+        container.addChild(axis(from: originLocal, to: originLocal + SIMD3(axisLength, 0, 0), color: .red))
+        container.addChild(axis(from: originLocal, to: originLocal + SIMD3(0, axisLength, 0), color: .green))
+        container.addChild(axis(from: originLocal, to: originLocal + SIMD3(0, 0, axisLength), color: .blue))
+        // Grid lines in XZ plane around origin
         let gridSize = 2
         for i in -gridSize...gridSize {
             let offset = Float(i) * 0.1
-            // X grid lines
-            content.add(axis(from: origin + SIMD3(-0.5, 0, offset), to: origin + SIMD3(0.5, 0, offset), color: .gray))
-            // Z grid lines
-            content.add(axis(from: origin + SIMD3(offset, 0, -0.5), to: origin + SIMD3(offset, 0, 0.5), color: .gray))
+            container.addChild(axis(from: SIMD3(-0.5, 0, offset), to: SIMD3(0.5, 0, offset), color: .gray))
+            container.addChild(axis(from: SIMD3(offset, 0, -0.5), to: SIMD3(offset, 0, 0.5), color: .gray))
         }
     }
 
@@ -133,11 +158,14 @@ class ElementViewModel: ObservableObject {
             draggingEntity = value.entity
             draggingStartPosition = value.entity.position
         }
-        // Compute new position based on start + translation
+        // Compute new position based on start + gesture's 3D translation
         if let start = draggingStartPosition {
-            // translation3D already yields SIMD3<Float>
-            let translation3D = value.gestureValue.translation3D
-            value.entity.position = start + translation3D
+            // Get 3D gesture translation (Vector3D) and convert to SIMD3<Float>
+            let t3 = value.gestureValue.translation3D
+            let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z))
+            // Apply scale
+            let offset = delta * Constants.dragTranslationScale
+            value.entity.position = start + offset
             selectedEntity = value.entity
             // Update connection lines immediately
             if let content = sceneContent {
@@ -155,6 +183,41 @@ class ElementViewModel: ObservableObject {
         if let content = sceneContent {
             updateConnections(in: content)
         }
+    }
+    
+    /// Handle pinch gesture to uniformly scale the entire graph container
+    func handleZoomChanged(_ value: EntityTargetValue<MagnificationGesture.Value>) {
+        guard let container = rootEntity else { return }
+        // Initialize starting scale
+        if zoomStartScale == nil {
+            zoomStartScale = container.scale.x
+        }
+        // Compute new scale relative to initial
+        let current = Float(value.gestureValue)
+        let newScale = zoomStartScale! * current
+        container.scale = SIMD3<Float>(repeating: newScale)
+    }
+
+    func handleZoomEnded(_ value: EntityTargetValue<MagnificationGesture.Value>) {
+        zoomStartScale = nil
+    }
+    
+    /// Handle pan gesture to move the entire graph origin
+    func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
+        guard let container = rootEntity else { return }
+        // Initialize pan start support
+        if panStartPosition == nil {
+            panStartPosition = container.position
+        }
+        // Convert gesture translation3D (Vector3D) to SIMD3<Float>
+        let t3 = value.gestureValue.translation3D
+        let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z))
+        let offset = delta * Constants.dragTranslationScale
+        container.position = panStartPosition! + offset
+    }
+
+    func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
+        panStartPosition = nil
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {

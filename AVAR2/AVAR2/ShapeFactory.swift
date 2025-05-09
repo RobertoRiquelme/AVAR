@@ -48,7 +48,7 @@ extension ElementDTO {
             mesh = MeshResource.generateCone(height: height, radius: radius)
         } else {
             // Default mesh: small box
-            mesh = MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.05, 0.05))
+            mesh = MeshResource.generateBox(size: SIMD3<Float>(0.0, 0.0, 0.0))
         }
 
         return (mesh, material)
