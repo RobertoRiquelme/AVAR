@@ -234,7 +234,7 @@ class ElementViewModel: ObservableObject {
                 return t
             }
             // Fallback to id if available
-            return element.id.isEmpty ? nil : element.id
+            return element.id.isEmpty ? nil : "" //element.id
         }()
         if let text = labelText {
             let labelEntity = createLabelEntity(text: text)
