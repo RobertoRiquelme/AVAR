@@ -162,7 +162,7 @@ class ElementViewModel: ObservableObject {
         if let start = draggingStartPosition {
             // Get 3D gesture translation (Vector3D) and convert to SIMD3<Float>
             let t3 = value.gestureValue.translation3D
-            let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z))
+            let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z))
             // Apply scale
             let offset = delta * Constants.dragTranslationScale
             value.entity.position = start + offset
@@ -191,6 +191,8 @@ class ElementViewModel: ObservableObject {
         // Initialize starting scale
         if zoomStartScale == nil {
             zoomStartScale = container.scale.x
+            zoomStartScale = container.scale.y
+            zoomStartScale = container.scale.z
         }
         // Compute new scale relative to initial
         let current = Float(value.gestureValue)
@@ -211,7 +213,7 @@ class ElementViewModel: ObservableObject {
         }
         // Convert gesture translation3D (Vector3D) to SIMD3<Float>
         let t3 = value.gestureValue.translation3D
-        let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z))
+        let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z))
         let offset = delta * Constants.dragTranslationScale
         container.position = panStartPosition! + offset
     }
