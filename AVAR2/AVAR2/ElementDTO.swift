@@ -48,9 +48,10 @@ struct ElementDTO: Codable {
     let type: String            // e.g. "camera", "RTelement", etc.
     let fromId: String?         // for edges: source element ID
     let toId: String?           // for edges: destination element ID
+    let interactions: [String]? // defines interactions for elements
 
     private enum CodingKeys: String, CodingKey {
-        case shape, position, color, id, type
+        case shape, position, color, id, type, interactions
         case fromId = "from_id", toId = "to_id"
     }
 
@@ -68,6 +69,7 @@ struct ElementDTO: Codable {
 
         self.position = try c.decodeIfPresent([Double].self, forKey: .position)
         self.color    = try c.decodeIfPresent([Double].self, forKey: .color)
+        self.interactions = try c.decodeIfPresent([String].self, forKey: .interactions)
 
         // Decode id as Int or String
         if let intID = try? c.decode(Int.self, forKey: .id) {

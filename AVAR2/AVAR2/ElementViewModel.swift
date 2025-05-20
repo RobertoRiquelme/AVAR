@@ -30,6 +30,10 @@ class ElementViewModel: ObservableObject {
     private var backgroundEntity: Entity?
     /// Starting uniform scale for the container when zoom begins
     private var zoomStartScale: Float?
+    /// Pivot point in world space at zoom start
+    private var zoomPivotWorld: SIMD3<Float>?
+    /// Pivot point in container-local space (normalized, unscaled) at zoom start
+    private var zoomPivotLocal: SIMD3<Float>?
     /// Starting position for root container when panning begins
     private var panStartPosition: SIMD3<Float>?
     private var selectedEntity: Entity?
@@ -85,14 +89,15 @@ class ElementViewModel: ObservableObject {
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
-            // Compute world position
+            // Compute world position, flipping Y so positive data Y goes downward relative to eye level
             let x = Float(coords[0]) * Constants.worldScale
             let yData = coords.count > 1 ? Float(coords[1]) * Constants.worldScale : 0
-            let y = yData + Constants.eyeLevel
+            // Invert Y: place at eye level minus data offset
+            let y = Constants.eyeLevel - yData
             let zData = coords.count > 2 ? Float(coords[2]) * Constants.worldScale : 0
             let z = zData + Constants.frontOffset
             let worldPos = SIMD3<Float>(x, y, z)
-            // Position relative to pivot
+            // Position relative to pivot (worldPos - pivot yields local = [x, -yData, zData])
             entity.position = worldPos - pivot
             logger.debug("Placing entity \(element.id, privacy: .public) at \(worldPos)")
             container.addChild(entity)
@@ -185,23 +190,40 @@ class ElementViewModel: ObservableObject {
         }
     }
     
-    /// Handle pinch gesture to uniformly scale the entire graph container
+    /// Handle pinch gesture to uniformly scale the entire graph container, pivoting around the touched entity
     func handleZoomChanged(_ value: EntityTargetValue<MagnificationGesture.Value>) {
         guard let container = rootEntity else { return }
-        // Initialize starting scale
-        if zoomStartScale == nil {
-            zoomStartScale = container.scale.x
-            zoomStartScale = container.scale.y
-            zoomStartScale = container.scale.z
-        }
-        // Compute new scale relative to initial
+        // Magnification amount (1.0 = no change)
         let current = Float(value.gestureValue)
+        // On first change, record initial scale and pivot
+        if zoomStartScale == nil {
+            // record starting uniform scale
+            zoomStartScale = container.scale.x
+            // compute pivot in world space: the touched entity's origin
+            let pivotWorld = value.entity.convert(position: SIMD3<Float>(0, 0, 0), to: nil)
+            zoomPivotWorld = pivotWorld
+            // compute pivot in container-local space (accounting for initial scale)
+            let localWithScale = container.convert(position: pivotWorld, from: nil)
+            // normalize by initial scale to get unscaled local coordinates
+            zoomPivotLocal = localWithScale / zoomStartScale!
+        }
+        // compute new uniform scale
         let newScale = zoomStartScale! * current
         container.scale = SIMD3<Float>(repeating: newScale)
+        // reposition container so that pivotWorld remains fixed under the pinch
+        if let pivotWorld = zoomPivotWorld, let pivotLocal = zoomPivotLocal {
+            // compute local pivot after scaling
+            let scaledLocal = pivotLocal * newScale
+            // set new container position so pivotWorld = container.position + scaledLocal
+            container.position = pivotWorld - scaledLocal
+        }
     }
 
     func handleZoomEnded(_ value: EntityTargetValue<MagnificationGesture.Value>) {
+        // clear zoom state
         zoomStartScale = nil
+        zoomPivotWorld = nil
+        zoomPivotLocal = nil
     }
     
     /// Handle pan gesture to move the entire graph origin

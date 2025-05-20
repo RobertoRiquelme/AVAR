@@ -22,7 +22,7 @@ extension ElementDTO {
             blue: CGFloat(rgba[2]),
             alpha: rgba.count > 3 ? CGFloat(rgba[3]) : 1.0
         )
-        let material = SimpleMaterial(color: uiColor, isMetallic: false)
+        let material = SimpleMaterial(color: uiColor, roughness: 0.5, isMetallic: false)
 
         // Shape descriptor and dimension array
         let desc = shape?.shapeDescription?.lowercased() ?? ""
@@ -30,12 +30,12 @@ extension ElementDTO {
 
         // Select mesh primitive
         let mesh: MeshResource
-        if desc.contains("box") {
+        if desc.contains("box") || desc.contains("cube") {
             let width  = extent.count > 0 ? Float(extent[0]) * Constants.worldScale : 0.1
             let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale : 0.1
             let depth  = extent.count > 2 ? Float(extent[2]) * Constants.worldScale : 0.1
             mesh = MeshResource.generateBox(size: SIMD3(width, height, depth))
-        } else if desc.contains("sphere") {
+        } else if desc.contains("sphere") || desc.contains("ellipse") {
             let radius = extent.count > 0 ? Float(extent[0]) * Constants.worldScale : 0.05
             mesh = MeshResource.generateSphere(radius: radius)
         } else if desc.contains("cylinder") {

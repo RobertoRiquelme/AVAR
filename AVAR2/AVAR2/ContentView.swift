@@ -44,20 +44,16 @@ struct ContentView: View {
                     }
                 }
         )
-        // Pinch gesture on background to zoom whole diagram
-        .simultaneousGesture(
-            MagnificationGesture().targetedToAnyEntity()
-                .onChanged { value in
-                    if value.entity.name == "graphBackground" {
-                        viewModel.handleZoomChanged(value)
-                    }
-                }
-                .onEnded { value in
-                    if value.entity.name == "graphBackground" {
-                        viewModel.handleZoomEnded(value)
-                    }
-                }
-        )
+        // Pinch gesture (on any entity) to zoom whole diagram, pivoting around touched entity
+//        .simultaneousGesture(
+//            MagnificationGesture().targetedToAnyEntity()
+//                .onChanged { value in
+//                    viewModel.handleZoomChanged(value)
+//                }
+//                .onEnded { value in
+//                    viewModel.handleZoomEnded(value)
+//                }
+//        )
         // Alert on load error
         .alert("Error Loading Data", isPresented: Binding(
             get: { viewModel.loadErrorMessage != nil },
@@ -75,7 +71,7 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView(filename: "Simple Tree")
-            .environment(AppModel())
+            //.environment(AppModel())
     }
 }
 #endif
