@@ -118,7 +118,7 @@ class ElementViewModel: ObservableObject {
         // For each element that defines an edge, connect fromId -> toId
         for edge in elements {
             if let from = edge.fromId, let to = edge.toId,
-               let line = createLineBetween(from, and: to) {
+               let line = createLineBetween(from, and: to, colorComponents: edge.color ?? edge.shape?.color) {
                 container.addChild(line)
                 lineEntities.append(line)
             }
@@ -276,7 +276,7 @@ class ElementViewModel: ObservableObject {
     }
 
 
-    private func createLineBetween(_ id1: String, and id2: String) -> ModelEntity? {
+    private func createLineBetween(_ id1: String, and id2: String, colorComponents: [Double]?) -> ModelEntity? {
         guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { return nil }
 
         let pos1 = entity1.position
@@ -285,7 +285,18 @@ class ElementViewModel: ObservableObject {
         let length = simd_length(lineVector)
 
         let mesh = MeshResource.generateBox(size: SIMD3(length, 0.002, 0.002))
-        let material = SimpleMaterial(color: .gray, isMetallic: false)
+        let materialColor: UIColor = {
+            if let rgba = colorComponents {
+                return UIColor(
+                    red: CGFloat(rgba[0]),
+                    green: CGFloat(rgba[1]),
+                    blue: CGFloat(rgba[2]),
+                    alpha: rgba.count > 3 ? CGFloat(rgba[3]) : 1.0
+                )
+            }
+            return .gray
+        }()
+        let material = SimpleMaterial(color: materialColor, isMetallic: false)
 
         let lineEntity = ModelEntity(mesh: mesh, materials: [material])
         lineEntity.position = pos1 + (lineVector / 2)
