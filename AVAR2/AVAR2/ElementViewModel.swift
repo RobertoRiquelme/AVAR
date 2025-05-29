@@ -20,6 +20,8 @@ class ElementViewModel: ObservableObject {
     @Published private(set) var elements: [ElementDTO] = []
     /// A user-facing error message when loading fails
     @Published var loadErrorMessage: String? = nil
+    /// True when the loaded graph came from RTelements (2D) rather than elements (3D)
+    @Published private(set) var isGraph2D: Bool = false
     private var entityMap: [String: Entity] = [:]
     private var lineEntities: [Entity] = []
     /// Holds the current RealityViewContent so we can update connections on the fly
@@ -44,9 +46,10 @@ class ElementViewModel: ObservableObject {
 
     func loadData(from filename: String) async {
         do {
-            let loaded = try ElementService.loadElements(from: filename)
-            self.elements = loaded
-            logger.log("Loaded \(loaded.count, privacy: .public) elements from \(filename, privacy: .public)")
+            let output = try ElementService.loadScriptOutput(from: filename)
+            self.elements = output.elements
+            self.isGraph2D = output.is2D
+            logger.log("Loaded \(output.elements.count, privacy: .public) elements (2D: \(output.is2D, privacy: .public)) from \(filename, privacy: .public)")
         } catch {
             let msg = "Failed to load \(filename): \(error.localizedDescription)"
             logger.error("\(msg, privacy: .public)")
@@ -56,8 +59,10 @@ class ElementViewModel: ObservableObject {
 
     /// Creates and positions all element entities in the scene.
     func loadElements(in content: RealityViewContent) {
+        
         // Keep reference for dynamic updates
         self.sceneContent = content
+        
         // Remove previous graph container and background
         if let existing = rootEntity {
             content.remove(existing)
@@ -65,8 +70,10 @@ class ElementViewModel: ObservableObject {
         if let bg = backgroundEntity {
             content.remove(bg)
         }
+        
         // Pivot for graph origin and background plane
         let pivot = SIMD3<Float>(0, Constants.eyeLevel, Constants.frontOffset)
+        
         // Add invisible background to capture pan and zoom
         let background = Entity()
         background.name = "graphBackground"
@@ -76,25 +83,30 @@ class ElementViewModel: ObservableObject {
         background.position = pivot
         content.add(background)
         self.backgroundEntity = background
+        
         // Create new root container under pivot
         let container = Entity()
         container.name = "graphRoot"
         container.position = pivot
         content.add(container)
         self.rootEntity = container
+        
         // Clear any existing entities and lines
         entityMap.removeAll()
         lineEntities.removeAll()
+        
         // Instantiate each element and add under root
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
+            // Select appropriate scale for 2D vs 3D graphs
+            let scale: Float = isGraph2D ? Constants.worldScale2D : Constants.worldScale3D
             // Compute world position, flipping Y so positive data Y goes downward relative to eye level
-            let x = Float(coords[0]) * Constants.worldScale
-            let yData = coords.count > 1 ? Float(coords[1]) * Constants.worldScale : 0
+            let x = Float(coords[0]) * scale
+            let yData = coords.count > 1 ? Float(coords[1]) * scale : 0
             // Invert Y: place at eye level minus data offset
             let y = Constants.eyeLevel - yData
-            let zData = coords.count > 2 ? Float(coords[2]) * Constants.worldScale : 0
+            let zData = coords.count > 2 ? Float(coords[2]) * scale : 0
             let z = zData + Constants.frontOffset
             let worldPos = SIMD3<Float>(x, y, z)
             // Position relative to pivot (worldPos - pivot yields local = [x, -yData, zData])

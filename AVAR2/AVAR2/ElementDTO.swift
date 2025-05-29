@@ -14,6 +14,8 @@ import Foundation
 
 struct ScriptOutput: Codable {
     let elements: [ElementDTO]
+    /// True if decoded from the "RTelements" key (i.e. a 2D/RT graph)
+    let is2D: Bool
 
     private enum CodingKeys: String, CodingKey {
         case elements
@@ -25,8 +27,10 @@ struct ScriptOutput: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let els = try? container.decode([ElementDTO].self, forKey: .elements) {
             self.elements = els
+            self.is2D = false
         } else {
             self.elements = try container.decode([ElementDTO].self, forKey: .RTelements)
+            self.is2D = true
         }
     }
 

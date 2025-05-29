@@ -10,7 +10,7 @@ import Foundation
 /// Global constants for world scale and placement.
 enum Constants {
     /// World Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
-    static let worldScale: Float = 0.01
+    static let worldScale: Float = 0.005
     /// 2D Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
     static let worldScale2D: Float = 0.005
     /// 3D Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
