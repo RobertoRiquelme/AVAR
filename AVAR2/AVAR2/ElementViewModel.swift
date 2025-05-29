@@ -248,6 +248,10 @@ class ElementViewModel: ObservableObject {
         // Create mesh and material via shape factory
         let (mesh, material) = element.meshAndMaterial()
         let entity = ModelEntity(mesh: mesh, materials: [material])
+        if let desc = element.shape?.shapeDescription?.lowercased(), desc.contains("rtellipse") {
+            logger.log("RR - Create ellipse")
+            entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
+        }
         entity.name = "element_\(element.id)"
 
         // Add a label if meaningful: skip if shape.text is "nil" or empty
