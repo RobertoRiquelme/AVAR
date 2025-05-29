@@ -9,9 +9,12 @@ import Foundation
 
 /// Global constants for world scale and placement.
 enum Constants {
-    /// Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
+    /// World Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
     static let worldScale: Float = 0.01
-    /// Vertical offset for placing content at eye level (meters).
+    /// 2D Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
+    static let worldScale2D: Float = 0.005
+    /// 3D Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
+    static let worldScale3D: Float = 0.1
     /// Vertical offset for placing content at eye level (meters).
     /// Typical eye height is ~1.6 meters.
     static let eyeLevel: Float = 1.0

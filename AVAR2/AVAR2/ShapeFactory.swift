@@ -32,32 +32,44 @@ extension ElementDTO {
         let mesh: MeshResource
         
         // Generate 2D
-        
+        // Box, Ellipse, label, edge, element
+        if desc.contains("rt") {
+            if desc.contains("box") {
+                let width  = extent.count > 0 ? Float(extent[0]) * Constants.worldScale2D : 0.1
+                let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale2D : 0.1
+                let depth  = extent.count > 2 ? Float(extent[2]) * Constants.worldScale2D : 0.1
+                mesh = MeshResource.generateBox(size: SIMD3(width, height, depth))
+            } else if desc.contains("ellipse") {
+                let height = extent.count > 0 ? Float(extent[0]) * Constants.worldScale2D : 0.05
+                let radius = extent.count > 1 ? Float(extent[1]) * Constants.worldScale2D : height * 2
+                mesh = MeshResource.generateCylinder(height: height, radius: radius)
+            } else {
+                // Default mesh: small box
+                mesh = MeshResource.generateBox(size: SIMD3<Float>(0.0, 0.0, 0.0))
+            }
+        }
         // Generate 3D
-        
-        if desc.contains("box") || desc.contains("cube") {
-            let width  = extent.count > 0 ? Float(extent[0]) * Constants.worldScale : 0.1
-            let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale : 0.1
-            let depth  = extent.count > 2 ? Float(extent[2]) * Constants.worldScale : 0.1
-            mesh = MeshResource.generateBox(size: SIMD3(width, height, depth))
-        } else if desc.contains("sphere") {
-            let radius = extent.count > 0 ? Float(extent[0]) * Constants.worldScale : 0.05
-            mesh = MeshResource.generateSphere(radius: radius)
-        } else if desc.contains("cylinder") {
-            let radius = extent.count > 0 ? Float(extent[0]) * Constants.worldScale : 0.05
-            let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale : radius * 2
-            mesh = MeshResource.generateCylinder(height: height, radius: radius)
-        } else if desc.contains("ellipse") {
-            let height = extent.count > 0 ? Float(extent[0]) * Constants.worldScale : 0.05
-            let radius = extent.count > 1 ? Float(extent[1]) * Constants.worldScale : height * 2
-            mesh = MeshResource.generateCylinder(height: height, radius: radius)
-        } else if desc.contains("cone") {
-            let radius = extent.count > 0 ? Float(extent[0]) * Constants.worldScale : 0.05
-            let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale : radius * 2
-            mesh = MeshResource.generateCone(height: height, radius: radius)
-        } else {
-            // Default mesh: small box
-            mesh = MeshResource.generateBox(size: SIMD3<Float>(0.0, 0.0, 0.0))
+        else {
+            if desc.contains("cube") {
+                let width  = extent.count > 0 ? Float(extent[0]) * Constants.worldScale3D : 0.1
+                let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale3D : 0.1
+                let depth  = extent.count > 2 ? Float(extent[2]) * Constants.worldScale3D : 0.1
+                mesh = MeshResource.generateBox(size: SIMD3(width, height, depth))
+            } else if desc.contains("sphere") {
+                let radius = extent.count > 0 ? Float(extent[0]) * Constants.worldScale3D : 0.05
+                mesh = MeshResource.generateSphere(radius: radius)
+            } else if desc.contains("cylinder") {
+                let radius = extent.count > 0 ? Float(extent[0]) * Constants.worldScale3D : 0.05
+                let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale3D : radius * 2
+                mesh = MeshResource.generateCylinder(height: height, radius: radius)
+            } else if desc.contains("cone") {
+                let radius = extent.count > 0 ? Float(extent[0]) * Constants.worldScale3D : 0.05
+                let height = extent.count > 1 ? Float(extent[1]) * Constants.worldScale3D : radius * 2
+                mesh = MeshResource.generateCone(height: height, radius: radius)
+            } else {
+                // Default mesh: small box
+                mesh = MeshResource.generateBox(size: SIMD3<Float>(0.0, 0.0, 0.0))
+            }
         }
 
         return (mesh, material)
