@@ -10,10 +10,48 @@ import SwiftUI
 import simd
 import OSLog
 
+/// Context for normalizing positions and extents based on the overall data range.
+struct NormalizationContext {
+    /// True if the source JSON was 2D ("RTelements") rather than full 3D.
+    let is2D: Bool
+    /// Center of the data positions in each dimension.
+    let positionCenters: [Double]
+    /// Range (max - min) of the data positions in each dimension (non-zero).
+    let positionRanges: [Double]
+
+    /// Build a normalization context from raw element positions.
+    init(elements: [ElementDTO], is2D: Bool) {
+        let dims = is2D ? 2 : 3
+        var mins = [Double](repeating: .greatestFiniteMagnitude, count: dims)
+        var maxs = [Double](repeating: -.greatestFiniteMagnitude, count: dims)
+        for element in elements {
+            if let coords = element.position {
+                for i in 0..<dims {
+                    let v = coords.count > i ? coords[i] : 0
+                    mins[i] = min(mins[i], v)
+                    maxs[i] = max(maxs[i], v)
+                }
+            }
+        }
+        var centers = [Double]()
+        var ranges = [Double]()
+        for i in 0..<dims {
+            let minv = mins[i]
+            let maxv = maxs[i]
+            let range = maxv - minv
+            centers.append((maxv + minv) / 2)
+            ranges.append(range != 0 ? range : 1)
+        }
+        self.is2D = is2D
+        self.positionCenters = centers
+        self.positionRanges = ranges
+    }
+}
+
 /// Extension on ElementDTO to produce a MeshResource and Material based on shapeDescription.
 extension ElementDTO {
-    /// Builds the mesh and material for this element.
-    func meshAndMaterial() -> (mesh: MeshResource, material: SimpleMaterial) {
+    /// Builds the mesh and material for this element, using the given normalization context.
+    func meshAndMaterial(normalization: NormalizationContext) -> (mesh: MeshResource, material: SimpleMaterial) {
         // Determine base color
         let rgba = self.color ?? self.shape?.color ?? [0.2, 0.4, 1.0, 1.0]
         let uiColor = UIColor(
@@ -24,49 +62,47 @@ extension ElementDTO {
         )
         let material = SimpleMaterial(color: uiColor, roughness: 0.5, isMetallic: false)
 
-        // Shape descriptor and dimension array
         let desc = shape?.shapeDescription?.lowercased() ?? ""
         let extent = shape?.extent ?? []
 
-        // Select mesh primitive
+        func normalized(_ index: Int, defaultValue: Double) -> Float {
+            guard index < extent.count else { return Float(defaultValue) }
+            return Float(extent[index] / normalization.positionRanges[index])
+        }
+
         let mesh: MeshResource
-        
-        // Generate 2D
-        // Box, Ellipse, label, edge, element
         if desc.contains("rt") {
-            let scale2D = Constants.worldScale2D
             if desc.contains("box") {
-                let width  = extent.count > 0 ? Float(extent[0]) * scale2D : 0.1
-                let height = extent.count > 1 ? Float(extent[1]) * scale2D : 0.1
-                let depth  = extent.count > 2 ? Float(extent[2]) * scale2D : 0.1
-                mesh = MeshResource.generateBox(size: SIMD3(width, height, depth))
+                let w = normalized(0, defaultValue: 0.1)
+                let h = normalized(1, defaultValue: 0.1)
+                let d = normalized(2, defaultValue: 0.1)
+                mesh = MeshResource.generateBox(size: SIMD3(w, h, d))
             } else if desc.contains("ellipse") {
-                let height = extent.count > 0 ? Float(extent[0]) * scale2D : 0.05
-                let radius = extent.count > 1 ? Float(extent[1]) * scale2D : height * 2
-                mesh = MeshResource.generateCylinder(height: height, radius: radius)
+                let h = normalized(0, defaultValue: 0.05)
+                let r = normalized(1, defaultValue: Double(h * 2))
+                mesh = MeshResource.generateCylinder(height: h, radius: r)
             } else {
-                mesh = MeshResource.generateBox(size: SIMD3<Float>(0.0, 0.0, 0.0))
+                mesh = MeshResource.generateBox(size: SIMD3<Float>(0, 0, 0))
             }
         } else {
-            let scale3D = Constants.worldScale3D
             if desc.contains("cube") {
-                let width  = extent.count > 0 ? Float(extent[0]) * scale3D : 0.1
-                let height = extent.count > 1 ? Float(extent[1]) * scale3D : 0.1
-                let depth  = extent.count > 2 ? Float(extent[2]) * scale3D : 0.1
-                mesh = MeshResource.generateBox(size: SIMD3(width, height, depth))
+                let w = normalized(0, defaultValue: 0.1)
+                let h = normalized(1, defaultValue: 0.1)
+                let d = normalized(2, defaultValue: 0.1)
+                mesh = MeshResource.generateBox(size: SIMD3(w, h, d))
             } else if desc.contains("sphere") {
-                let radius = extent.count > 0 ? Float(extent[0]) * scale3D : 0.05
-                mesh = MeshResource.generateSphere(radius: radius)
+                let r = normalized(0, defaultValue: 0.05)
+                mesh = MeshResource.generateSphere(radius: r)
             } else if desc.contains("cylinder") {
-                let radius = extent.count > 0 ? Float(extent[0]) * scale3D : 0.05
-                let height = extent.count > 1 ? Float(extent[1]) * scale3D : radius * 2
-                mesh = MeshResource.generateCylinder(height: height, radius: radius)
+                let r = normalized(0, defaultValue: 0.05)
+                let h = normalized(1, defaultValue: Double(r * 2))
+                mesh = MeshResource.generateCylinder(height: h, radius: r)
             } else if desc.contains("cone") {
-                let radius = extent.count > 0 ? Float(extent[0]) * scale3D : 0.05
-                let height = extent.count > 1 ? Float(extent[1]) * scale3D : radius * 2
-                mesh = MeshResource.generateCone(height: height, radius: radius)
+                let r = normalized(0, defaultValue: 0.05)
+                let h = normalized(1, defaultValue: Double(r * 2))
+                mesh = MeshResource.generateCone(height: h, radius: r)
             } else {
-                mesh = MeshResource.generateBox(size: SIMD3<Float>(0.0, 0.0, 0.0))
+                mesh = MeshResource.generateBox(size: SIMD3<Float>(0, 0, 0))
             }
         }
 

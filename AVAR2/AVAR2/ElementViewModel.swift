@@ -22,6 +22,7 @@ class ElementViewModel: ObservableObject {
     @Published var loadErrorMessage: String? = nil
     /// True when the loaded graph came from RTelements (2D) rather than elements (3D)
     @Published private(set) var isGraph2D: Bool = false
+    private var normalizationContext: NormalizationContext?
     private var entityMap: [String: Entity] = [:]
     private var lineEntities: [Entity] = []
     /// Holds the current RealityViewContent so we can update connections on the fly
@@ -49,6 +50,7 @@ class ElementViewModel: ObservableObject {
             let output = try ElementService.loadScriptOutput(from: filename)
             self.elements = output.elements
             self.isGraph2D = output.is2D
+            self.normalizationContext = NormalizationContext(elements: output.elements, is2D: output.is2D)
             logger.log("Loaded \(output.elements.count, privacy: .public) elements (2D: \(output.is2D, privacy: .public)) from \(filename, privacy: .public)")
         } catch {
             let msg = "Failed to load \(filename): \(error.localizedDescription)"
@@ -96,22 +98,24 @@ class ElementViewModel: ObservableObject {
         lineEntities.removeAll()
         
         // Instantiate each element and add under root
+        guard let normalizationContext = self.normalizationContext else {
+            logger.error("Missing normalization context; call loadData(from:) before loadElements(in:)")
+            return
+        }
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
-            // Select appropriate scale for 2D vs 3D graphs
-            let scale: Float = isGraph2D ? Constants.worldScale2D : Constants.worldScale3D
-            // Compute world position, flipping Y so positive data Y goes downward relative to eye level
-            let x = Float(coords[0]) * scale
-            let yData = coords.count > 1 ? Float(coords[1]) * scale : 0
-            // Invert Y: place at eye level minus data offset
-            let y = Constants.eyeLevel - yData
-            let zData = coords.count > 2 ? Float(coords[2]) * scale : 0
-            let z = zData + Constants.frontOffset
-            let worldPos = SIMD3<Float>(x, y, z)
-            // Position relative to pivot (worldPos - pivot yields local = [x, -yData, zData])
-            entity.position = worldPos - pivot
-            logger.debug("Placing entity \(element.id, privacy: .public) at \(worldPos)")
+
+            
+            let dims = normalizationContext.positionCenters.count
+            let rawX = coords.count > 0 ? coords[0] : 0
+            let rawY = coords.count > 1 ? coords[1] : 0
+            let rawZ = dims > 2 && coords.count > 2 ? coords[2] : 0
+            let normX = (rawX - normalizationContext.positionCenters[0]) / normalizationContext.positionRanges[0]
+            let normY = (rawY - normalizationContext.positionCenters[1]) / normalizationContext.positionRanges[1]
+            let normZ = dims > 2 ? (rawZ - normalizationContext.positionCenters[2]) / normalizationContext.positionRanges[2] : 0
+            let localPos = SIMD3<Float>(Float(normX), -Float(normY), Float(normZ))
+            entity.position = localPos
             container.addChild(entity)
             entityMap[element.id] = entity
         }
@@ -257,8 +261,11 @@ class ElementViewModel: ObservableObject {
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {
-        // Create mesh and material via shape factory
-        let (mesh, material) = element.meshAndMaterial()
+        guard let normalizationContext = self.normalizationContext else {
+            preconditionFailure("Normalization context must be set before creating entities")
+        }
+        
+        let (mesh, material) = element.meshAndMaterial(normalization: normalizationContext)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         if let desc = element.shape?.shapeDescription?.lowercased(), desc.contains("rtellipse") {
             logger.log("RR - Create ellipse")
