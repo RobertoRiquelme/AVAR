@@ -111,9 +111,12 @@ class ElementViewModel: ObservableObject {
             let rawX = coords.count > 0 ? coords[0] : 0
             let rawY = coords.count > 1 ? coords[1] : 0
             let rawZ = dims > 2 && coords.count > 2 ? coords[2] : 0
-            let normX = (rawX - normalizationContext.positionCenters[0]) / normalizationContext.positionRanges[0]
-            let normY = (rawY - normalizationContext.positionCenters[1]) / normalizationContext.positionRanges[1]
-            let normZ = dims > 2 ? (rawZ - normalizationContext.positionCenters[2]) / normalizationContext.positionRanges[2] : 0
+            let globalRange = normalizationContext.globalRange
+            let normX = (rawX - normalizationContext.positionCenters[0]) / globalRange
+            let normY = (rawY - normalizationContext.positionCenters[1]) / globalRange
+            let normZ = dims > 2
+                ? (rawZ - normalizationContext.positionCenters[2]) / globalRange
+                : 0
             let localPos = SIMD3<Float>(Float(normX), -Float(normY), Float(normZ))
             entity.position = localPos
             container.addChild(entity)

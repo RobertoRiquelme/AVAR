@@ -19,6 +19,9 @@ struct NormalizationContext {
     /// Range (max - min) of the data positions in each dimension (non-zero).
     let positionRanges: [Double]
 
+    /// Maximum range (span) across all dimensions; used to preserve aspect ratio.
+    var globalRange: Double { positionRanges.max() ?? 1 }
+
     /// Build a normalization context from raw element positions.
     init(elements: [ElementDTO], is2D: Bool) {
         let dims = is2D ? 2 : 3
@@ -67,7 +70,7 @@ extension ElementDTO {
 
         func normalized(_ index: Int, defaultValue: Double) -> Float {
             guard index < extent.count else { return Float(defaultValue) }
-            return Float(extent[index] / normalization.positionRanges[index])
+            return Float(extent[index] / normalization.globalRange)
         }
 
         let mesh: MeshResource
