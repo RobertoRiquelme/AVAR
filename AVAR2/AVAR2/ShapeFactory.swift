@@ -70,7 +70,7 @@ extension ElementDTO {
 
         func normalized(_ index: Int, defaultValue: Double) -> Float {
             guard index < extent.count else { return Float(defaultValue) }
-            return Float(extent[index] / normalization.globalRange)
+            return Float(extent[index] / normalization.globalRange * 2)
         }
 
         let mesh: MeshResource
@@ -78,10 +78,10 @@ extension ElementDTO {
             if desc.contains("box") {
                 let w = normalized(0, defaultValue: 0.1)
                 let h = normalized(1, defaultValue: 0.1)
-                let d = normalized(2, defaultValue: 0.1)
+                let d = normalized(2, defaultValue: 0.01)
                 mesh = MeshResource.generateBox(size: SIMD3(w, h, d))
             } else if desc.contains("ellipse") {
-                let h = normalized(0, defaultValue: 0.05)
+                let h = normalized(0, defaultValue: 0.01)
                 let r = normalized(1, defaultValue: Double(h * 2))
                 mesh = MeshResource.generateCylinder(height: h, radius: r)
             } else {

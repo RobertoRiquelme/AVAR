@@ -112,10 +112,10 @@ class ElementViewModel: ObservableObject {
             let rawY = coords.count > 1 ? coords[1] : 0
             let rawZ = dims > 2 && coords.count > 2 ? coords[2] : 0
             let globalRange = normalizationContext.globalRange
-            let normX = (rawX - normalizationContext.positionCenters[0]) / globalRange
-            let normY = (rawY - normalizationContext.positionCenters[1]) / globalRange
+            let normX = (rawX - normalizationContext.positionCenters[0]) / globalRange * 2
+            let normY = (rawY - normalizationContext.positionCenters[1]) / globalRange * 2
             let normZ = dims > 2
-                ? (rawZ - normalizationContext.positionCenters[2]) / globalRange
+                ? (rawZ - normalizationContext.positionCenters[2]) / globalRange * 2
                 : 0
             let localPos = SIMD3<Float>(Float(normX), -Float(normY), Float(normZ))
             entity.position = localPos
@@ -169,8 +169,8 @@ class ElementViewModel: ObservableObject {
         let gridSize = 2
         for i in -gridSize...gridSize {
             let offset = Float(i) * 0.1
-            container.addChild(axis(from: SIMD3(-0.5, 0, offset), to: SIMD3(0.5, 0, offset), color: .gray))
-            container.addChild(axis(from: SIMD3(offset, 0, -0.5), to: SIMD3(offset, 0, 0.5), color: .gray))
+            container.addChild(axis(from: SIMD3(-1.0, 0, offset), to: SIMD3(1.0, 0, offset), color: .gray))
+            container.addChild(axis(from: SIMD3(offset, 0, -1.0), to: SIMD3(offset, 0, 1.0), color: .gray))
         }
     }
 
