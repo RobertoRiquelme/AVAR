@@ -105,7 +105,6 @@ class ElementViewModel: ObservableObject {
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
-
             
             let dims = normalizationContext.positionCenters.count
             let rawX = coords.count > 0 ? coords[0] : 0
@@ -124,7 +123,7 @@ class ElementViewModel: ObservableObject {
         }
         // Draw connections and grid under root
         updateConnections(in: content)
-        addCoordinateGrid()
+        //addCoordinateGrid()
     }
     
     /// Draws lines for each edge specified by fromId/toId on edge elements.
@@ -268,23 +267,32 @@ class ElementViewModel: ObservableObject {
             preconditionFailure("Normalization context must be set before creating entities")
         }
         
+        let desc = element.shape?.shapeDescription?.lowercased() ?? ""
+        // Special case: render RTlabel shapes as text-only entities using specified extents
+        logger.log("Create Entity - \(desc)")
+        if desc.contains("rtlabel") {
+            let entity = createRTLabelEntity(for: element, normalization: normalizationContext)
+            entity.name = "element_\(element.id)"
+            entity.generateCollisionShapes(recursive: true)
+            entity.components.set(InputTargetComponent())
+            return entity
+        }
+
         let (mesh, material) = element.meshAndMaterial(normalization: normalizationContext)
         let entity = ModelEntity(mesh: mesh, materials: [material])
-        if let desc = element.shape?.shapeDescription?.lowercased(), desc.contains("rtellipse") {
-            logger.log("RR - Create ellipse")
+        if desc.contains("rtellipse") {
             entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
         }
         entity.name = "element_\(element.id)"
 
-        // Add a label if meaningful: skip if shape.text is "nil" or empty
+        // Add a label if meaningful for non-RTlabel shapes: skip if shape.text is "nil" or empty
         let rawText = element.shape?.text
         let labelText: String? = {
             if let t = rawText, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                t.lowercased() != "nil" {
                 return t
             }
-            // Fallback to id if available
-            return element.id.isEmpty ? nil : "" //element.id
+            return element.id.isEmpty ? nil : ""
         }()
         if let text = labelText {
             let labelEntity = createLabelEntity(text: text)
@@ -336,6 +344,90 @@ class ElementViewModel: ObservableObject {
         let mesh = MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: 0.05), containerFrame: .zero, alignment: .center, lineBreakMode: .byWordWrapping)
         let material = SimpleMaterial(color: .white, isMetallic: false)
         return ModelEntity(mesh: mesh, materials: [material])
+    }
+
+
+    /// Creates a 2D RTlabel entity using the shape.text and shape.extent to size the text container.
+    private func createRTLabelEntity(for element: ElementDTO, normalization: NormalizationContext) -> Entity {
+        guard let rawText = element.shape?.text,
+              !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              rawText.lowercased() != "nil" else {
+            return ModelEntity()
+        }
+        logger.log("RTlabel - rawText: \(rawText)")
+        // Build text mesh sized to shape.extent, thin and unlit for visibility
+        let extent = element.shape?.extent ?? []
+        // Normalize extents into [-1…+1], interpreting extent[0]=width, extent[1]=height
+        let w = extent.count > 0
+            ? Float(extent[0] / normalization.globalRange)
+            : 0.1
+        let h = extent.count > 1
+            ? Float(extent[1] / normalization.globalRange)
+            : 0.05
+        
+//        let frame = CGRect(
+//            x: CGFloat(w) / 2,
+//            y: CGFloat(h) / 2,
+//            width: CGFloat(w),
+//            height: CGFloat(h)
+//        )
+//        let mesh = MeshResource.generateText(
+//            rawText,
+//            extrusionDepth: 1.0, //0.001,
+//            font: .systemFont(ofSize: CGFloat(max(h, w))),
+//            containerFrame: frame,
+//            alignment: .center,
+//            lineBreakMode: .byCharWrapping//.byWordWrapping
+//        )
+        
+        let minframe = CGFloat(min(h, w))
+        logger.log("rawText: \(rawText) | w: \(w) | h: \(h) | minframe: \(minframe)")
+        let mesh = MeshResource.generateText(
+            rawText,
+            extrusionDepth: 0.005,
+            font: .systemFont(ofSize: minframe),
+            containerFrame: .zero,
+            alignment: .center,
+            lineBreakMode: .byWordWrapping
+        )
+        
+        let materialColor: UIColor = {
+            let rgba = element.shape?.color ?? element.color
+            if let components = rgba, components.count >= 3 {
+                return UIColor(
+                    red:   CGFloat(components[0]),
+                    green: CGFloat(components[1]),
+                    blue:  CGFloat(components[2]),
+                    alpha: components.count > 3 ? CGFloat(components[3]) : 1.0
+                )
+            }
+            return .white
+        }()
+        // Use unlit material so the text remains visible regardless of scene lighting
+        let material = UnlitMaterial(color: materialColor)
+        let labelEntity = ModelEntity(mesh: mesh, materials: [material])
+        // Orient label into XZ-plane so it faces camera in 2D mode, lift slightly to avoid z-fighting
+        //labelEntity.orientation = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
+        labelEntity.position.y += 0.001
+        // Debug: print world transform and bounds
+        print("RTLabel [\(element.id)] transform:\n\(labelEntity.transform.matrix)")
+        let bounds = labelEntity.visualBounds(relativeTo: nil)
+        print("RTLabel [\(element.id)] bounds center: \(bounds.center), extents: \(bounds.extents)")
+        // Debug: add a small red sphere at the label origin
+        let debugDot = ModelEntity(
+            mesh: MeshResource.generateSphere(radius: 0.01),
+            materials: [SimpleMaterial(color: .red, isMetallic: false)]
+        )
+        labelEntity.addChild(debugDot)
+        // Debug: draw a translucent yellow box around the label bounds
+//        let boxBounds = labelEntity.visualBounds(relativeTo: labelEntity)
+//        let box = ModelEntity(
+//            mesh: MeshResource.generateBox(size: boxBounds.extents * 2),
+//            materials: [SimpleMaterial(color: .yellow.withAlphaComponent(0.3), isMetallic: false)]
+//        )
+//        box.position = boxBounds.center
+//        labelEntity.addChild(box)
+        return labelEntity
     }
 
 }

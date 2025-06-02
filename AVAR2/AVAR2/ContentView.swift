@@ -29,7 +29,7 @@ struct ContentView: View {
             DragGesture(minimumDistance: 0).targetedToAnyEntity()
                 .onChanged { value in
                     let name = value.entity.name
-                    if name.starts(with: "element_") {
+                    if name.starts(with: "element_") && !viewModel.isGraph2D {
                         viewModel.handleDragChanged(value)
                     } else if name == "graphBackground" {
                         viewModel.handlePanChanged(value)
@@ -37,7 +37,7 @@ struct ContentView: View {
                 }
                 .onEnded { value in
                     let name = value.entity.name
-                    if name.starts(with: "element_") {
+                    if name.starts(with: "element_") && !viewModel.isGraph2D{
                         viewModel.handleDragEnded(value)
                     } else if name == "graphBackground" {
                         viewModel.handlePanEnded(value)
