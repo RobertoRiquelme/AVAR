@@ -13,6 +13,7 @@ import RealityKitContent
 struct ContentView: View {
     /// The resource filename (without extension) to load.
     var filename: String = "2D Tree Layout"
+    var onClose: (() -> Void)? = nil
     @StateObject private var viewModel = ElementViewModel()
 
     var body: some View {
@@ -62,6 +63,21 @@ struct ContentView: View {
             Button("OK", role: .cancel) { viewModel.loadErrorMessage = nil }
         } message: {
             Text(viewModel.loadErrorMessage ?? "Unknown error.")
+        }
+        .overlay(alignment: .topTrailing) {
+            if let onClose = onClose {
+                Button(action: onClose) {
+                    ZStack {
+                        Circle()
+                            .fill(.red)
+                        Image(systemName: "xmark")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 40, height: 40)
+                }
+                .padding([.top, .trailing], 16)
+            }
         }
     }
 }

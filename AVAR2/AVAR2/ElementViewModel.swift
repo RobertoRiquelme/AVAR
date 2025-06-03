@@ -79,7 +79,7 @@ class ElementViewModel: ObservableObject {
         // Add invisible background to capture pan and zoom
         let background = Entity()
         background.name = "graphBackground"
-        let bgShape = ShapeResource.generateBox(size: [10, 10, 0.01])
+        let bgShape = ShapeResource.generateBox(size: [1, 1, 0.01])
         background.components.set(CollisionComponent(shapes: [bgShape]))
         background.components.set(InputTargetComponent())
         background.position = pivot

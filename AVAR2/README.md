@@ -26,7 +26,8 @@ When the app launches, you will see a 2D launcher window:
 
 - **Select Example**: Drop-down menu listing all example layout files (JSON or TXT) in `AVAR2/Resources`. Choose the layout you want to visualize.
 - **Enter Immersive Space**: Opens the immersive RealityKit view showing your graph in 3D.
-- **Reload Immersive Space**: After changing the selected example, tap this to reload the scene with the new file.
+- **Add Diagram**: Adds the currently selected diagram into the immersive scene without closing existing content.
+- **Exit Immersive Space**: Closes the immersive session and clears all loaded diagrams.
 
 ## Immersive View
 
