@@ -60,7 +60,8 @@ class ElementViewModel: ObservableObject {
     }
 
     /// Creates and positions all element entities in the scene.
-    func loadElements(in content: RealityViewContent) {
+    /// - Parameter onClose: Optional callback to invoke when the close button is tapped.
+    func loadElements(in content: RealityViewContent, onClose: (() -> Void)? = nil) {
         
         // Keep reference for dynamic updates
         self.sceneContent = content
@@ -101,6 +102,43 @@ class ElementViewModel: ObservableObject {
         background.position = .zero
         container.addChild(background)
         self.backgroundEntity = background
+
+        if let onClose = onClose {
+            let buttonContainer = Entity()
+            buttonContainer.name = "closeButton"
+
+            let buttonRadius: Float = 0.06
+            let buttonThickness: Float = 0.01
+            let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
+            let buttonMaterial = SimpleMaterial(color: .red, isMetallic: false)
+            let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
+            buttonContainer.addChild(buttonEntity)
+
+            let textMesh = MeshResource.generateText(
+                "×",
+                extrusionDepth: 0.002,
+                font: .systemFont(ofSize: 0.15),
+                containerFrame: .zero,
+                alignment: .center,
+                lineBreakMode: .byWordWrapping
+            )
+            let textMaterial = SimpleMaterial(color: .white, isMetallic: false)
+            let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
+            textEntity.position = [0, 0, buttonThickness / 2 + 0.001]
+            buttonContainer.addChild(textEntity)
+
+            let halfW = bgWidth / 2
+            let halfH = bgHeight / 2
+            let margin: Float = 0.1
+            buttonContainer.position = [halfW - margin, -halfH + margin, 0.005]
+
+            buttonContainer.generateCollisionShapes(recursive: true)
+            buttonContainer.components.set(InputTargetComponent())
+            for child in buttonContainer.children {
+                child.components.set(InputTargetComponent())
+            }
+            background.addChild(buttonContainer)
+        }
 
         // Clear any existing entities and lines
         entityMap.removeAll()

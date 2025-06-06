@@ -18,7 +18,7 @@ struct ContentView: View {
 
     var body: some View {
         RealityView { content in
-            viewModel.loadElements(in: content)
+            viewModel.loadElements(in: content, onClose: onClose)
         } update: { content in
             viewModel.updateConnections(in: content)
         }
@@ -45,6 +45,19 @@ struct ContentView: View {
                     }
                 }
         )
+        .simultaneousGesture(
+            TapGesture().targetedToAnyEntity()
+                .onEnded { value in
+                    var entity: Entity? = value.entity
+                    while let current = entity {
+                        if current.name == "closeButton" {
+                            onClose?()
+                            break
+                        }
+                        entity = current.parent
+                    }
+                }
+        )
         // Pinch gesture (on any entity) to zoom whole diagram, pivoting around touched entity
 //        .simultaneousGesture(
 //            MagnificationGesture().targetedToAnyEntity()
@@ -63,21 +76,6 @@ struct ContentView: View {
             Button("OK", role: .cancel) { viewModel.loadErrorMessage = nil }
         } message: {
             Text(viewModel.loadErrorMessage ?? "Unknown error.")
-        }
-        .overlay(alignment: .topTrailing) {
-            if let onClose = onClose {
-                Button(action: onClose) {
-                    ZStack {
-                        Circle()
-                            .fill(.red)
-                        Image(systemName: "xmark")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                    }
-                    .frame(width: 40, height: 40)
-                }
-                .padding([.top, .trailing], 16)
-            }
         }
     }
 }
