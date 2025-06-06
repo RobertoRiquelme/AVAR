@@ -75,33 +75,36 @@ class ElementViewModel: ObservableObject {
         
         // Pivot for graph origin and background plane
         let pivot = SIMD3<Float>(0, Constants.eyeLevel, Constants.frontOffset)
-        
-        // Add invisible background to capture pan and zoom
-        let background = Entity()
-        background.name = "graphBackground"
-        let bgShape = ShapeResource.generateBox(size: [1, 1, 0.01])
-        background.components.set(CollisionComponent(shapes: [bgShape]))
-        background.components.set(InputTargetComponent())
-        background.position = pivot
-        content.add(background)
-        self.backgroundEntity = background
-        
-        // Create new root container under pivot
+
+        guard let normalizationContext = self.normalizationContext else {
+            logger.error("Missing normalization context; call loadData(from:) before loadElements(in:)")
+            return
+        }
+
+        // Compute size of background based on element positions
+        let bgWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
+        let bgHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
+
+        // Create new root container under pivot (moves and scales all graph content)
         let container = Entity()
         container.name = "graphRoot"
         container.position = pivot
         content.add(container)
         self.rootEntity = container
-        
+
+        // Add invisible background under the same container to capture pan/zoom gestures
+        let background = Entity()
+        background.name = "graphBackground"
+        let bgShape = ShapeResource.generateBox(size: [bgWidth, bgHeight, 0.01])
+        background.components.set(CollisionComponent(shapes: [bgShape]))
+        background.components.set(InputTargetComponent())
+        background.position = .zero
+        container.addChild(background)
+        self.backgroundEntity = background
+
         // Clear any existing entities and lines
         entityMap.removeAll()
         lineEntities.removeAll()
-        
-        // Instantiate each element and add under root
-        guard let normalizationContext = self.normalizationContext else {
-            logger.error("Missing normalization context; call loadData(from:) before loadElements(in:)")
-            return
-        }
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
