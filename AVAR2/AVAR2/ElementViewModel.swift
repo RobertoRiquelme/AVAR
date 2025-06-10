@@ -260,7 +260,7 @@ class ElementViewModel: ObservableObject {
         if let start = draggingStartPosition {
             // Get 3D gesture translation (Vector3D) and convert to SIMD3<Float>
             let t3 = value.gestureValue.translation3D
-            let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z))
+            let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z))
             // Apply scale
             let offset = delta * Constants.dragTranslationScale
             value.entity.position = start + offset
@@ -323,7 +323,7 @@ class ElementViewModel: ObservableObject {
     func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
         let t3 = value.translation3D
-        let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z)) * Constants.dragTranslationScale
+        let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z)) * Constants.dragTranslationScale
 
         if panStartPosition == nil {
             panStartPosition = container.position
