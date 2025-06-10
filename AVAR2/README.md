@@ -37,6 +37,7 @@ Once in the immersive space:
 - Supported shapes: **Box**, **Sphere**, **Cylinder**, **Cone** (fallback to small box).
 - Connections (edges) are drawn as thin gray lines between nodes.
 - **Drag** any node to reposition it; lines update in real time.
+- **Window Controls**: Grab the handle at the bottom center of each diagram to move its window in space, and tap the close button next to the handle to close the diagram.
 
 ## Data Files
 

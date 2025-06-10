@@ -25,23 +25,35 @@ struct ContentView: View {
         .task {
             await viewModel.loadData(from: filename)
         }
-        // Combined drag gesture: element drag vs background pan
+        // Combined drag gesture: element drag vs window pan via grab handle
         .gesture(
             DragGesture(minimumDistance: 0).targetedToAnyEntity()
                 .onChanged { value in
-                    let name = value.entity.name
-                    if name.starts(with: "element_") && !viewModel.isGraph2D {
-                        viewModel.handleDragChanged(value)
-                    } else if name == "graphBackground" {
-                        viewModel.handlePanChanged(value)
+                    var entity: Entity? = value.entity
+                    while let current = entity {
+                        let name = current.name
+                        if name.starts(with: "element_") && !viewModel.isGraph2D {
+                            viewModel.handleDragChanged(value)
+                            return
+                        } else if name == "grabHandle" {
+                            viewModel.handlePanChanged(value)
+                            return
+                        }
+                        entity = current.parent
                     }
                 }
                 .onEnded { value in
-                    let name = value.entity.name
-                    if name.starts(with: "element_") && !viewModel.isGraph2D{
-                        viewModel.handleDragEnded(value)
-                    } else if name == "graphBackground" {
-                        viewModel.handlePanEnded(value)
+                    var entity: Entity? = value.entity
+                    while let current = entity {
+                        let name = current.name
+                        if name.starts(with: "element_") && !viewModel.isGraph2D {
+                            viewModel.handleDragEnded(value)
+                            return
+                        } else if name == "grabHandle" {
+                            viewModel.handlePanEnded(value)
+                            return
+                        }
+                        entity = current.parent
                     }
                 }
         )

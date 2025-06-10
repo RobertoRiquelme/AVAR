@@ -98,7 +98,7 @@ class ElementViewModel: ObservableObject {
         background.name = "graphBackground"
         let bgShape = ShapeResource.generateBox(size: [bgWidth, bgHeight, 0.01])
         background.components.set(CollisionComponent(shapes: [bgShape]))
-        background.components.set(InputTargetComponent())
+        // Input is managed by handle and close button; disable background as catch-all target
         background.position = .zero
         container.addChild(background)
         self.backgroundEntity = background
@@ -139,6 +139,28 @@ class ElementViewModel: ObservableObject {
             }
             background.addChild(buttonContainer)
         }
+
+        // Add grab handle for dragging the entire window
+        let halfW = bgWidth / 2
+        let halfH = bgHeight / 2
+        let margin: Float = 0.1
+        let handleWidth: Float = min(bgWidth * 0.5, 0.5)
+        let handleHeight: Float = 0.01
+        let handleThickness: Float = 0.01
+        let handleMargin: Float = 0.05
+        let handleContainer = Entity()
+        handleContainer.name = "grabHandle"
+        let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness])
+        let handleMaterial = SimpleMaterial(color: .white, isMetallic: false)
+        let handleEntity = ModelEntity(mesh: handleMesh, materials: [handleMaterial])
+        handleContainer.addChild(handleEntity)
+        handleContainer.position = [0, -halfH - handleHeight / 2 - handleMargin, 0.005]
+        handleContainer.generateCollisionShapes(recursive: true)
+        handleContainer.components.set(InputTargetComponent())
+        for child in handleContainer.children {
+            child.components.set(InputTargetComponent())
+        }
+        background.addChild(handleContainer)
 
         // Clear any existing entities and lines
         entityMap.removeAll()
