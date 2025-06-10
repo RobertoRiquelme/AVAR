@@ -107,30 +107,36 @@ class ElementViewModel: ObservableObject {
             let buttonContainer = Entity()
             buttonContainer.name = "closeButton"
 
-            let buttonRadius: Float = 0.06
-            let buttonThickness: Float = 0.01
+            let buttonRadius: Float = 0.04
+            let buttonThickness: Float = 0.005
             let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
-            let buttonMaterial = SimpleMaterial(color: .red, isMetallic: false)
+            let buttonMaterial = SimpleMaterial(color: .white, isMetallic: false)
             let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
+            buttonEntity.transform.rotation = simd_quatf(angle: .pi/2, axis: [1, 0, 0])
             buttonContainer.addChild(buttonEntity)
 
             let textMesh = MeshResource.generateText(
                 "×",
-                extrusionDepth: 0.002,
-                font: .systemFont(ofSize: 0.15),
+                extrusionDepth: 0.001,
+                font: .systemFont(ofSize: 0.1),
                 containerFrame: .zero,
                 alignment: .center,
                 lineBreakMode: .byWordWrapping
             )
-            let textMaterial = SimpleMaterial(color: .white, isMetallic: false)
+            let textMaterial = SimpleMaterial(color: .gray, isMetallic: false)
             let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
-            textEntity.position = [0, 0, buttonThickness / 2 + 0.001]
+            textEntity.position = [-0.03, -0.05, buttonThickness / 2 + 0.0005]
             buttonContainer.addChild(textEntity)
 
             let halfW = bgWidth / 2
             let halfH = bgHeight / 2
-            let margin: Float = 0.1
-            buttonContainer.position = [halfW - margin, -halfH + margin, 0.005]
+            let handleWidth: Float = min(bgWidth * 0.5, 0.5)
+            let handleHeight: Float = 0.01
+            let handleMargin: Float = 0.05
+            let handlePosY = -halfH - handleHeight / 2 - handleMargin
+            let spacing: Float = 0.02
+            let closePosX = -handleWidth / 2 - buttonRadius - spacing
+            buttonContainer.position = [closePosX, handlePosY, 0.01]
 
             buttonContainer.generateCollisionShapes(recursive: true)
             buttonContainer.components.set(InputTargetComponent())
@@ -145,16 +151,16 @@ class ElementViewModel: ObservableObject {
         let halfH = bgHeight / 2
         let margin: Float = 0.1
         let handleWidth: Float = min(bgWidth * 0.5, 0.5)
-        let handleHeight: Float = 0.01
+        let handleHeight: Float = 0.025
         let handleThickness: Float = 0.01
-        let handleMargin: Float = 0.05
+        let handleMargin: Float = 0.02
         let handleContainer = Entity()
         handleContainer.name = "grabHandle"
         let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness])
         let handleMaterial = SimpleMaterial(color: .white, isMetallic: false)
         let handleEntity = ModelEntity(mesh: handleMesh, materials: [handleMaterial])
         handleContainer.addChild(handleEntity)
-        handleContainer.position = [0, -halfH - handleHeight / 2 - handleMargin, 0.005]
+        handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, 0.01]
         handleContainer.generateCollisionShapes(recursive: true)
         handleContainer.components.set(InputTargetComponent())
         for child in handleContainer.children {
