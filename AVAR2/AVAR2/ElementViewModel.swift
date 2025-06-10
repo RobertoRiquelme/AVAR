@@ -37,8 +37,14 @@ class ElementViewModel: ObservableObject {
     private var zoomPivotWorld: SIMD3<Float>?
     /// Pivot point in container-local space (normalized, unscaled) at zoom start
     private var zoomPivotLocal: SIMD3<Float>?
-    /// Starting position for root container when panning begins
+    /// Starting container position when panning begins
     private var panStartPosition: SIMD3<Float>?
+    /// Pivot point in container-local coordinates at pan start (handle location)
+    private var panPivotLocal: SIMD3<Float>?
+    /// Pivot point in world coordinates at pan start (handle location)
+    private var panPivotWorld: SIMD3<Float>?
+    /// Container orientation at the start of a pan (for pitch-only rotation)
+    private var panStartOrientation: simd_quatf?
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
     private var draggingEntity: Entity?
@@ -254,7 +260,7 @@ class ElementViewModel: ObservableObject {
         if let start = draggingStartPosition {
             // Get 3D gesture translation (Vector3D) and convert to SIMD3<Float>
             let t3 = value.gestureValue.translation3D
-            let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z))
+            let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z))
             // Apply scale
             let offset = delta * Constants.dragTranslationScale
             value.entity.position = start + offset
@@ -313,22 +319,45 @@ class ElementViewModel: ObservableObject {
         zoomPivotLocal = nil
     }
     
-    /// Handle pan gesture to move the entire graph origin
+    /// Handle pan gesture to move the entire graph origin, tilting toward the head
     func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
-        // Initialize pan start support
+        let t3 = value.translation3D
+        let delta = SIMD3<Float>(Float(t3.x), Float(t3.y), Float(t3.z)) * Constants.dragTranslationScale
+
         if panStartPosition == nil {
             panStartPosition = container.position
+            let pivotWorld = value.entity.convert(position: .zero, to: nil)
+            panPivotWorld = pivotWorld
+            panPivotLocal = container.convert(position: pivotWorld, from: nil)
+            panStartOrientation = container.orientation
+            return
         }
-        // Convert gesture translation3D (Vector3D) to SIMD3<Float>
-        let t3 = value.gestureValue.translation3D
-        let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z))
-        let offset = delta * Constants.dragTranslationScale
-        container.position = panStartPosition! + offset
+
+        if let pivotWorldOrigin = panPivotWorld,
+           let pivotLocal = panPivotLocal,
+           let startOrient = panStartOrientation {
+            let pivotWorldNow = pivotWorldOrigin + delta
+            // Rotate only in pitch around the handle so the window tilts toward world origin
+            let cameraPos = SIMD3<Float>(repeating: 0)
+            let dir = cameraPos - pivotWorldNow
+            let flatDist = sqrt(dir.x * dir.x + dir.z * dir.z)
+            let pitchAngle = -atan2(dir.y, flatDist)
+            let rotAxis = startOrient.act([1, 0, 0])
+            let pitchQuat = simd_quatf(angle: pitchAngle, axis: rotAxis)
+            let newOrient = pitchQuat * startOrient
+            container.orientation = newOrient
+            container.position = pivotWorldNow - newOrient.act(pivotLocal)
+        } else if let start = panStartPosition {
+            container.position = start + delta
+        }
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
         panStartPosition = nil
+        panPivotLocal = nil
+        panPivotWorld = nil
+        panStartOrientation = nil
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {
@@ -499,4 +528,12 @@ class ElementViewModel: ObservableObject {
         return labelEntity
     }
 
+}
+
+// MARK: - Camera Transform Helpers
+extension simd_float4x4 {
+    /// Extracts the translation (position) from a 4x4 transform matrix
+    var translation: SIMD3<Float> {
+        SIMD3<Float>(columns.3.x, columns.3.y, columns.3.z)
+    }
 }
