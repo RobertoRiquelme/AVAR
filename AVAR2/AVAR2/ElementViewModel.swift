@@ -109,6 +109,8 @@ class ElementViewModel: ObservableObject {
         container.addChild(background)
         self.backgroundEntity = background
 
+        let hoverEffectComponent = HoverEffectComponent()
+        
         if let onClose = onClose {
             let buttonContainer = Entity()
             buttonContainer.name = "closeButton"
@@ -146,12 +148,18 @@ class ElementViewModel: ObservableObject {
 
             buttonContainer.generateCollisionShapes(recursive: true)
             buttonContainer.components.set(InputTargetComponent())
+            if #available(iOS 17.0, visionOS 1.0, *) {
+                buttonContainer.components.set(hoverEffectComponent)
+            }
             for child in buttonContainer.children {
                 child.components.set(InputTargetComponent())
+                if #available(iOS 17.0, visionOS 1.0, *) {
+                    child.components.set(hoverEffectComponent)
+                }
             }
             background.addChild(buttonContainer)
         }
-
+        
         // Add grab handle for dragging the entire window
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
@@ -169,8 +177,14 @@ class ElementViewModel: ObservableObject {
         handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, 0.01]
         handleContainer.generateCollisionShapes(recursive: true)
         handleContainer.components.set(InputTargetComponent())
+        if #available(iOS 17.0, visionOS 1.0, *) {
+            handleContainer.components.set(hoverEffectComponent)
+        }
         for child in handleContainer.children {
             child.components.set(InputTargetComponent())
+            if #available(iOS 17.0, visionOS 1.0, *) {
+                child.components.set(hoverEffectComponent)
+            }
         }
         background.addChild(handleContainer)
 
@@ -350,7 +364,7 @@ class ElementViewModel: ObservableObject {
             container.orientation = newOrient
             container.position = pivotWorldNow - newOrient.act(pivotLocal)
         } else if let start = panStartPosition {
-            container.position = start + delta
+            container.position = start// + delta
         }
     }
 
