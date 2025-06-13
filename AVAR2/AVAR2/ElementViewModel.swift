@@ -148,14 +148,10 @@ class ElementViewModel: ObservableObject {
 
             buttonContainer.generateCollisionShapes(recursive: true)
             buttonContainer.components.set(InputTargetComponent())
-            if #available(iOS 17.0, visionOS 1.0, *) {
-                buttonContainer.components.set(hoverEffectComponent)
-            }
+            buttonContainer.components.set(hoverEffectComponent)
             for child in buttonContainer.children {
                 child.components.set(InputTargetComponent())
-                if #available(iOS 17.0, visionOS 1.0, *) {
-                    child.components.set(hoverEffectComponent)
-                }
+                child.components.set(hoverEffectComponent)
             }
             background.addChild(buttonContainer)
         }
@@ -177,14 +173,10 @@ class ElementViewModel: ObservableObject {
         handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, 0.01]
         handleContainer.generateCollisionShapes(recursive: true)
         handleContainer.components.set(InputTargetComponent())
-        if #available(iOS 17.0, visionOS 1.0, *) {
-            handleContainer.components.set(hoverEffectComponent)
-        }
+        handleContainer.components.set(hoverEffectComponent)
         for child in handleContainer.children {
             child.components.set(InputTargetComponent())
-            if #available(iOS 17.0, visionOS 1.0, *) {
-                child.components.set(hoverEffectComponent)
-            }
+            child.components.set(hoverEffectComponent)
         }
         background.addChild(handleContainer)
 
@@ -208,9 +200,12 @@ class ElementViewModel: ObservableObject {
             let yPos = normalizationContext.is2D ? -Float(normY) : Float(normY)
             let localPos = SIMD3<Float>(Float(normX), yPos, Float(normZ))
             entity.position = localPos
+            entity.components.set(hoverEffectComponent)
             container.addChild(entity)
             entityMap[element.id] = entity
         }
+        
+
         // Draw connections and grid under root
         updateConnections(in: content)
         //addCoordinateGrid()
