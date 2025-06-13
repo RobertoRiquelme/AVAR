@@ -191,7 +191,8 @@ class ElementViewModel: ObservableObject {
             let normZ = dims > 2
                 ? (rawZ - normalizationContext.positionCenters[2]) / globalRange * 2
                 : 0
-            let localPos = SIMD3<Float>(Float(normX), -Float(normY), Float(normZ))
+            let yPos = normalizationContext.is2D ? -Float(normY) : Float(normY)
+            let localPos = SIMD3<Float>(Float(normX), yPos, Float(normZ))
             entity.position = localPos
             container.addChild(entity)
             entityMap[element.id] = entity
