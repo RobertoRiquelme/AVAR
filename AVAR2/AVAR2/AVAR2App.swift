@@ -6,6 +6,39 @@
 //
 
 import SwiftUI
+import QuartzCore
+
+final class FPSMonitor: ObservableObject {
+    @Published private(set) var fps: Int = 0
+    private var displayLink: CADisplayLink?
+    private var lastTimestamp: CFTimeInterval = 0
+    private var frameCount: Int = 0
+
+    init() {
+        displayLink = CADisplayLink(target: self, selector: #selector(tick))
+        displayLink?.add(to: .main, forMode: .common)
+    }
+
+    deinit {
+        displayLink?.invalidate()
+    }
+
+    @objc private func tick() {
+        guard let link = displayLink else { return }
+        if lastTimestamp == 0 {
+            lastTimestamp = link.timestamp
+            frameCount = 0
+            return
+        }
+        frameCount += 1
+        let delta = link.timestamp - lastTimestamp
+        if delta >= 1.0 {
+            fps = Int(round(Double(frameCount) / delta))
+            frameCount = 0
+            lastTimestamp = link.timestamp
+        }
+    }
+}
 
 @main
 struct AVAR2: App {
@@ -18,6 +51,7 @@ struct AVAR2: App {
     @State private var hasEnteredImmersive: Bool = false
     /// List of diagrams currently loaded into the immersive space
     @State private var activeFiles: [String] = []
+    @StateObject private var fpsMonitor = FPSMonitor()
 
     init() {
         // Find all .txt resources in the main bundle
@@ -70,6 +104,8 @@ struct AVAR2: App {
                 }
 
                 Spacer()
+                Text("\(fpsMonitor.fps) FPS")
+                    .padding(.bottom)
             }
             .padding()
             .contentShape(Rectangle())
