@@ -39,11 +39,11 @@ class ElementViewModel: ObservableObject {
     private var zoomPivotLocal: SIMD3<Float>?
     /// Starting container position when panning begins
     private var panStartPosition: SIMD3<Float>?
-    /// Pivot point in container-local coordinates at pan start (handle location)
-    private var panPivotLocal: SIMD3<Float>?
-    /// Pivot point in world coordinates at pan start (handle location)
+    /// Pivot point in world space at pan start (handle location)
     private var panPivotWorld: SIMD3<Float>?
-    /// Container orientation at the start of a pan (for pitch-only rotation)
+    /// Pivot point in container-local space at pan start (handle location)
+    private var panPivotLocal: SIMD3<Float>?
+    /// Container orientation at the start of a pan (for full spherical rotation)
     private var panStartOrientation: simd_quatf?
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
@@ -329,7 +329,7 @@ class ElementViewModel: ObservableObject {
         zoomPivotLocal = nil
     }
     
-    /// Handle pan gesture to move the entire graph origin, tilting toward the head
+    /// Handle pan gesture to move the entire graph origin around the user on a spherical pivot
     func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
         let t3 = value.translation3D
@@ -348,25 +348,24 @@ class ElementViewModel: ObservableObject {
            let pivotLocal = panPivotLocal,
            let startOrient = panStartOrientation {
             let pivotWorldNow = pivotWorldOrigin + delta
-            // Rotate only in pitch around the handle so the window tilts toward world origin
             let cameraPos = SIMD3<Float>(repeating: 0)
             let dir = cameraPos - pivotWorldNow
+            let yawAngle = atan2(dir.x, dir.z)
+            let yawQuat = simd_quatf(angle: yawAngle, axis: [0, 1, 0])
             let flatDist = sqrt(dir.x * dir.x + dir.z * dir.z)
             let pitchAngle = -atan2(dir.y, flatDist)
-            let rotAxis = startOrient.act([1, 0, 0])
-            let pitchQuat = simd_quatf(angle: pitchAngle, axis: rotAxis)
-            let newOrient = pitchQuat * startOrient
+            let pitchAxis = startOrient.act([1, 0, 0])
+            let pitchQuat = simd_quatf(angle: pitchAngle, axis: pitchAxis)
+            let newOrient = yawQuat * pitchQuat * startOrient
             container.orientation = newOrient
             container.position = pivotWorldNow - newOrient.act(pivotLocal)
-        } else if let start = panStartPosition {
-            container.position = start// + delta
         }
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
         panStartPosition = nil
-        panPivotLocal = nil
         panPivotWorld = nil
+        panPivotLocal = nil
         panStartOrientation = nil
     }
 
