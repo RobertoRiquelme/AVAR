@@ -45,6 +45,8 @@ class ElementViewModel: ObservableObject {
     private var panPivotLocal: SIMD3<Float>?
     /// Container orientation at the start of a pan (for full spherical rotation)
     private var panStartOrientation: simd_quatf?
+    private var panStartPitch: Float?
+
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
     private var draggingEntity: Entity?
@@ -341,22 +343,36 @@ class ElementViewModel: ObservableObject {
             panPivotWorld = pivotWorld
             panPivotLocal = container.convert(position: pivotWorld, from: nil)
             panStartOrientation = container.orientation
+
+            // Extract starting pitch angle from orientation
+            let forward = panStartOrientation!.act([0, 0, -1])
+            panStartPitch = asin(forward.y / simd_length(forward))
             return
         }
 
         if let pivotWorldOrigin = panPivotWorld,
            let pivotLocal = panPivotLocal,
-           let startOrient = panStartOrientation {
+           let startOrient = panStartOrientation,
+           let startPitch = panStartPitch {
+
             let pivotWorldNow = pivotWorldOrigin + delta
             let cameraPos = SIMD3<Float>(repeating: 0)
             let dir = cameraPos - pivotWorldNow
+
+            // --- YAW (as before) ---
             let yawAngle = atan2(dir.x, dir.z)
             let yawQuat = simd_quatf(angle: yawAngle, axis: [0, 1, 0])
-            let flatDist = sqrt(dir.x * dir.x + dir.z * dir.z)
-            let pitchAngle = -atan2(dir.y, flatDist)
-            let pitchAxis = startOrient.act([1, 0, 0])
-            let pitchQuat = simd_quatf(angle: pitchAngle, axis: pitchAxis)
-            let newOrient = yawQuat * pitchQuat * startOrient
+
+            // --- PITCH (accumulated) ---
+            let pitchSensitivity: Float = 0.0005 // Experiment for feel!
+            let yDelta = -Float(t3.y) // Invert if needed
+            var pitch = startPitch + yDelta * pitchSensitivity
+
+            let maxPitch: Float = .pi / 4 // ±45°
+            pitch = max(-maxPitch, min(pitch, maxPitch))
+            let pitchQuat = simd_quatf(angle: pitch, axis: startOrient.act([1, 0, 0]))
+
+            let newOrient = yawQuat * pitchQuat
             container.orientation = newOrient
             container.position = pivotWorldNow - newOrient.act(pivotLocal)
         }
