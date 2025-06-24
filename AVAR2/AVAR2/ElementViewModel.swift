@@ -58,6 +58,12 @@ class ElementViewModel: ObservableObject {
     /// Tracks which surface anchor (if any) the graph is currently snapped to
     private var snappedAnchor: AnchorEntity? = nil
 
+    // NEW: Snap/unsnap banner
+    @Published var snapStatusMessage: String = ""
+
+    // NEW: Set this to false to only show message once, or to true to always show
+    private var alwaysShowSnapMessage = true
+
     func loadData(from filename: String) async {
         do {
             let output = try ElementService.loadScriptOutput(from: filename)
@@ -75,10 +81,10 @@ class ElementViewModel: ObservableObject {
     /// Creates and positions all element entities in the scene.
     /// - Parameter onClose: Optional callback to invoke when the close button is tapped.
     func loadElements(in content: RealityViewContent, onClose: (() -> Void)? = nil) {
-        
+
         // Keep reference for dynamic updates
         self.sceneContent = content
-        
+
         // Remove previous graph container and background
         if let existing = rootEntity {
             content.remove(existing)
@@ -86,7 +92,7 @@ class ElementViewModel: ObservableObject {
         if let bg = backgroundEntity {
             content.remove(bg)
         }
-        
+
         // Pivot for graph origin and background plane
         let pivot = SIMD3<Float>(0, Constants.eyeLevel, Constants.frontOffset)
 
@@ -117,7 +123,7 @@ class ElementViewModel: ObservableObject {
         self.backgroundEntity = background
 
         let hoverEffectComponent = HoverEffectComponent()
-        
+
         if let onClose = onClose {
             let buttonContainer = Entity()
             buttonContainer.name = "closeButton"
@@ -162,7 +168,7 @@ class ElementViewModel: ObservableObject {
             }
             background.addChild(buttonContainer)
         }
-        
+
         // Add grab handle for dragging the entire window
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
@@ -193,7 +199,7 @@ class ElementViewModel: ObservableObject {
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
-            
+
             let dims = normalizationContext.positionCenters.count
             let rawX = coords.count > 0 ? coords[0] : 0
             let rawY = coords.count > 1 ? coords[1] : 0
@@ -211,13 +217,12 @@ class ElementViewModel: ObservableObject {
             container.addChild(entity)
             entityMap[element.id] = entity
         }
-        
 
         // Draw connections and grid under root
         updateConnections(in: content)
         //addCoordinateGrid()
     }
-    
+
     /// Draws lines for each edge specified by fromId/toId on edge elements.
     /// Rebuilds all connection lines under the root container
     func updateConnections(in content: RealityViewContent) {
@@ -299,7 +304,7 @@ class ElementViewModel: ObservableObject {
             updateConnections(in: content)
         }
     }
-    
+
     /// Handle pinch gesture to uniformly scale the entire graph container, pivoting around the touched entity
     func handleZoomChanged(_ value: EntityTargetValue<MagnificationGesture.Value>) {
         guard let container = rootEntity else { return }
@@ -335,74 +340,73 @@ class ElementViewModel: ObservableObject {
         zoomPivotWorld = nil
         zoomPivotLocal = nil
     }
-    
+
     /// Handle pan gesture to move the entire graph origin around the user on a spherical pivot
     func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
+
         let t3 = value.translation3D
-        let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z)) * Constants.dragTranslationScale
+        let translation = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z)) * Constants.dragTranslationScale
 
+        // On first pan, record the original position in world coordinates
         if panStartPosition == nil {
-            panStartPosition = container.position
-            let pivotWorld = value.entity.convert(position: .zero, to: nil)
-            panPivotWorld = pivotWorld
-            panPivotLocal = container.convert(position: pivotWorld, from: nil)
-            panStartOrientation = container.orientation
-
-            // Extract starting pitch angle from orientation
-            let forward = panStartOrientation!.act([0, 0, -1])
-            panStartPitch = asin(forward.y / simd_length(forward))
-            return
+            panStartPosition = container.position(relativeTo: nil)
         }
 
-        if let pivotWorldOrigin = panPivotWorld,
-           let pivotLocal = panPivotLocal,
-           let startOrient = panStartOrientation,
-           let startPitch = panStartPitch {
+        // Move container in world space, preserving its distance from the user
+        if let start = panStartPosition {
+            let newWorldPos = start + translation
 
-            let pivotWorldNow = pivotWorldOrigin + delta
-            let cameraPos = SIMD3<Float>(repeating: 0)
-            let dir = cameraPos - pivotWorldNow
+            // Always face the camera (no pitch/roll, only yaw)
+            let cameraPos = SIMD3<Float>(0, 0, 0) // In world space, camera is at origin
+            let direction = normalize(cameraPos - newWorldPos)
+            let yaw = atan2(direction.x, direction.z)
+            let newOrientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
 
-            // --- YAW (as before) ---
-            let yawAngle = atan2(dir.x, dir.z)
-            let yawQuat = simd_quatf(angle: yawAngle, axis: [0, 1, 0])
+            // Set world position and orientation
+            container.setPosition(newWorldPos, relativeTo: nil)
+            container.setOrientation(newOrientation, relativeTo: nil)
+        }
 
-            // --- PITCH (accumulated) ---
-            let pitchSensitivity: Float = 0.0005 // Experiment for feel!
-            let yDelta = -Float(t3.y) // Invert if needed
-            var pitch = startPitch + yDelta * pitchSensitivity
-
-            let maxPitch: Float = .pi / 4 // ±45°
-            pitch = max(-maxPitch, min(pitch, maxPitch))
-            let pitchQuat = simd_quatf(angle: pitch, axis: startOrient.act([1, 0, 0]))
-
-            let newOrient = yawQuat * pitchQuat
-            container.orientation = newOrient
-            container.position = pivotWorldNow - newOrient.act(pivotLocal)
-
-            // --- Surface Snapping Logic ---
-            #if os(visionOS)
-            let worldPos = container.position(relativeTo: nil)
-            if let nearest = nearestSurfaceAnchor(to: worldPos) {
-                if snappedAnchor !== nearest {
-                    // Snap: parent to the anchor, set position relative to it
-                    let localPos = nearest.convert(position: worldPos, from: nil)
+        // Surface snapping logic (unchanged)
+        #if os(visionOS)
+        let worldPos = container.position(relativeTo: nil)
+        if let nearest = nearestSurfaceAnchor(to: worldPos) {
+            if snappedAnchor !== nearest {
+                let localPos = nearest.convert(position: worldPos, from: nil)
+                container.move(
+                    to: Transform(scale: container.scale, rotation: container.orientation, translation: localPos),
+                    relativeTo: nearest,
+                    duration: 0.20,
+                    timingFunction: .easeInOut
+                )
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
                     container.removeFromParent()
                     nearest.addChild(container)
                     container.position = localPos
-                    snappedAnchor = nearest
                 }
-            } else if snappedAnchor != nil {
-                // Unsnap: parent back to scene root (content), preserve world position
-                let worldPos = container.position(relativeTo: nil)
-                container.removeFromParent()
-                sceneContent?.add(container)
-                container.position = worldPos
-                snappedAnchor = nil
+                snappedAnchor = nearest
+                setSnapStatusMessage("Snapped to \(nearest == tableAnchor ? "Table" : "Wall")")
             }
-            #endif
+        } else if snappedAnchor != nil {
+            let worldPos = container.position(relativeTo: nil)
+            if let sceneRoot = sceneContent {
+                container.move(
+                    to: Transform(scale: container.scale, rotation: container.orientation, translation: worldPos),
+                    relativeTo: nil,
+                    duration: 0.20,
+                    timingFunction: .easeInOut
+                )
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
+                    container.removeFromParent()
+                    sceneRoot.add(container)
+                    container.position = worldPos
+                }
+                snappedAnchor = nil
+                setSnapStatusMessage("Unsnap from Surface")
+            }
         }
+        #endif
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
@@ -416,16 +420,33 @@ class ElementViewModel: ObservableObject {
         let worldPos = container.position(relativeTo: nil)
         if let nearest = nearestSurfaceAnchor(to: worldPos, threshold: 0.30) { // can use a slightly larger threshold for settle
             let localPos = nearest.convert(position: worldPos, from: nil)
-            container.removeFromParent()
-            nearest.addChild(container)
-            container.position = localPos
+            container.move(
+                to: Transform(scale: container.scale, rotation: container.orientation, translation: localPos),
+                relativeTo: nearest,
+                duration: 0.20,
+                timingFunction: .easeInOut
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
+                container.removeFromParent()
+                nearest.addChild(container)
+                container.position = localPos
+            }
             snappedAnchor = nearest
+            setSnapStatusMessage("Snapped to \(nearest == tableAnchor ? "Table" : "Wall")")
         } else if snappedAnchor != nil {
-            // Unsnap
-            container.removeFromParent()
-            sceneContent?.add(container)
-            container.position = worldPos
+            container.move(
+                to: Transform(scale: container.scale, rotation: container.orientation, translation: worldPos),
+                relativeTo: nil,
+                duration: 0.20,
+                timingFunction: .easeInOut
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
+                container.removeFromParent()
+                self.sceneContent?.add(container)
+                container.position = worldPos
+            }
             snappedAnchor = nil
+            setSnapStatusMessage("Unsnap from Surface")
         }
         #endif
 
@@ -454,11 +475,23 @@ class ElementViewModel: ObservableObject {
         return closest?.anchor
     }
 
+    private func setSnapStatusMessage(_ message: String) {
+        snapStatusMessage = message
+        // Optionally auto-clear after a second
+        if alwaysShowSnapMessage == false {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                if self.snapStatusMessage == message {
+                    self.snapStatusMessage = ""
+                }
+            }
+        }
+    }
+
     private func createEntity(for element: ElementDTO) -> Entity {
         guard let normalizationContext = self.normalizationContext else {
             preconditionFailure("Normalization context must be set before creating entities")
         }
-        
+
         let desc = element.shape?.shapeDescription?.lowercased() ?? ""
         // Special case: render RTlabel shapes as text-only entities using specified extents
         logger.log("Create Entity - \(desc)")
@@ -496,7 +529,6 @@ class ElementViewModel: ObservableObject {
         entity.components.set(InputTargetComponent())
         return entity
     }
-
 
     private func createLineBetween(_ id1: String, and id2: String, colorComponents: [Double]?) -> ModelEntity? {
         guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { return nil }
@@ -538,7 +570,6 @@ class ElementViewModel: ObservableObject {
         return ModelEntity(mesh: mesh, materials: [material])
     }
 
-
     /// Creates a 2D RTlabel entity using the shape.text and shape.extent to size the text container.
     private func createRTLabelEntity(for element: ElementDTO, normalization: NormalizationContext) -> Entity {
         guard let rawText = element.shape?.text,
@@ -556,22 +587,7 @@ class ElementViewModel: ObservableObject {
         let h = extent.count > 1
             ? Float(extent[1] / normalization.globalRange)
             : 0.05
-        
-//        let frame = CGRect(
-//            x: CGFloat(w) / 2,
-//            y: CGFloat(h) / 2,
-//            width: CGFloat(w),
-//            height: CGFloat(h)
-//        )
-//        let mesh = MeshResource.generateText(
-//            rawText,
-//            extrusionDepth: 1.0, //0.001,
-//            font: .systemFont(ofSize: CGFloat(max(h, w))),
-//            containerFrame: frame,
-//            alignment: .center,
-//            lineBreakMode: .byCharWrapping//.byWordWrapping
-//        )
-        
+
         let minframe = CGFloat(min(h, w))
         logger.log("rawText: \(rawText) | w: \(w) | h: \(h) | minframe: \(minframe)")
         let mesh = MeshResource.generateText(
@@ -582,7 +598,7 @@ class ElementViewModel: ObservableObject {
             alignment: .center,
             lineBreakMode: .byWordWrapping
         )
-        
+
         let materialColor: UIColor = {
             let rgba = element.shape?.color ?? element.color
             if let components = rgba, components.count >= 3 {
@@ -599,7 +615,6 @@ class ElementViewModel: ObservableObject {
         let material = UnlitMaterial(color: materialColor)
         let labelEntity = ModelEntity(mesh: mesh, materials: [material])
         // Orient label into XZ-plane so it faces camera in 2D mode, lift slightly to avoid z-fighting
-        //labelEntity.orientation = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
         labelEntity.position.y += 0.001
         // Debug: print world transform and bounds
         print("RTLabel [\(element.id)] transform:\n\(labelEntity.transform.matrix)")
@@ -611,17 +626,8 @@ class ElementViewModel: ObservableObject {
             materials: [SimpleMaterial(color: .red, isMetallic: false)]
         )
         labelEntity.addChild(debugDot)
-        // Debug: draw a translucent yellow box around the label bounds
-//        let boxBounds = labelEntity.visualBounds(relativeTo: labelEntity)
-//        let box = ModelEntity(
-//            mesh: MeshResource.generateBox(size: boxBounds.extents * 2),
-//            materials: [SimpleMaterial(color: .yellow.withAlphaComponent(0.3), isMetallic: false)]
-//        )
-//        box.position = boxBounds.center
-//        labelEntity.addChild(box)
         return labelEntity
     }
-
 }
 
 // MARK: - Camera Transform Helpers

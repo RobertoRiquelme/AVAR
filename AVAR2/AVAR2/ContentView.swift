@@ -127,6 +127,20 @@ struct ContentView: View {
         } message: {
             Text(viewModel.loadErrorMessage ?? "Unknown error.")
         }
+        .overlay(alignment: .top) {
+            if !viewModel.snapStatusMessage.isEmpty {
+                Text(viewModel.snapStatusMessage)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(16)
+                    .padding(.top, 20)
+                    .transition(.opacity)
+                    .zIndex(100)
+            }
+        }
     }
 }
 
