@@ -16,30 +16,48 @@ struct ContentView: View {
     var filename: String = "2D Tree Layout"
     var onClose: (() -> Void)? = nil
     @StateObject private var viewModel = ElementViewModel()
-
+    @State private var isTableDetected: Bool = false
+    @State private var isWallDetected: Bool = false
+    
     var body: some View {
         RealityView { content in
-        #if os(visionOS)
-            // Insert invisible SpatialEntity anchors for table & wall detection
-            do {
-                let tableAnchor = try AnchorEntity(
-                    plane: .horizontal,
-                    classification: .table,
-                    minimumBounds: [0.3, 0.3]
-                )
-                content.add(tableAnchor)
-                let wallAnchor = try AnchorEntity(
-                    plane: .vertical,
-                    classification: .wall,
-                    minimumBounds: [0.3, 0.3]
-                )
-                content.add(wallAnchor)
-            } catch {
-                print("SpatialEntity init failed:", error)
-            }
-        #endif
-        viewModel.loadElements(in: content, onClose: onClose)
+            // Insert invisible anchors for table & wall detection
+            let tableAnchor = AnchorEntity(
+                plane: .horizontal,
+                classification: .table,
+                minimumBounds: [0.3, 0.3]
+            )
+            tableAnchor.name = "tableAnchor"
+            content.add(tableAnchor)
+            
+            let wallAnchor = AnchorEntity(
+                plane: .vertical,
+                classification: .wall,
+                minimumBounds: [0.3, 0.3]
+            )
+            wallAnchor.name = "wallAnchor"
+            content.add(wallAnchor)
+            
+            // Save to ViewModel or local state if needed
+            viewModel.tableAnchor = tableAnchor
+            viewModel.wallAnchor = wallAnchor
+
+            viewModel.loadElements(in: content, onClose: onClose)
         } update: { content in
+            // Check detection state
+            if let tableAnchor = content.entities.first(where: { $0.name == "tableAnchor" }) as? AnchorEntity {
+                if tableAnchor.isAnchored && !isTableDetected {
+                    isTableDetected = true
+                    print("Table surface detected!")
+                    // Notify the ViewModel or trigger UI update here
+                }
+            }
+            if let wallAnchor = content.entities.first(where: { $0.name == "wallAnchor" }) as? AnchorEntity {
+                if wallAnchor.isAnchored && !isWallDetected {
+                    isWallDetected = true
+                    print("Wall surface detected!")
+                }
+            }
             viewModel.updateConnections(in: content)
         }
         .task {

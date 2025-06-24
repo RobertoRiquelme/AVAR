@@ -52,6 +52,11 @@ class ElementViewModel: ObservableObject {
     private var draggingEntity: Entity?
     /// The world-space position at the start of the current drag
     private var draggingStartPosition: SIMD3<Float>?
+    // In ElementViewModel.swift
+    @Published var tableAnchor: AnchorEntity?
+    @Published var wallAnchor: AnchorEntity?
+    /// Tracks which surface anchor (if any) the graph is currently snapped to
+    private var snappedAnchor: AnchorEntity? = nil
 
     func loadData(from filename: String) async {
         do {
@@ -375,6 +380,28 @@ class ElementViewModel: ObservableObject {
             let newOrient = yawQuat * pitchQuat
             container.orientation = newOrient
             container.position = pivotWorldNow - newOrient.act(pivotLocal)
+
+            // --- Surface Snapping Logic ---
+            #if os(visionOS)
+            let worldPos = container.position(relativeTo: nil)
+            if let nearest = nearestSurfaceAnchor(to: worldPos) {
+                if snappedAnchor !== nearest {
+                    // Snap: parent to the anchor, set position relative to it
+                    let localPos = nearest.convert(position: worldPos, from: nil)
+                    container.removeFromParent()
+                    nearest.addChild(container)
+                    container.position = localPos
+                    snappedAnchor = nearest
+                }
+            } else if snappedAnchor != nil {
+                // Unsnap: parent back to scene root (content), preserve world position
+                let worldPos = container.position(relativeTo: nil)
+                container.removeFromParent()
+                sceneContent?.add(container)
+                container.position = worldPos
+                snappedAnchor = nil
+            }
+            #endif
         }
     }
 
@@ -383,26 +410,48 @@ class ElementViewModel: ObservableObject {
         panPivotWorld = nil
         panPivotLocal = nil
         panStartOrientation = nil
-        // Surface snapping: raycast down to attach container under detected AnchorEntity
+
         #if os(visionOS)
         guard let container = rootEntity else { return }
-
-        // Get the handle world position (start of the ray)
-        let handleWorldPos = value.entity.convert(position: .zero, to: nil)
-        let down = SIMD3<Float>(0, -1, 0) // Down direction in world space
-        let maxDistance: Float = 2.0
-
-        if let scene = container.scene {
-            // RealityKit's correct method
-            let hits = scene.raycast(origin: handleWorldPos, direction: down, length: maxDistance)
-            if let hit = hits.first, let anchor = hit.entity.anchor as? AnchorEntity {
-                container.removeFromParent()
-                anchor.addChild(container)
-                let localPos = anchor.convert(position: hit.position, from: nil)
-                container.position = localPos
-            }
+        let worldPos = container.position(relativeTo: nil)
+        if let nearest = nearestSurfaceAnchor(to: worldPos, threshold: 0.30) { // can use a slightly larger threshold for settle
+            let localPos = nearest.convert(position: worldPos, from: nil)
+            container.removeFromParent()
+            nearest.addChild(container)
+            container.position = localPos
+            snappedAnchor = nearest
+        } else if snappedAnchor != nil {
+            // Unsnap
+            container.removeFromParent()
+            sceneContent?.add(container)
+            container.position = worldPos
+            snappedAnchor = nil
         }
         #endif
+
+        // Final update of connection lines
+        if let content = sceneContent {
+            updateConnections(in: content)
+        }
+    }
+
+    /// Returns the nearest anchor (table or wall) within the given threshold, or nil if none are close enough
+    private func nearestSurfaceAnchor(to worldPos: SIMD3<Float>, threshold: Float = 0.25) -> AnchorEntity? {
+        let anchors: [AnchorEntity?] = [tableAnchor, wallAnchor]
+        // Only consider anchors that are in the scene and anchored
+        let candidates = anchors.compactMap { $0 }
+            .filter { $0.isAnchored }
+        var closest: (anchor: AnchorEntity, distance: Float)? = nil
+        for anchor in candidates {
+            let anchorPos = anchor.position(relativeTo: nil)
+            let dist = simd_distance(anchorPos, worldPos)
+            if dist < threshold {
+                if closest == nil || dist < closest!.distance {
+                    closest = (anchor, dist)
+                }
+            }
+        }
+        return closest?.anchor
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {
