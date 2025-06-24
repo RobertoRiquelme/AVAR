@@ -383,6 +383,26 @@ class ElementViewModel: ObservableObject {
         panPivotWorld = nil
         panPivotLocal = nil
         panStartOrientation = nil
+        // Surface snapping: raycast down to attach container under detected AnchorEntity
+        #if os(visionOS)
+        guard let container = rootEntity else { return }
+
+        // Get the handle world position (start of the ray)
+        let handleWorldPos = value.entity.convert(position: .zero, to: nil)
+        let down = SIMD3<Float>(0, -1, 0) // Down direction in world space
+        let maxDistance: Float = 2.0
+
+        if let scene = container.scene {
+            // RealityKit's correct method
+            let hits = scene.raycast(origin: handleWorldPos, direction: down, length: maxDistance)
+            if let hit = hits.first, let anchor = hit.entity.anchor as? AnchorEntity {
+                container.removeFromParent()
+                anchor.addChild(container)
+                let localPos = anchor.convert(position: hit.position, from: nil)
+                container.position = localPos
+            }
+        }
+        #endif
     }
 
     private func createEntity(for element: ElementDTO) -> Entity {

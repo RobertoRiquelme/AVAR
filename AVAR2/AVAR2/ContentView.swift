@@ -9,6 +9,7 @@ import SwiftUI
 import RealityKit
 import RealityKitContent
 
+
 /// Displays an immersive graph based on a selected example file.
 struct ContentView: View {
     /// The resource filename (without extension) to load.
@@ -18,7 +19,26 @@ struct ContentView: View {
 
     var body: some View {
         RealityView { content in
-            viewModel.loadElements(in: content, onClose: onClose)
+        #if os(visionOS)
+            // Insert invisible SpatialEntity anchors for table & wall detection
+            do {
+                let tableAnchor = try AnchorEntity(
+                    plane: .horizontal,
+                    classification: .table,
+                    minimumBounds: [0.3, 0.3]
+                )
+                content.add(tableAnchor)
+                let wallAnchor = try AnchorEntity(
+                    plane: .vertical,
+                    classification: .wall,
+                    minimumBounds: [0.3, 0.3]
+                )
+                content.add(wallAnchor)
+            } catch {
+                print("SpatialEntity init failed:", error)
+            }
+        #endif
+        viewModel.loadElements(in: content, onClose: onClose)
         } update: { content in
             viewModel.updateConnections(in: content)
         }
