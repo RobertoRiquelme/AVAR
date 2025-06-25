@@ -45,6 +45,10 @@ struct AVAR2: App {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
+    enum InputMode: String {
+        case file, json
+    }
+
     // Gather all example files in the bundle (without extension)
     let files: [String]
     @State private var selectedFile: String
@@ -52,6 +56,10 @@ struct AVAR2: App {
     /// List of diagrams currently loaded into the immersive space
     @State private var activeFiles: [String] = []
     @StateObject private var fpsMonitor = FPSMonitor()
+
+    @State private var inputMode: InputMode = .file
+    @State private var jsonInput: String = ""
+    @State private var isJSONValid: Bool = false
 
     init() {
         // Find all .txt resources in the main bundle
@@ -71,23 +79,76 @@ struct AVAR2: App {
                     .font(.title)
                     .padding(.top)
 
-                // Picker to choose which example file to load
-                Picker("Select Example", selection: $selectedFile) {
-                    ForEach(files, id: \.self) { name in
-                        Text(name).tag(name)
-                    }
+                Picker("Input Source", selection: $inputMode) {
+                    Text("From File").tag(InputMode.file)
+                    Text("From JSON").tag(InputMode.json)
                 }
-                .pickerStyle(.menu)
+                .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                // Enter or add diagrams to the immersive space
+                if inputMode == .file {
+                    Picker("Select Example", selection: $selectedFile) {
+                        ForEach(files, id: \.self) { name in
+                            Text(name).tag(name)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .padding(.horizontal)
+                } else {
+                    VStack(alignment: .leading) {
+                        Text("Paste JSON Diagram:")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        TextEditor(text: $jsonInput)
+                            .frame(height: UIFont.preferredFont(forTextStyle: .body).lineHeight * 10 + 32)
+                            .padding(.horizontal)
+
+                        HStack {
+                            Button("Validate JSON") {
+                                if let data = jsonInput.data(using: .utf8) {
+                                    isJSONValid = (try? JSONSerialization.jsonObject(with: data)) != nil
+                                } else {
+                                    isJSONValid = false
+                                }
+                            }
+
+                            Spacer()
+
+                            Button("Clear") {
+                                jsonInput = ""
+                                isJSONValid = false
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        if !isJSONValid && !jsonInput.isEmpty {
+                            Text("Invalid JSON format")
+                                .foregroundColor(.red)
+                                .padding(.horizontal)
+                        }
+                    }
+                }
+
                 Button(hasEnteredImmersive ? "Add Diagram" : "Enter Immersive Space") {
                     Task {
+                        if inputMode == .json && !isJSONValid {
+                            return // Prevent invalid input
+                        }
+
                         if !hasEnteredImmersive {
                             hasEnteredImmersive = true
                             await openImmersiveSpace(id: "MainImmersive")
                         }
-                        activeFiles.append(selectedFile)
+
+                        let newFile = inputMode == .file ? selectedFile : "input_json_\(UUID().uuidString)"
+                        if inputMode == .json {
+                            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(newFile).appendingPathExtension("txt")
+                            try? jsonInput.write(to: tempURL, atomically: true, encoding: .utf8)
+                        }
+                        activeFiles.append(newFile)
+
+                        // Optional: Save jsonInput to temp file here if needed
                     }
                 }
                 .font(.title2)
@@ -105,6 +166,7 @@ struct AVAR2: App {
 
                 Spacer()
                 Text("\(fpsMonitor.fps) FPS")
+                    .font(.title)
                     .padding(.bottom)
             }
             .padding()
@@ -113,7 +175,6 @@ struct AVAR2: App {
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
-            // Render all active diagrams in the same immersive space
             Group {
                 ForEach(activeFiles, id: \.self) { file in
                     ContentView(filename: file) {

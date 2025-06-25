@@ -18,6 +18,43 @@ struct ContentView: View {
     @StateObject private var viewModel = ElementViewModel()
     @State private var isTableDetected: Bool = false
     @State private var isWallDetected: Bool = false
+    @State private var detectedTableAnchors: [AnchorEntity] = []
+    @State private var detectedWallAnchors: [AnchorEntity] = []
+    
+    func makeSurfaceHighlight(isTable: Bool) -> ModelEntity {
+        print("Highlighting \(isTable ? "table" : "wall") detected!")
+
+        let size: SIMD2<Float> = [0.5, 0.5]
+        // Main plane (semi-transparent fill)
+        let mesh = MeshResource.generatePlane(width: size.x, depth: size.y)
+        let fillColor = isTable ? UIColor.systemGreen.withAlphaComponent(0.2) : UIColor.systemBlue.withAlphaComponent(0.2)
+        let fillMaterial = UnlitMaterial(color: fillColor)
+
+        let highlight = ModelEntity(mesh: mesh, materials: [fillMaterial])
+        highlight.name = isTable ? "tableHighlight" : "wallHighlight"
+        // Glowing border: thin slightly larger plane, higher alpha
+        let borderWidth: Float = 0.01
+        let borderMesh = MeshResource.generatePlane(width: size.x + borderWidth, depth: size.y + borderWidth)
+        let borderColor = isTable ? UIColor.green.withAlphaComponent(0.8) : UIColor.blue.withAlphaComponent(0.8)
+        let borderMaterial = UnlitMaterial(color: borderColor)
+        let borderEntity = ModelEntity(mesh: borderMesh, materials: [borderMaterial])
+        borderEntity.name = isTable ? "tableBorder" : "wallBorder"
+        highlight.addChild(borderEntity)
+
+        // Raise above surface a bit to avoid z-fighting
+        if isTable {
+            highlight.position.y = 0.01
+            borderEntity.position.y = 0.001
+        } else {
+            highlight.orientation = simd_quatf(angle: -.pi/2, axis: [1, 0, 0])
+            borderEntity.orientation = simd_quatf(angle: -.pi/2, axis: [1, 0, 0])
+            highlight.position.z = 0.01
+            borderEntity.position.z = 0.001
+        }
+
+        highlight.scale = SIMD3<Float>(repeating: 1.0)
+        return highlight
+    }
     
     var body: some View {
         RealityView { content in
@@ -25,7 +62,7 @@ struct ContentView: View {
             let tableAnchor = AnchorEntity(
                 plane: .horizontal,
                 classification: .table,
-                minimumBounds: [0.3, 0.3]
+                minimumBounds: [0.5, 0.5]
             )
             tableAnchor.name = "tableAnchor"
             content.add(tableAnchor)
@@ -33,7 +70,7 @@ struct ContentView: View {
             let wallAnchor = AnchorEntity(
                 plane: .vertical,
                 classification: .wall,
-                minimumBounds: [0.3, 0.3]
+                minimumBounds: [0.5, 0.5]
             )
             wallAnchor.name = "wallAnchor"
             content.add(wallAnchor)
@@ -45,17 +82,50 @@ struct ContentView: View {
             viewModel.loadElements(in: content, onClose: onClose)
         } update: { content in
             // Check detection state
-            if let tableAnchor = content.entities.first(where: { $0.name == "tableAnchor" }) as? AnchorEntity {
-                if tableAnchor.isAnchored && !isTableDetected {
-                    isTableDetected = true
-                    print("Table surface detected!")
-                    // Notify the ViewModel or trigger UI update here
+            // Detect all tables
+            
+            let allAnchors = content.entities.compactMap { $0 as? AnchorEntity }
+            
+            for anchor in allAnchors {
+                // Only process horizontal/vertical planes
+                guard anchor.isAnchored else { continue }
+                let anchoring = anchor.anchoring
+                var isTable = false
+                var isWall = false
+                switch anchoring.target {
+                    case .plane(let planeAlignment, let classification, _):
+                        isTable = planeAlignment == .horizontal && classification == .table
+                        isWall = planeAlignment == .vertical && classification == .wall
+                    default:
+                        break
                 }
-            }
-            if let wallAnchor = content.entities.first(where: { $0.name == "wallAnchor" }) as? AnchorEntity {
-                if wallAnchor.isAnchored && !isWallDetected {
-                    isWallDetected = true
-                    print("Wall surface detected!")
+
+                // Add highlight if not present and not already in our tracked lists
+                if isTable {
+                    if !detectedTableAnchors.contains(where: { $0 === anchor }) {
+                        detectedTableAnchors.append(anchor)
+                        print("Table surface detected!")
+                        //if anchor.findEntity(named: "tableHighlight") == nil {
+                            let highlight = makeSurfaceHighlight(isTable: true)
+                            anchor.addChild(highlight)
+                        //}
+                    }
+                } else if isWall {
+                    if !detectedWallAnchors.contains(where: { $0 === anchor }) {
+                        detectedWallAnchors.append(anchor)
+                        print("Wall surface detected!")
+                        //if anchor.findEntity(named: "wallHighlight") == nil {
+                            let highlight = makeSurfaceHighlight(isTable: false)
+                            anchor.addChild(highlight)
+                        //}
+                    }
+                } else {
+                    // If you want to highlight any other classification/plane, you can handle them here!
+                    // For example:
+                    // if anchor.findEntity(named: "genericHighlight") == nil {
+                    //     let highlight = makeSurfaceHighlight(isTable: true) // or make a new style
+                    //     anchor.addChild(highlight)
+                    // }
                 }
             }
             viewModel.updateConnections(in: content)
