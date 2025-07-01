@@ -44,6 +44,10 @@ class ElementViewModel: ObservableObject {
     private var panStartOrientation: simd_quatf?
     /// Flag to prevent surface snapping during active pan
     private var isPanActive: Bool = false
+    /// Current surface the diagram is snapped to (if any)
+    private var currentSnappedSurface: AnchorEntity? = nil
+    /// Snapping distance threshold
+    private let snapDistance: Float = 0.15  // 15cm
 
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
@@ -225,6 +229,9 @@ class ElementViewModel: ObservableObject {
         // Draw connections and grid under root
         updateConnections(in: content)
         //addCoordinateGrid()
+        
+        // Add red sphere at [0,0,0] to show diagram center
+        addOriginMarker()
     }
 
     /// Draws lines for each edge specified by fromId/toId on edge elements.
@@ -387,17 +394,33 @@ class ElementViewModel: ObservableObject {
                 container.setOrientation(targetOrientation, relativeTo: nil)
             }
         }
+        
+        // Surface snapping during pan
+        #if os(visionOS)
+        checkForSurfaceSnapping(container: container, at: newPosition)
+        #endif
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
+        guard let container = rootEntity else { return }
+        
+        // Final snap check when pan ends
+        #if os(visionOS)
+        let finalPosition = container.position(relativeTo: nil)
+        print("🏁 Pan ended at position: \(finalPosition)")
+        if let snapTarget = findNearestWallForSnapping(diagramPosition: finalPosition) {
+            print("🎯 Found snap target: \(snapTarget.name)")
+            performSnapToSurface(container: container, surface: snapTarget)
+        } else {
+            print("🚫 No snap target found")
+        }
+        #endif
+        
         // Native visionOS windows don't have momentum - they stop immediately
         // Just clear the pan state
         panStartPosition = nil
         panStartOrientation = nil
         isPanActive = false
-        
-        // The orientation will already be correct from handlePanChanged
-        // No need to force any specific orientation here
 
         // Final update of connection lines
         if let content = sceneContent {
@@ -409,13 +432,18 @@ class ElementViewModel: ObservableObject {
     func addDetectedSurfaceAnchor(_ anchor: AnchorEntity) {
         if !detectedSurfaceAnchors.contains(where: { $0 === anchor }) {
             detectedSurfaceAnchors.append(anchor)
+            print("📋 Added surface to tracking: \(anchor.name) (Total: \(detectedSurfaceAnchors.count))")
             
             // Update primary anchors if needed
             if anchor.name.contains("table") && tableAnchor == nil {
                 tableAnchor = anchor
+                print("🎯 Set primary table anchor: \(anchor.name)")
             } else if anchor.name.contains("wall") && wallAnchor == nil {
                 wallAnchor = anchor
+                print("🎯 Set primary wall anchor: \(anchor.name)")
             }
+        } else {
+            print("⚠️ Surface already in tracking list: \(anchor.name)")
         }
     }
     
@@ -463,13 +491,13 @@ class ElementViewModel: ObservableObject {
         // Calculate distance to plane
         let toPoint = worldPos - anchorPos
         let distanceToPlane = abs(simd_dot(toPoint, surfaceNormal))
-        
+        print("📏 Distance to plane: \(distanceToPlane)")
         return distanceToPlane
     }
     
     /// Checks if a surface is suitable for snapping based on orientation and size
     private func isSurfaceSuitableForSnapping(_ anchor: AnchorEntity) -> Bool {
-        // Check if anchor has sufficient size (you might need to access the underlying ARPlaneAnchor)
+// Check if anchor has sufficient size (you might need to access the underlying ARPlaneAnchor)
         // For now, we'll assume all detected anchors are suitable
         return anchor.isAnchored
     }
@@ -722,6 +750,127 @@ class ElementViewModel: ObservableObject {
         )
         labelEntity.addChild(debugDot)
         return labelEntity
+    }
+    
+    /// Check for surface snapping during pan gestures
+    private func checkForSurfaceSnapping(container: Entity, at position: SIMD3<Float>) {
+        guard !detectedSurfaceAnchors.isEmpty else { 
+            print("🚫 No detected surfaces for snapping")
+            return 
+        }
+        
+        if let nearestSurface = findNearestWallForSnapping(diagramPosition: position) {
+            // Show visual feedback that snapping is available
+            let message = "Near \(getSurfaceTypeName(nearestSurface)) - release to snap"
+            print("✨ \(message)")
+            setSnapStatusMessage(message)
+        } else {
+            // Clear snap message if not near any surface
+            if !snapStatusMessage.isEmpty && snapStatusMessage.contains("Near") {
+                setSnapStatusMessage("")
+            }
+        }
+    }
+    
+    /// Find the nearest wall for snapping - diagrams should face walls with z=0 plane
+    private func findNearestWallForSnapping(diagramPosition: SIMD3<Float>) -> AnchorEntity? {
+        var closest: (wall: AnchorEntity, distance: Float)? = nil
+        
+        print("🔍 Checking \(detectedSurfaceAnchors.count) surfaces for wall snapping")
+        
+        for surface in detectedSurfaceAnchors {
+            guard surface.isAnchored else { continue }
+            
+            // Only consider walls (vertical surfaces)
+            let surfaceName = surface.name.lowercased()
+//            guard surfaceName.contains("wall") else { 
+//                print("⏭️ Skipping non-wall surface: \(surface.name)")
+//                continue 
+//            }
+            
+            let wallPosition = surface.position(relativeTo: nil)
+            let wallRotation = surface.orientation(relativeTo: nil)
+            
+            // Calculate distance from diagram's z=0 plane to the wall surface
+            let wallNormal = wallRotation.act(SIMD3<Float>(0, 0, 1))  // Wall faces forward
+            let toWall = wallPosition - diagramPosition
+            let distanceToWall = abs(simd_dot(toWall, wallNormal))
+            
+            print("📍 Wall \(surface.name): distance = \(distanceToWall)m")
+            
+            if distanceToWall <= snapDistance {
+                if closest == nil || distanceToWall < closest!.distance {
+                    closest = (surface, distanceToWall)
+                    print("🎯 New closest wall: \(surface.name) at \(distanceToWall)m")
+                }
+            }
+        }
+        
+        return closest?.wall
+    }
+    
+    /// Perform smooth snap animation to wall - diagram faces wall with z=0 plane
+    private func performSnapToSurface(container: Entity, surface: AnchorEntity) {
+        let wallPosition = surface.position(relativeTo: nil)
+        let wallRotation = surface.orientation(relativeTo: nil)
+        
+        // For walls: position diagram so its z=0 plane is close to wall
+        let wallNormal = wallRotation.act(SIMD3<Float>(0, 0, 1))  // Wall normal pointing out
+        let offsetDistance: Float = 0.05  // 5cm from wall (like hanging a painting)
+        let snapPosition = wallPosition - (wallNormal * offsetDistance)
+        
+        // Orient diagram so x-y plane is parallel to wall (same orientation as wall)
+        let diagramOrientation = wallRotation
+        
+        print("📌 Snapping to wall at \(snapPosition) with x-y plane parallel to wall")
+        
+        // Animate to snap position
+        container.move(
+            to: Transform(
+                scale: container.scale,
+                rotation: diagramOrientation,
+                translation: snapPosition
+            ),
+            relativeTo: nil,
+            duration: 0.4,
+            timingFunction: .easeOut
+        )
+        
+        currentSnappedSurface = surface
+        let surfaceType = getSurfaceTypeName(surface)
+        let message = "Snapped to \(surfaceType)"
+        print("✅ \(message)")
+        // Show message using existing overlay system
+        setSnapStatusMessage(message)
+        
+        // Auto-clear message after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if self.snapStatusMessage.contains("Snapped") {
+                self.setSnapStatusMessage("")
+            }
+        }
+    }
+    
+    // Removed 3D text message functions - using existing overlay system instead
+    
+    /// Add a red sphere at [0,0,0] to highlight the diagram's origin point
+    private func addOriginMarker() {
+        guard let container = rootEntity else { return }
+        
+        // Create small red sphere
+        let sphereRadius: Float = 0.02  // 2cm radius
+        let sphereMesh = MeshResource.generateSphere(radius: sphereRadius)
+        let sphereMaterial = SimpleMaterial(color: .red, isMetallic: false)
+        let sphereEntity = ModelEntity(mesh: sphereMesh, materials: [sphereMaterial])
+        sphereEntity.name = "originMarker"
+        
+        // Position at exact [0,0,0] in container space
+        sphereEntity.position = SIMD3<Float>(0, 0, 0)
+        
+        // Add to container
+        container.addChild(sphereEntity)
+        
+        print("🔴 Added red origin marker at [0,0,0]")
     }
 }
 

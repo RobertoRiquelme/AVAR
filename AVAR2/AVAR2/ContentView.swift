@@ -33,12 +33,11 @@ struct ContentView: View {
         tableAnchor.name = "simulatorTableAnchor"
         tableAnchor.setPosition(SIMD3<Float>(0, -0.5, -1.5), relativeTo: nil)
         
-        // Add visual highlight for simulator testing - NO OFFSET
+        // Add visual highlight for fallback testing
         let tableHighlightMesh = MeshResource.generatePlane(width: 1.0, depth: 1.0)
         let tableHighlightMaterial = UnlitMaterial(color: UIColor.green.withAlphaComponent(0.5))
         let tableHighlight = ModelEntity(mesh: tableHighlightMesh, materials: [tableHighlightMaterial])
         tableHighlight.name = "surfaceHighlight_table"
-        // NO position offset - let the anchor handle positioning
         tableAnchor.addChild(tableHighlight)
         
         detectedTableAnchors.append(tableAnchor)
@@ -50,12 +49,13 @@ struct ContentView: View {
         wallAnchor.setPosition(SIMD3<Float>(0, 0, -2.0), relativeTo: nil)
         wallAnchor.setOrientation(simd_quatf(angle: 0, axis: [0, 1, 0]), relativeTo: nil)
         
-        // Add visual highlight for simulator testing - NO MANUAL ROTATION
+        // Add visual highlight for fallback testing
         let wallHighlightMesh = MeshResource.generatePlane(width: 2.0, depth: 2.0)
         let wallHighlightMaterial = UnlitMaterial(color: UIColor.blue.withAlphaComponent(0.5))
         let wallHighlight = ModelEntity(mesh: wallHighlightMesh, materials: [wallHighlightMaterial])
         wallHighlight.name = "surfaceHighlight_wall"
-        // NO rotation or position offset - let the anchor handle orientation
+        // Rotate wall to be vertical
+        wallHighlight.orientation = simd_quatf(angle: .pi/2, axis: SIMD3<Float>(1, 0, 0))
         wallAnchor.addChild(wallHighlight)
         
         detectedWallAnchors.append(wallAnchor)
@@ -68,11 +68,14 @@ struct ContentView: View {
     
     func setupARKitProviders() async {
         #if os(visionOS)
+        print("🚀 Starting ARKit setup...")
         let session = ARKitSession()
         let sceneReconstruction = SceneReconstructionProvider()
         // Enable detection of ALL plane types including floors and ceilings
         let planeDetection = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
         print("🔎 PlaneDetection configured for: horizontal + vertical planes")
+        print("🔎 PlaneDetection supported: \(PlaneDetectionProvider.isSupported)")
+        print("🔎 SceneReconstruction supported: \(SceneReconstructionProvider.isSupported)")
         
         // Check if any providers are supported before requesting authorization
         guard SceneReconstructionProvider.isSupported || PlaneDetectionProvider.isSupported else {
@@ -84,9 +87,11 @@ struct ContentView: View {
         let authorizationResult = await session.requestAuthorization(for: [.worldSensing])
         
         for (authorizationType, authorizationStatus) in authorizationResult {
-            print("Authorization status for \(authorizationType): \(authorizationStatus)")
+            print("🔐 Authorization status for \(authorizationType): \(authorizationStatus)")
             if authorizationStatus != .allowed {
-                print("Failed to get authorization for \(authorizationType)")
+                print("❌ Failed to get authorization for \(authorizationType)")
+            } else {
+                print("✅ Authorization granted for \(authorizationType)")
             }
         }
         
@@ -118,8 +123,21 @@ struct ContentView: View {
                 
                 if PlaneDetectionProvider.isSupported {
                     self.planeDetectionProvider = planeDetection
+                    print("👁️ Starting plane detection monitoring...")
                     // Start monitoring plane updates only if plane detection is supported
                     await monitorPlaneUpdates(provider: planeDetection)
+                    
+                    // Add fallback anchors after a delay if no real surfaces detected
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                        if self.viewModel.detectedSurfaceAnchors.isEmpty {
+                            print("⚠️ No real surfaces detected after 5s, creating fallback anchors")
+                            self.createFallbackAnchors()
+                        } else {
+                            print("✅ Real surfaces detected, skipping fallback anchors")
+                        }
+                    }
+                } else {
+                    print("❌ PlaneDetectionProvider not supported")
                 }
                 
                 print("ARKit session started successfully with \(providersToRun.count) provider(s)")
@@ -209,7 +227,8 @@ struct ContentView: View {
             highlightEntity.position.z = normalOffset   // Slightly in front of wall
         }
         
-        anchorEntity.addChild(highlightEntity)
+        // Disable surface highlighting - comment out the line below
+        // anchorEntity.addChild(highlightEntity)
         
         // The entity will be added to scene via the wrapper anchor
         
@@ -226,7 +245,8 @@ struct ContentView: View {
         }
         
         viewModel.addDetectedSurfaceAnchor(wrapperAnchor)
-        print("✨ Added \(anchor.classification) highlight - \(planeWidth)x\(planeHeight)m")
+        print("✨ Added \(anchor.classification) surface - \(planeWidth)x\(planeHeight)m")
+        print("📋 Total detected surfaces in ViewModel: \(viewModel.detectedSurfaceAnchors.count)")
         #endif
     }
     
@@ -362,7 +382,7 @@ struct ContentView: View {
         } message: {
             Text(viewModel.loadErrorMessage ?? "Unknown error.")
         }
-        .overlay(alignment: .top) {
+        .overlay(alignment: .center) {
             if !viewModel.snapStatusMessage.isEmpty {
                 Text(viewModel.snapStatusMessage)
                     .font(.headline)
