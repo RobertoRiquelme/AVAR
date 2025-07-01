@@ -819,10 +819,11 @@ class ElementViewModel: ObservableObject {
         let offsetDistance: Float = 0.05  // 5cm from wall (like hanging a painting)
         let snapPosition = wallPosition - (wallNormal * offsetDistance)
         
-        // Orient diagram so x-y plane is parallel to wall (same orientation as wall)
-        let diagramOrientation = wallRotation
+        // Orient diagram vertically on the wall (rotate -90 degrees around x-axis to fix upside down)
+        let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
+        let diagramOrientation = wallRotation * verticalRotation
         
-        print("📌 Snapping to wall at \(snapPosition) with x-y plane parallel to wall")
+        print("📌 Snapping to wall at \(snapPosition) with diagram oriented vertically")
         
         // Animate to snap position
         container.move(

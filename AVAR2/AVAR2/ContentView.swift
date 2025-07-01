@@ -58,6 +58,14 @@ struct ContentView: View {
         wallHighlight.orientation = simd_quatf(angle: .pi/2, axis: SIMD3<Float>(1, 0, 0))
         wallAnchor.addChild(wallHighlight)
         
+        // Add white box at center of fallback wall
+        let whiteBoxMesh = MeshResource.generateBox(size: 0.1)
+        let whiteBoxMaterial = UnlitMaterial(color: UIColor.white)
+        let whiteBoxEntity = ModelEntity(mesh: whiteBoxMesh, materials: [whiteBoxMaterial])
+        whiteBoxEntity.name = "wallCenterBox_simulator"
+        whiteBoxEntity.position = SIMD3<Float>(0, 0, 0.05)
+        wallAnchor.addChild(whiteBoxEntity)
+        
         detectedWallAnchors.append(wallAnchor)
         viewModel.addDetectedSurfaceAnchor(wallAnchor)
         
@@ -242,6 +250,18 @@ struct ContentView: View {
             detectedTableAnchors.append(wrapperAnchor)
         } else if anchor.classification == .wall {
             detectedWallAnchors.append(wrapperAnchor)
+            
+            // Add white box at center of wall
+            let whiteBoxMesh = MeshResource.generateBox(size: 0.1)
+            let whiteBoxMaterial = UnlitMaterial(color: UIColor.white)
+            let whiteBoxEntity = ModelEntity(mesh: whiteBoxMesh, materials: [whiteBoxMaterial])
+            whiteBoxEntity.name = "wallCenterBox_\(anchor.id)"
+            
+            // Position the box at the center of the wall
+            // The box should be positioned slightly in front of the wall surface
+            whiteBoxEntity.position = SIMD3<Float>(0, 0, 0.05)
+            
+            anchorEntity.addChild(whiteBoxEntity)
         }
         
         viewModel.addDetectedSurfaceAnchor(wrapperAnchor)
