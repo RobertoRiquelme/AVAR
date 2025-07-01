@@ -8,6 +8,7 @@
 import SwiftUI
 import RealityKit
 import RealityKitContent
+import ARKit
 
 
 /// Displays an immersive graph based on a selected example file.
@@ -20,118 +21,282 @@ struct ContentView: View {
     @State private var isWallDetected: Bool = false
     @State private var detectedTableAnchors: [AnchorEntity] = []
     @State private var detectedWallAnchors: [AnchorEntity] = []
+    @State private var sceneReconstructionProvider: SceneReconstructionProvider?
+    @State private var planeDetectionProvider: PlaneDetectionProvider?
+    @State private var currentSceneContent: RealityViewContent?
     
-    func makeSurfaceHighlight(isTable: Bool) -> ModelEntity {
-        print("Highlighting \(isTable ? "table" : "wall") detected!")
-
-        let size: SIMD2<Float> = [0.5, 0.5]
-        // Main plane (semi-transparent fill)
-        let mesh = MeshResource.generatePlane(width: size.x, depth: size.y)
-        let fillColor = isTable ? UIColor.systemGreen.withAlphaComponent(0.2) : UIColor.systemBlue.withAlphaComponent(0.2)
-        let fillMaterial = UnlitMaterial(color: fillColor)
-
-        let highlight = ModelEntity(mesh: mesh, materials: [fillMaterial])
-        highlight.name = isTable ? "tableHighlight" : "wallHighlight"
-        // Glowing border: thin slightly larger plane, higher alpha
-        let borderWidth: Float = 0.01
-        let borderMesh = MeshResource.generatePlane(width: size.x + borderWidth, depth: size.y + borderWidth)
-        let borderColor = isTable ? UIColor.green.withAlphaComponent(0.8) : UIColor.blue.withAlphaComponent(0.8)
-        let borderMaterial = UnlitMaterial(color: borderColor)
-        let borderEntity = ModelEntity(mesh: borderMesh, materials: [borderMaterial])
-        borderEntity.name = isTable ? "tableBorder" : "wallBorder"
-        highlight.addChild(borderEntity)
-
-        // Raise above surface a bit to avoid z-fighting
-        if isTable {
-            highlight.position.y = 0.01
-            borderEntity.position.y = 0.001
-        } else {
-            highlight.orientation = simd_quatf(angle: -.pi/2, axis: [1, 0, 0])
-            borderEntity.orientation = simd_quatf(angle: -.pi/2, axis: [1, 0, 0])
-            highlight.position.z = 0.01
-            borderEntity.position.z = 0.001
-        }
-
-        highlight.scale = SIMD3<Float>(repeating: 1.0)
-        return highlight
+    /// Creates fallback surface anchors for simulator testing
+    func createFallbackAnchors() {
+        #if os(visionOS)
+        // Create a mock table anchor positioned below user
+        let tableAnchor = AnchorEntity(.plane(.horizontal, classification: .table, minimumBounds: [1.0, 1.0]))
+        tableAnchor.name = "simulatorTableAnchor"
+        tableAnchor.setPosition(SIMD3<Float>(0, -0.5, -1.5), relativeTo: nil)
+        
+        // Add visual highlight for simulator testing - NO OFFSET
+        let tableHighlightMesh = MeshResource.generatePlane(width: 1.0, depth: 1.0)
+        let tableHighlightMaterial = UnlitMaterial(color: UIColor.green.withAlphaComponent(0.5))
+        let tableHighlight = ModelEntity(mesh: tableHighlightMesh, materials: [tableHighlightMaterial])
+        tableHighlight.name = "surfaceHighlight_table"
+        // NO position offset - let the anchor handle positioning
+        tableAnchor.addChild(tableHighlight)
+        
+        detectedTableAnchors.append(tableAnchor)
+        viewModel.addDetectedSurfaceAnchor(tableAnchor)
+        
+        // Create a mock wall anchor positioned in front of user
+        let wallAnchor = AnchorEntity(.plane(.vertical, classification: .wall, minimumBounds: [2.0, 2.0]))
+        wallAnchor.name = "simulatorWallAnchor" 
+        wallAnchor.setPosition(SIMD3<Float>(0, 0, -2.0), relativeTo: nil)
+        wallAnchor.setOrientation(simd_quatf(angle: 0, axis: [0, 1, 0]), relativeTo: nil)
+        
+        // Add visual highlight for simulator testing - NO MANUAL ROTATION
+        let wallHighlightMesh = MeshResource.generatePlane(width: 2.0, depth: 2.0)
+        let wallHighlightMaterial = UnlitMaterial(color: UIColor.blue.withAlphaComponent(0.5))
+        let wallHighlight = ModelEntity(mesh: wallHighlightMesh, materials: [wallHighlightMaterial])
+        wallHighlight.name = "surfaceHighlight_wall"
+        // NO rotation or position offset - let the anchor handle orientation
+        wallAnchor.addChild(wallHighlight)
+        
+        detectedWallAnchors.append(wallAnchor)
+        viewModel.addDetectedSurfaceAnchor(wallAnchor)
+        
+        print("✅ Created fallback anchors for simulator: 1 table (below), 1 wall (front)")
+        print("📱 Simulator Mode: Surface snapping will work with these mock surfaces")
+        #endif
     }
+    
+    func setupARKitProviders() async {
+        #if os(visionOS)
+        let session = ARKitSession()
+        let sceneReconstruction = SceneReconstructionProvider()
+        // Enable detection of ALL plane types including floors and ceilings
+        let planeDetection = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
+        print("🔎 PlaneDetection configured for: horizontal + vertical planes")
+        
+        // Check if any providers are supported before requesting authorization
+        guard SceneReconstructionProvider.isSupported || PlaneDetectionProvider.isSupported else {
+            print("No ARKit providers are supported - skipping authorization and creating fallback anchors")
+            createFallbackAnchors()
+            return
+        }
+        
+        let authorizationResult = await session.requestAuthorization(for: [.worldSensing])
+        
+        for (authorizationType, authorizationStatus) in authorizationResult {
+            print("Authorization status for \(authorizationType): \(authorizationStatus)")
+            if authorizationStatus != .allowed {
+                print("Failed to get authorization for \(authorizationType)")
+            }
+        }
+        
+        do {
+            // Check if providers are supported before running
+            var providersToRun: [DataProvider] = []
+            
+            if SceneReconstructionProvider.isSupported {
+                providersToRun.append(sceneReconstruction)
+                print("Scene reconstruction is supported")
+            } else {
+                print("Scene reconstruction is not supported (likely running in simulator)")
+            }
+            
+            if PlaneDetectionProvider.isSupported {
+                providersToRun.append(planeDetection)
+                print("Plane detection is supported")
+            } else {
+                print("Plane detection is not supported (likely running in simulator)")
+            }
+            
+            // Only run ARKit session if we have supported providers
+            if !providersToRun.isEmpty {
+                try await session.run(providersToRun)
+                
+                if SceneReconstructionProvider.isSupported {
+                    self.sceneReconstructionProvider = sceneReconstruction
+                }
+                
+                if PlaneDetectionProvider.isSupported {
+                    self.planeDetectionProvider = planeDetection
+                    // Start monitoring plane updates only if plane detection is supported
+                    await monitorPlaneUpdates(provider: planeDetection)
+                }
+                
+                print("ARKit session started successfully with \(providersToRun.count) provider(s)")
+            } else {
+                print("No ARKit providers are supported - app will run without surface detection")
+                // Create fallback anchors for simulator testing
+                createFallbackAnchors()
+            }
+        } catch {
+            print("Failed to start ARKit session: \(error)")
+            // Create fallback anchors if ARKit fails
+            createFallbackAnchors()
+        }
+        #endif
+    }
+    
+    func monitorPlaneUpdates(provider: PlaneDetectionProvider) async {
+        #if os(visionOS)
+        for await update in provider.anchorUpdates {
+            let anchor = update.anchor
+            
+            switch update.event {
+            case .added:
+                handlePlaneAdded(anchor: anchor)
+            case .updated:
+                handlePlaneUpdated(anchor: anchor)
+            case .removed:
+                handlePlaneRemoved(anchor: anchor)
+            }
+        }
+        #endif
+    }
+    
+    @MainActor
+    func handlePlaneAdded(anchor: PlaneAnchor) {
+        #if os(visionOS)
+        print("🔍 RAW ARKit Plane: \(anchor.classification), alignment: \(anchor.alignment)")
+        print("📍 RAW Position: \(anchor.originFromAnchorTransform.translation)")
+        print("🔄 RAW Transform: \(anchor.originFromAnchorTransform)")
+        
+        // Don't create custom AnchorEntity - use the ARKit anchor directly
+        // Create a simple Entity to hold our highlight
+        let anchorEntity = Entity()
+        anchorEntity.name = "detectedPlane_\(anchor.id)"
+        
+        // Set the exact position and orientation from ARKit
+        anchorEntity.setPosition(anchor.originFromAnchorTransform.translation, relativeTo: nil)
+        anchorEntity.setOrientation(simd_quatf(anchor.originFromAnchorTransform), relativeTo: nil)
+        
+        // Create visual highlight that exactly matches the detected plane
+        let planeWidth = anchor.geometry.extent.width
+        let planeHeight = anchor.geometry.extent.height
+        
+        // Choose color based on surface type
+        let highlightColor: UIColor = {
+            switch anchor.classification {
+            case .table:
+                return UIColor.green.withAlphaComponent(0.6)
+            case .wall:
+                return UIColor.blue.withAlphaComponent(0.6)
+            case .floor:
+                return UIColor.brown.withAlphaComponent(0.6)
+            case .ceiling:
+                return UIColor.gray.withAlphaComponent(0.6)
+            default:
+                return UIColor.yellow.withAlphaComponent(0.6)
+            }
+        }()
+        
+        // Create a plane mesh that matches the detected surface exactly
+        let highlightMesh = MeshResource.generatePlane(width: planeWidth, depth: planeHeight)
+        let highlightMaterial = UnlitMaterial(color: highlightColor)
+        let highlightEntity = ModelEntity(mesh: highlightMesh, materials: [highlightMaterial])
+        highlightEntity.name = "surfaceHighlight_\(anchor.classification)"
+        
+        // Apply a tiny offset based on the plane's normal to prevent z-fighting
+        let normalOffset: Float = 0.001
+        if anchor.alignment == .horizontal {
+            // For horizontal planes (tables, floors, ceilings)
+            if anchor.classification == .ceiling {
+                highlightEntity.position.y = -normalOffset  // Slightly below ceiling
+            } else {
+                highlightEntity.position.y = normalOffset   // Slightly above floor/table
+            }
+        } else {
+            // For vertical planes (walls)
+            highlightEntity.position.z = normalOffset   // Slightly in front of wall
+        }
+        
+        anchorEntity.addChild(highlightEntity)
+        
+        // The entity will be added to scene via the wrapper anchor
+        
+        // Create an AnchorEntity wrapper for compatibility with existing tracking
+        let wrapperAnchor = AnchorEntity()
+        wrapperAnchor.name = anchorEntity.name
+        wrapperAnchor.addChild(anchorEntity)
+        
+        // Track ALL surfaces, not just tables and walls
+        if anchor.classification == .table {
+            detectedTableAnchors.append(wrapperAnchor)
+        } else if anchor.classification == .wall {
+            detectedWallAnchors.append(wrapperAnchor)
+        }
+        
+        viewModel.addDetectedSurfaceAnchor(wrapperAnchor)
+        print("✨ Added \(anchor.classification) highlight - \(planeWidth)x\(planeHeight)m")
+        #endif
+    }
+    
+    @MainActor
+    func handlePlaneUpdated(anchor: PlaneAnchor) {
+        #if os(visionOS)
+        // Find and update the corresponding anchor entity
+        let allAnchors = detectedTableAnchors + detectedWallAnchors + viewModel.detectedSurfaceAnchors
+        if let existingEntity = allAnchors.first(where: { $0.name == "detectedPlane_\(anchor.id)" }) {
+            // Update position and orientation
+            existingEntity.setPosition(anchor.originFromAnchorTransform.translation, relativeTo: nil)
+            existingEntity.setOrientation(simd_quatf(anchor.originFromAnchorTransform), relativeTo: nil)
+            
+            // Only update highlight if size changed significantly (to prevent blinking)
+            if let existingHighlight = existingEntity.children.first(where: { $0.name.contains("surfaceHighlight") }) as? ModelEntity {
+                let currentBounds = existingHighlight.visualBounds(relativeTo: existingEntity)
+                let newWidth = anchor.geometry.extent.width
+                let newHeight = anchor.geometry.extent.height
+                let currentWidth = currentBounds.extents.x * 2
+                let currentDepth = currentBounds.extents.z * 2
+                
+                // Only update if size changed by more than 10cm
+                if abs(newWidth - currentWidth) > 0.1 || abs(newHeight - currentDepth) > 0.1 {
+                    existingHighlight.removeFromParent()
+                    
+                    let newMesh = MeshResource.generatePlane(width: newWidth, depth: newHeight)
+                    existingHighlight.model?.mesh = newMesh
+                    existingEntity.addChild(existingHighlight)
+                    
+                    print("📏 Updated \(anchor.classification) size: \(newWidth)x\(newHeight)m")
+                }
+            }
+        }
+        #endif
+    }
+    
+    @MainActor
+    func handlePlaneRemoved(anchor: PlaneAnchor) {
+        #if os(visionOS)
+        // Find and remove the corresponding anchor entity
+        let allAnchors = detectedTableAnchors + detectedWallAnchors
+        if let entityToRemove = allAnchors.first(where: { $0.name == "detectedPlane_\(anchor.id)" }) {
+            detectedTableAnchors.removeAll { $0 === entityToRemove }
+            detectedWallAnchors.removeAll { $0 === entityToRemove }
+            viewModel.removeDetectedSurfaceAnchor(entityToRemove)
+        }
+        #endif
+    }
+    
+    // Removed complex surface highlighting - using simpler approach above
     
     var body: some View {
         RealityView { content in
-            // Insert invisible anchors for table & wall detection
-            let tableAnchor = AnchorEntity(
-                plane: .horizontal,
-                classification: .table,
-                minimumBounds: [0.5, 0.5]
-            )
-            tableAnchor.name = "tableAnchor"
-            content.add(tableAnchor)
-            
-            let wallAnchor = AnchorEntity(
-                plane: .vertical,
-                classification: .wall,
-                minimumBounds: [0.5, 0.5]
-            )
-            wallAnchor.name = "wallAnchor"
-            content.add(wallAnchor)
-            
-            // Save to ViewModel or local state if needed
-            viewModel.tableAnchor = tableAnchor
-            viewModel.wallAnchor = wallAnchor
-
+            currentSceneContent = content
             viewModel.loadElements(in: content, onClose: onClose)
         } update: { content in
-            // Check detection state
-            // Detect all tables
-            
-            let allAnchors = content.entities.compactMap { $0 as? AnchorEntity }
-            
-            for anchor in allAnchors {
-                // Only process horizontal/vertical planes
-                guard anchor.isAnchored else { continue }
-                let anchoring = anchor.anchoring
-                var isTable = false
-                var isWall = false
-                switch anchoring.target {
-                    case .plane(let planeAlignment, let classification, _):
-                        isTable = planeAlignment == .horizontal && classification == .table
-                        isWall = planeAlignment == .vertical && classification == .wall
-                    default:
-                        break
-                }
-
-                // Add highlight if not present and not already in our tracked lists
-                if isTable {
-                    if !detectedTableAnchors.contains(where: { $0 === anchor }) {
-                        detectedTableAnchors.append(anchor)
-                        print("Table surface detected!")
-                        //if anchor.findEntity(named: "tableHighlight") == nil {
-                            let highlight = makeSurfaceHighlight(isTable: true)
-                            anchor.addChild(highlight)
-                        //}
-                    }
-                } else if isWall {
-                    if !detectedWallAnchors.contains(where: { $0 === anchor }) {
-                        detectedWallAnchors.append(anchor)
-                        print("Wall surface detected!")
-                        //if anchor.findEntity(named: "wallHighlight") == nil {
-                            let highlight = makeSurfaceHighlight(isTable: false)
-                            anchor.addChild(highlight)
-                        //}
-                    }
-                } else {
-                    // If you want to highlight any other classification/plane, you can handle them here!
-                    // For example:
-                    // if anchor.findEntity(named: "genericHighlight") == nil {
-                    //     let highlight = makeSurfaceHighlight(isTable: true) // or make a new style
-                    //     anchor.addChild(highlight)
-                    // }
+            currentSceneContent = content
+            // Add fallback anchors to the content if they exist
+            for anchor in detectedTableAnchors + detectedWallAnchors {
+                if !content.entities.contains(anchor) {
+                    content.add(anchor)
                 }
             }
+            // The surface detection is now handled by ARKit providers
+            // Just update connections as needed
             viewModel.updateConnections(in: content)
         }
         .task {
             await viewModel.loadData(from: filename)
+            await setupARKitProviders()
         }
         // Combined drag gesture: element drag vs window pan via grab handle
         .gesture(

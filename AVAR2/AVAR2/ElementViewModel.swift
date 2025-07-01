@@ -11,6 +11,7 @@ import RealityKitContent
 import SwiftUI
 import simd
 import OSLog
+import ARKit
 
 // Logger for ViewModel
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel")
@@ -39,13 +40,10 @@ class ElementViewModel: ObservableObject {
     private var zoomPivotLocal: SIMD3<Float>?
     /// Starting container position when panning begins
     private var panStartPosition: SIMD3<Float>?
-    /// Pivot point in world space at pan start (handle location)
-    private var panPivotWorld: SIMD3<Float>?
-    /// Pivot point in container-local space at pan start (handle location)
-    private var panPivotLocal: SIMD3<Float>?
-    /// Container orientation at the start of a pan (for full spherical rotation)
+    /// Container orientation at the start of a pan
     private var panStartOrientation: simd_quatf?
-    private var panStartPitch: Float?
+    /// Flag to prevent surface snapping during active pan
+    private var isPanActive: Bool = false
 
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
@@ -57,12 +55,18 @@ class ElementViewModel: ObservableObject {
     @Published var wallAnchor: AnchorEntity?
     /// Tracks which surface anchor (if any) the graph is currently snapped to
     private var snappedAnchor: AnchorEntity? = nil
+    /// List of all detected surface anchors
+    @Published var detectedSurfaceAnchors: [AnchorEntity] = []
 
     // NEW: Snap/unsnap banner
     @Published var snapStatusMessage: String = ""
 
     // NEW: Set this to false to only show message once, or to true to always show
     private var alwaysShowSnapMessage = true
+    
+    // Enhanced surface detection constants
+    private let snapThreshold: Float = 0.3  // Distance threshold for snapping
+    private let releaseThreshold: Float = 0.5  // Distance threshold for releasing snap
 
     func loadData(from filename: String) async {
         do {
@@ -341,114 +345,59 @@ class ElementViewModel: ObservableObject {
         zoomPivotLocal = nil
     }
 
-    /// Handle pan gesture to move the entire graph origin around the user on a spherical pivot
+    /// Handle pan gesture to move the entire graph origin like native visionOS windows
     func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
 
-        let t3 = value.translation3D
-        let translation = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z)) * Constants.dragTranslationScale
-
-        // On first pan, record the original position in world coordinates
+        // Get gesture translation in full 3D space
+        let translation = value.gestureValue.translation3D
+        let gestureOffset = SIMD3<Float>(
+            Float(translation.x),
+            -Float(translation.y),  // Invert Y axis
+            Float(translation.z)    // Include Z movement
+        )
+        
+        // On first pan, just store the starting position
         if panStartPosition == nil {
             panStartPosition = container.position(relativeTo: nil)
+            isPanActive = true
+            return
         }
-
-        // Move container in world space, preserving its distance from the user
-        if let start = panStartPosition {
-            let newWorldPos = start + translation
-
-            // Always face the camera (no pitch/roll, only yaw)
-            let cameraPos = SIMD3<Float>(0, 0, 0) // In world space, camera is at origin
-            let direction = normalize(cameraPos - newWorldPos)
-            let yaw = atan2(direction.x, direction.z)
-            let newOrientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
-
-            // Set world position and orientation
-            container.setPosition(newWorldPos, relativeTo: nil)
-            container.setOrientation(newOrientation, relativeTo: nil)
-        }
-
-        // Surface snapping logic (unchanged)
-        #if os(visionOS)
-        let worldPos = container.position(relativeTo: nil)
-        if let nearest = nearestSurfaceAnchor(to: worldPos) {
-            if snappedAnchor !== nearest {
-                let localPos = nearest.convert(position: worldPos, from: nil)
-                container.move(
-                    to: Transform(scale: container.scale, rotation: container.orientation, translation: localPos),
-                    relativeTo: nearest,
-                    duration: 0.20,
-                    timingFunction: .easeInOut
-                )
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
-                    container.removeFromParent()
-                    nearest.addChild(container)
-                    container.position = localPos
-                }
-                snappedAnchor = nearest
-                setSnapStatusMessage("Snapped to \(nearest == tableAnchor ? "Table" : "Wall")")
-            }
-        } else if snappedAnchor != nil {
-            let worldPos = container.position(relativeTo: nil)
-            if let sceneRoot = sceneContent {
-                container.move(
-                    to: Transform(scale: container.scale, rotation: container.orientation, translation: worldPos),
-                    relativeTo: nil,
-                    duration: 0.20,
-                    timingFunction: .easeInOut
-                )
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
-                    container.removeFromParent()
-                    sceneRoot.add(container)
-                    container.position = worldPos
-                }
-                snappedAnchor = nil
-                setSnapStatusMessage("Unsnap from Surface")
+        
+        // Scale down the movement to match native visionOS sensitivity
+        let moveScale: Float = 0.0005  // Reduce sensitivity
+        let scaledOffset = gestureOffset * moveScale
+        let newPosition = panStartPosition! + scaledOffset
+        
+        // Set position in 3D space
+        container.setPosition(newPosition, relativeTo: nil)
+        
+        // Auto-rotate to face user but keep parallel to ground like native visionOS windows
+        let userPosition = SIMD3<Float>(0, newPosition.y, 0)  // User at same Y level as window
+        let windowToUser = userPosition - newPosition
+        let distanceToUser = simd_length(windowToUser)
+        
+        if distanceToUser > 0.001 {
+            // Only rotate around Y axis to face user, keeping window parallel to ground
+            let directionToUser = normalize(SIMD3<Float>(windowToUser.x, 0, windowToUser.z))  // Zero out Y component
+            
+            // Create rotation only around Y axis
+            if simd_length(scaledOffset) > 0.00001 {  // Only rotate on meaningful movement
+                let targetOrientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: directionToUser)
+                container.setOrientation(targetOrientation, relativeTo: nil)
             }
         }
-        #endif
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
+        // Native visionOS windows don't have momentum - they stop immediately
+        // Just clear the pan state
         panStartPosition = nil
-        panPivotWorld = nil
-        panPivotLocal = nil
         panStartOrientation = nil
-
-        #if os(visionOS)
-        guard let container = rootEntity else { return }
-        let worldPos = container.position(relativeTo: nil)
-        if let nearest = nearestSurfaceAnchor(to: worldPos, threshold: 0.30) { // can use a slightly larger threshold for settle
-            let localPos = nearest.convert(position: worldPos, from: nil)
-            container.move(
-                to: Transform(scale: container.scale, rotation: container.orientation, translation: localPos),
-                relativeTo: nearest,
-                duration: 0.20,
-                timingFunction: .easeInOut
-            )
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
-                container.removeFromParent()
-                nearest.addChild(container)
-                container.position = localPos
-            }
-            snappedAnchor = nearest
-            setSnapStatusMessage("Snapped to \(nearest == tableAnchor ? "Table" : "Wall")")
-        } else if snappedAnchor != nil {
-            container.move(
-                to: Transform(scale: container.scale, rotation: container.orientation, translation: worldPos),
-                relativeTo: nil,
-                duration: 0.20,
-                timingFunction: .easeInOut
-            )
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
-                container.removeFromParent()
-                self.sceneContent?.add(container)
-                container.position = worldPos
-            }
-            snappedAnchor = nil
-            setSnapStatusMessage("Unsnap from Surface")
-        }
-        #endif
+        isPanActive = false
+        
+        // The orientation will already be correct from handlePanChanged
+        // No need to force any specific orientation here
 
         // Final update of connection lines
         if let content = sceneContent {
@@ -456,23 +405,169 @@ class ElementViewModel: ObservableObject {
         }
     }
 
-    /// Returns the nearest anchor (table or wall) within the given threshold, or nil if none are close enough
+    /// Adds a detected surface anchor to the tracking list
+    func addDetectedSurfaceAnchor(_ anchor: AnchorEntity) {
+        if !detectedSurfaceAnchors.contains(where: { $0 === anchor }) {
+            detectedSurfaceAnchors.append(anchor)
+            
+            // Update primary anchors if needed
+            if anchor.name.contains("table") && tableAnchor == nil {
+                tableAnchor = anchor
+            } else if anchor.name.contains("wall") && wallAnchor == nil {
+                wallAnchor = anchor
+            }
+        }
+    }
+    
+    /// Removes a detected surface anchor from the tracking list
+    func removeDetectedSurfaceAnchor(_ anchor: AnchorEntity) {
+        detectedSurfaceAnchors.removeAll { $0 === anchor }
+        
+        if tableAnchor === anchor {
+            tableAnchor = detectedSurfaceAnchors.first { $0.name.contains("table") }
+        } else if wallAnchor === anchor {
+            wallAnchor = detectedSurfaceAnchors.first { $0.name.contains("wall") }
+        }
+    }
+    
+    /// Enhanced surface detection with better classification and proximity detection
     private func nearestSurfaceAnchor(to worldPos: SIMD3<Float>, threshold: Float = 0.25) -> AnchorEntity? {
-        let anchors: [AnchorEntity?] = [tableAnchor, wallAnchor]
-        // Only consider anchors that are in the scene and anchored
-        let candidates = anchors.compactMap { $0 }
-            .filter { $0.isAnchored }
-        var closest: (anchor: AnchorEntity, distance: Float)? = nil
+        // Use all detected surface anchors, not just primary ones
+        let candidates = detectedSurfaceAnchors.filter { $0.isAnchored }
+        var closest: (anchor: AnchorEntity, distance: Float, surfaceDistance: Float)? = nil
+        
         for anchor in candidates {
             let anchorPos = anchor.position(relativeTo: nil)
             let dist = simd_distance(anchorPos, worldPos)
-            if dist < threshold {
-                if closest == nil || dist < closest!.distance {
-                    closest = (anchor, dist)
+            
+            // Calculate distance to surface plane, not just anchor center
+            let surfaceDistance = calculateDistanceToSurface(worldPos: worldPos, anchor: anchor)
+            
+            if surfaceDistance < threshold {
+                if closest == nil || surfaceDistance < closest!.surfaceDistance {
+                    closest = (anchor, dist, surfaceDistance)
                 }
             }
         }
         return closest?.anchor
+    }
+    
+    /// Calculates the actual distance from a point to the surface plane
+    private func calculateDistanceToSurface(worldPos: SIMD3<Float>, anchor: AnchorEntity) -> Float {
+        let anchorPos = anchor.position(relativeTo: nil)
+        let anchorRotation = anchor.orientation(relativeTo: nil)
+        
+        // Get the normal vector of the surface plane
+        let surfaceNormal = anchorRotation.act(SIMD3<Float>(0, 1, 0))
+        
+        // Calculate distance to plane
+        let toPoint = worldPos - anchorPos
+        let distanceToPlane = abs(simd_dot(toPoint, surfaceNormal))
+        
+        return distanceToPlane
+    }
+    
+    /// Checks if a surface is suitable for snapping based on orientation and size
+    private func isSurfaceSuitableForSnapping(_ anchor: AnchorEntity) -> Bool {
+        // Check if anchor has sufficient size (you might need to access the underlying ARPlaneAnchor)
+        // For now, we'll assume all detected anchors are suitable
+        return anchor.isAnchored
+    }
+    
+    /// Calculates the optimal snap position for a container on a surface
+    private func calculateOptimalSnapPosition(for container: Entity, on anchor: AnchorEntity) -> SIMD3<Float> {
+        let worldPos = container.position(relativeTo: nil)
+        let anchorPos = anchor.position(relativeTo: nil)
+        let anchorRotation = anchor.orientation(relativeTo: nil)
+        
+        // Get the surface normal
+        let surfaceNormal = anchorRotation.act(SIMD3<Float>(0, 1, 0))
+        
+        // Project the container position onto the surface plane
+        let toContainer = worldPos - anchorPos
+        let distanceToPlane = simd_dot(toContainer, surfaceNormal)
+        let projectedWorldPos = worldPos - (surfaceNormal * distanceToPlane)
+        
+        // Convert to anchor local space and add small offset above surface
+        let localPos = anchor.convert(position: projectedWorldPos, from: nil)
+        
+        // Add small offset to prevent z-fighting
+        let offsetAmount: Float = 0.05
+        return localPos + SIMD3<Float>(0, offsetAmount, 0)
+    }
+    
+    /// Performs the snap animation to a surface
+    private func snapToSurface(container: Entity, anchor: AnchorEntity, localPos: SIMD3<Float>) {
+        // Animate the snap
+        container.move(
+            to: Transform(scale: container.scale, rotation: container.orientation, translation: localPos),
+            relativeTo: anchor,
+            duration: 0.25,
+            timingFunction: .easeOut
+        )
+        
+        // After animation, reparent to the anchor
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            container.removeFromParent()
+            anchor.addChild(container)
+            container.position = localPos
+        }
+    }
+    
+    /// Performs the unsnap animation from a surface
+    private func unsnapFromSurface(container: Entity) {
+        guard let sceneContent = sceneContent else { return }
+        
+        let worldPos = container.position(relativeTo: nil)
+        
+        // Animate back to world space
+        container.move(
+            to: Transform(scale: container.scale, rotation: container.orientation, translation: worldPos),
+            relativeTo: nil,
+            duration: 0.25,
+            timingFunction: .easeOut
+        )
+        
+        // After animation, reparent to scene root
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            container.removeFromParent()
+            sceneContent.add(container)
+            container.position = worldPos
+        }
+    }
+    
+    /// Gets a human-readable surface type name
+    private func getSurfaceTypeName(_ anchor: AnchorEntity) -> String {
+        if anchor.name.contains("table") || anchor === tableAnchor {
+            return "Table"
+        } else if anchor.name.contains("wall") || anchor === wallAnchor {
+            return "Wall"
+        } else if anchor.name.contains("floor") {
+            return "Floor"
+        } else if anchor.name.contains("ceiling") {
+            return "Ceiling"
+        } else {
+            return "Surface"
+        }
+    }
+    
+    /// Provides haptic feedback for snapping actions
+    private func provideFeedback(for action: FeedbackAction) {
+        #if os(visionOS)
+        // visionOS doesn't have traditional haptic feedback, but we could use audio cues
+        // For now, we'll just log the action
+        switch action {
+        case .snap:
+            logger.log("Snap feedback triggered")
+        case .release:
+            logger.log("Release feedback triggered")
+        }
+        #endif
+    }
+    
+    enum FeedbackAction {
+        case snap
+        case release
     }
 
     private func setSnapStatusMessage(_ message: String) {
