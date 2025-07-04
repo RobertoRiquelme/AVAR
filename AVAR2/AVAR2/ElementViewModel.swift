@@ -772,58 +772,68 @@ class ElementViewModel: ObservableObject {
         }
     }
     
-    /// Find the nearest wall for snapping - diagrams should face walls with z=0 plane
+    /// Find the nearest surface for snapping - diagrams can snap to any surface
     private func findNearestWallForSnapping(diagramPosition: SIMD3<Float>) -> AnchorEntity? {
-        var closest: (wall: AnchorEntity, distance: Float)? = nil
+        var closest: (surface: AnchorEntity, distance: Float)? = nil
         
-        print("🔍 Checking \(detectedSurfaceAnchors.count) surfaces for wall snapping")
+        print("🔍 Checking \(detectedSurfaceAnchors.count) surfaces for snapping")
         
         for surface in detectedSurfaceAnchors {
             guard surface.isAnchored else { continue }
             
-            // Only consider walls (vertical surfaces)
-            let surfaceName = surface.name.lowercased()
-//            guard surfaceName.contains("wall") else { 
-//                print("⏭️ Skipping non-wall surface: \(surface.name)")
-//                continue 
-//            }
+            let surfacePosition = surface.position(relativeTo: nil)
             
-            let wallPosition = surface.position(relativeTo: nil)
-            let wallRotation = surface.orientation(relativeTo: nil)
+            // Calculate 3D distance to surface
+            let distance = simd_distance(diagramPosition, surfacePosition)
             
-            // Calculate distance from diagram's z=0 plane to the wall surface
-            let wallNormal = wallRotation.act(SIMD3<Float>(0, 0, 1))  // Wall faces forward
-            let toWall = wallPosition - diagramPosition
-            let distanceToWall = abs(simd_dot(toWall, wallNormal))
+            print("📍 Surface \(surface.name): distance = \(distance)m")
             
-            print("📍 Wall \(surface.name): distance = \(distanceToWall)m")
-            
-            if distanceToWall <= snapDistance {
-                if closest == nil || distanceToWall < closest!.distance {
-                    closest = (surface, distanceToWall)
-                    print("🎯 New closest wall: \(surface.name) at \(distanceToWall)m")
+            if distance <= snapDistance {
+                if closest == nil || distance < closest!.distance {
+                    closest = (surface, distance)
+                    print("🎯 New closest surface: \(surface.name) at \(distance)m")
                 }
             }
         }
         
-        return closest?.wall
+        return closest?.surface
     }
     
-    /// Perform smooth snap animation to wall - diagram faces wall with z=0 plane
+    /// Perform smooth snap animation to any surface type
     private func performSnapToSurface(container: Entity, surface: AnchorEntity) {
-        let wallPosition = surface.position(relativeTo: nil)
-        let wallRotation = surface.orientation(relativeTo: nil)
+        let surfacePosition = surface.position(relativeTo: nil)
+        let surfaceRotation = surface.orientation(relativeTo: nil)
+        let surfaceType = getSurfaceTypeName(surface)
         
-        // For walls: position diagram so its z=0 plane is close to wall
-        let wallNormal = wallRotation.act(SIMD3<Float>(0, 0, 1))  // Wall normal pointing out
-        let offsetDistance: Float = 0.05  // 5cm from wall (like hanging a painting)
-        let snapPosition = wallPosition - (wallNormal * offsetDistance)
+        var snapPosition: SIMD3<Float>
+        var diagramOrientation: simd_quatf
+        let offsetDistance: Float = 0.05  // 5cm offset
         
-        // Orient diagram vertically on the wall (rotate -90 degrees around x-axis to fix upside down)
-        let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
-        let diagramOrientation = wallRotation * verticalRotation
-        
-        print("📌 Snapping to wall at \(snapPosition) with diagram oriented vertically")
+        // Determine snap behavior based on surface type
+        if surfaceType.lowercased().contains("wall") {
+            // For walls: position diagram vertically, facing out from wall
+            let wallNormal = surfaceRotation.act(SIMD3<Float>(0, 0, 1))
+            snapPosition = surfacePosition - (wallNormal * offsetDistance)
+            let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
+            diagramOrientation = surfaceRotation * verticalRotation
+            print("📌 Snapping to wall at \(snapPosition)")
+        } else if surfaceType.lowercased().contains("table") || surfaceType.lowercased().contains("floor") {
+            // For horizontal surfaces: position diagram flat on surface
+            snapPosition = surfacePosition + SIMD3<Float>(0, offsetDistance, 0)
+            diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))  // Keep upright
+            print("📌 Snapping to horizontal surface at \(snapPosition)")
+        } else if surfaceType.lowercased().contains("ceiling") {
+            // For ceiling: position diagram hanging from ceiling
+            snapPosition = surfacePosition - SIMD3<Float>(0, offsetDistance, 0)
+            let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
+            diagramOrientation = upsideDownRotation
+            print("📌 Snapping to ceiling at \(snapPosition)")
+        } else {
+            // For any other surface: use simple position matching
+            snapPosition = surfacePosition + SIMD3<Float>(0, offsetDistance, 0)
+            diagramOrientation = container.orientation(relativeTo: nil)  // Keep current orientation
+            print("📌 Snapping to surface at \(snapPosition)")
+        }
         
         // Animate to snap position
         container.move(
@@ -838,7 +848,6 @@ class ElementViewModel: ObservableObject {
         )
         
         currentSnappedSurface = surface
-        let surfaceType = getSurfaceTypeName(surface)
         let message = "Snapped to \(surfaceType)"
         print("✅ \(message)")
         // Show message using existing overlay system

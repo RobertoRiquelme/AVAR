@@ -16,8 +16,12 @@ struct ContentView: View {
     var filename: String = "2D Tree Layout"
     var onClose: (() -> Void)? = nil
     @StateObject private var viewModel = ElementViewModel()
-    @StateObject private var surfaceDetector = ARKitSurfaceDetector()
+    @Environment(AppModel.self) private var appModel
     @State private var currentSceneContent: RealityViewContent?
+    
+    private var surfaceDetector: ARKitSurfaceDetector {
+        appModel.surfaceDetector
+    }
     
     /// Updates surface anchors in the viewModel when new surfaces are detected
     private func updateSurfaceAnchors() {
@@ -47,8 +51,8 @@ struct ContentView: View {
         }
         .task {
             await viewModel.loadData(from: filename)
-            // Start ARKit surface detection
-            await surfaceDetector.run()
+            // Start ARKit surface detection only once
+            await appModel.startSurfaceDetectionIfNeeded()
         }
         .onChange(of: surfaceDetector.surfaceAnchors) { _, newAnchors in
             updateSurfaceAnchors()

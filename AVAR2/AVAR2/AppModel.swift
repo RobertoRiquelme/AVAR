@@ -21,4 +21,11 @@ class AppModel {
     
     // Simple ARKit surface detector
     let surfaceDetector = ARKitSurfaceDetector()
+    private var surfaceDetectionStarted = false
+    
+    func startSurfaceDetectionIfNeeded() async {
+        guard !surfaceDetectionStarted else { return }
+        surfaceDetectionStarted = true
+        await surfaceDetector.run()
+    }
 }

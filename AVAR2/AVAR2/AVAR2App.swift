@@ -44,6 +44,7 @@ final class FPSMonitor: ObservableObject {
 struct AVAR2: App {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @State private var appModel = AppModel()
 
     enum InputMode: String {
         case file, json
@@ -182,6 +183,7 @@ struct AVAR2: App {
                     }
                 }
             }
+            .environment(appModel)
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
