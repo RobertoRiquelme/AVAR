@@ -18,4 +18,7 @@ class AppModel {
         case open
     }
     var immersiveSpaceState = ImmersiveSpaceState.open
+    
+    // Simple ARKit surface detector
+    let surfaceDetector = ARKitSurfaceDetector()
 }
