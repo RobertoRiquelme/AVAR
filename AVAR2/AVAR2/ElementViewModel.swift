@@ -47,7 +47,7 @@ class ElementViewModel: ObservableObject {
     /// Current surface the diagram is snapped to (if any)
     private var currentSnappedSurface: AnchorEntity? = nil
     /// Snapping distance threshold
-    private let snapDistance: Float = 0.15  // 15cm
+    private let snapDistance: Float = 1.0  // 1 meter - focused on nearby surfaces
 
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
@@ -61,6 +61,12 @@ class ElementViewModel: ObservableObject {
     private var snappedAnchor: AnchorEntity? = nil
     /// List of all detected surface anchors
     @Published var detectedSurfaceAnchors: [AnchorEntity] = []
+    
+    /// Reference to AppModel (simplified)
+    private var appModel: AppModel?
+    
+    /// Reference to the grab handle for adding snap messages
+    private var grabHandleEntity: Entity?
 
     // NEW: Snap/unsnap banner
     @Published var snapStatusMessage: String = ""
@@ -69,8 +75,66 @@ class ElementViewModel: ObservableObject {
     private var alwaysShowSnapMessage = true
     
     // Enhanced surface detection constants
-    private let snapThreshold: Float = 0.3  // Distance threshold for snapping
-    private let releaseThreshold: Float = 0.5  // Distance threshold for releasing snap
+    private let snapThreshold: Float = 1.0  // Distance threshold for snapping
+    private let releaseThreshold: Float = 1.0  // Distance threshold for releasing snap
+    
+    /// Set the AppModel reference for accessing shared surface anchors
+    func setAppModel(_ appModel: AppModel) {
+        self.appModel = appModel
+    }
+    
+    /// Get all available surface anchors (simple approach)
+    private func getAllSurfaceAnchors() -> [AnchorEntity] {
+        // Convert PlaneAnchors to simple AnchorEntities for snapping
+        guard let appModel = appModel else { return [] }
+        
+        return appModel.surfaceDetector.surfaceAnchors.map { planeAnchor in
+            let anchor = AnchorEntity()
+            anchor.name = "surface_\(planeAnchor.classification.description)"
+            anchor.transform = Transform(matrix: planeAnchor.originFromAnchorTransform)
+            return anchor
+        }
+    }
+    
+    /// Update the 3D snap message above the grab handle
+    private func update3DSnapMessage(_ message: String) {
+        guard let grabHandle = grabHandleEntity else { 
+            print("⚠️ Cannot update 3D snap message - no grab handle entity")
+            return 
+        }
+        print("🎯 Updating 3D snap message: '\(message)'")
+        
+        // Remove existing snap message
+        if let existingMessage = grabHandle.children.first(where: { $0.name == "snapMessage" }) {
+            existingMessage.removeFromParent()
+        }
+        
+        // Don't add anything if message is empty
+        guard !message.isEmpty else { return }
+        
+        // Create 3D text entity
+        let textMesh = MeshResource.generateText(
+            message,
+            extrusionDepth: 0.002,
+            font: .systemFont(ofSize: 0.03),
+            containerFrame: .zero,
+            alignment: .center,
+            lineBreakMode: .byWordWrapping
+        )
+        
+        // Create text material with bright color
+        let textMaterial = SimpleMaterial(color: .systemBlue, isMetallic: false)
+        let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
+        textEntity.name = "snapMessage"
+        
+        // Position above the grab handle
+        textEntity.position = [0, 0.08, 0] // 8cm above the handle
+        
+        // Add to grab handle
+        grabHandle.addChild(textEntity)
+        
+        print("🎯 Added 3D snap message: '\(message)' above grab handle")
+    }
 
     func loadData(from filename: String) async {
         do {
@@ -200,6 +264,10 @@ class ElementViewModel: ObservableObject {
             child.components.set(hoverEffectComponent)
         }
         background.addChild(handleContainer)
+        
+        // Store reference for adding snap messages
+        self.grabHandleEntity = handleContainer
+        print("🎯 Grab handle entity set: \(handleContainer.name)")
 
         // Clear any existing entities and lines
         entityMap.removeAll()
@@ -396,16 +464,14 @@ class ElementViewModel: ObservableObject {
         }
         
         // Surface snapping during pan
-        #if os(visionOS)
+        print("🎯 Pan gesture active - checking for surface snapping")
         checkForSurfaceSnapping(container: container, at: newPosition)
-        #endif
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
         
         // Final snap check when pan ends
-        #if os(visionOS)
         let finalPosition = container.position(relativeTo: nil)
         print("🏁 Pan ended at position: \(finalPosition)")
         if let snapTarget = findNearestWallForSnapping(diagramPosition: finalPosition) {
@@ -414,7 +480,6 @@ class ElementViewModel: ObservableObject {
         } else {
             print("🚫 No snap target found")
         }
-        #endif
         
         // Native visionOS windows don't have momentum - they stop immediately
         // Just clear the pan state
@@ -568,7 +633,7 @@ class ElementViewModel: ObservableObject {
     private func getSurfaceTypeName(_ anchor: AnchorEntity) -> String {
         if anchor.name.contains("table") || anchor === tableAnchor {
             return "Table"
-        } else if anchor.name.contains("wall") || anchor === wallAnchor {
+        } else if anchor.name.contains("wall") || anchor === wallAnchor || isVerticalSurface(anchor) {
             return "Wall"
         } else if anchor.name.contains("floor") {
             return "Floor"
@@ -577,6 +642,23 @@ class ElementViewModel: ObservableObject {
         } else {
             return "Surface"
         }
+    }
+    
+    /// Detect if a surface is vertical (likely a wall) based on its orientation
+    private func isVerticalSurface(_ anchor: AnchorEntity) -> Bool {
+        let rotation = anchor.orientation(relativeTo: nil)
+        let normal = rotation.act(SIMD3<Float>(0, 1, 0)) // Surface normal
+        
+        // Check if the surface normal is mostly horizontal (pointing sideways)
+        // For vertical surfaces, the Y component should be close to 0
+        let verticalThreshold: Float = 0.7 // Adjust this value as needed
+        let isVertical = abs(normal.y) < verticalThreshold
+        
+        if isVertical {
+            print("🧱 Detected vertical surface (wall): \(anchor.name) with normal \(normal)")
+        }
+        
+        return isVertical
     }
     
     /// Provides haptic feedback for snapping actions
@@ -599,14 +681,28 @@ class ElementViewModel: ObservableObject {
     }
 
     private func setSnapStatusMessage(_ message: String) {
+        print("🔔 Setting snap status message: '\(message)'")
+        print("🔔 Previous message was: '\(snapStatusMessage)'")
         snapStatusMessage = message
+        print("🔔 Message set successfully. Current value: '\(snapStatusMessage)'")
+        
+        // Update the 3D message above grab handle
+        update3DSnapMessage(message)
+        
         // Optionally auto-clear after a second
         if alwaysShowSnapMessage == false {
+            print("🔔 Auto-clear enabled - will clear in 1.5 seconds")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 if self.snapStatusMessage == message {
+                    print("🔔 Auto-clearing message: '\(message)'")
                     self.snapStatusMessage = ""
+                    self.update3DSnapMessage("") // Clear 3D message too
+                } else {
+                    print("🔔 Message changed, not clearing: '\(message)' vs '\(self.snapStatusMessage)'")
                 }
             }
+        } else {
+            print("🔔 Auto-clear disabled (alwaysShowSnapMessage = true)")
         }
     }
 
@@ -754,14 +850,19 @@ class ElementViewModel: ObservableObject {
     
     /// Check for surface snapping during pan gestures
     private func checkForSurfaceSnapping(container: Entity, at position: SIMD3<Float>) {
-        guard !detectedSurfaceAnchors.isEmpty else { 
-            print("🚫 No detected surfaces for snapping")
+        let availableSurfaces = getAllSurfaceAnchors()
+        print("🔍 checkForSurfaceSnapping called")
+        print("🔍 Diagram position: \(position)")
+        print("🔍 Available surfaces: \(availableSurfaces.count) (local: \(detectedSurfaceAnchors.count))")
+        guard !availableSurfaces.isEmpty else { 
+            print("🚫 No detected surfaces for snapping (local: \(detectedSurfaceAnchors.count))")
             return 
         }
         
         if let nearestSurface = findNearestWallForSnapping(diagramPosition: position) {
             // Show visual feedback that snapping is available
-            let message = "Near \(getSurfaceTypeName(nearestSurface)) - release to snap"
+            let surfaceType = getSurfaceTypeName(nearestSurface)
+            let message = "📍 Near \(surfaceType) - Release to Snap!"
             print("✨ \(message)")
             setSnapStatusMessage(message)
         } else {
@@ -776,24 +877,44 @@ class ElementViewModel: ObservableObject {
     private func findNearestWallForSnapping(diagramPosition: SIMD3<Float>) -> AnchorEntity? {
         var closest: (surface: AnchorEntity, distance: Float)? = nil
         
-        print("🔍 Checking \(detectedSurfaceAnchors.count) surfaces for snapping")
+        let availableSurfaces = getAllSurfaceAnchors()
+        print("🔍 Checking \(availableSurfaces.count) surfaces for snapping at position \(diagramPosition)")
         
-        for surface in detectedSurfaceAnchors {
-            guard surface.isAnchored else { continue }
-            
+        for surface in availableSurfaces {
             let surfacePosition = surface.position(relativeTo: nil)
             
             // Calculate 3D distance to surface
             let distance = simd_distance(diagramPosition, surfacePosition)
             
-            print("📍 Surface \(surface.name): distance = \(distance)m")
+            // Get surface type for better debug info
+            let surfaceType = getSurfaceTypeName(surface)
+            print("📍 Surface \(surface.name) (\(surfaceType))")
+            print("   📍 Surface world position: \(surfacePosition)")
+            print("   📍 Diagram position: \(diagramPosition)")
+            print("   📍 Distance: \(distance)m")
+            
+            // Only snap to walls - detect by orientation (vertical surfaces)
+            let isWall = isVerticalSurface(surface) || surface.name.contains("wall") || surfaceType == "Wall"
+            if !isWall {
+                print("🚫 Skipping non-wall surface: \(surface.name) (\(surfaceType))")
+                continue
+            }
             
             if distance <= snapDistance {
                 if closest == nil || distance < closest!.distance {
                     closest = (surface, distance)
-                    print("🎯 New closest surface: \(surface.name) at \(distance)m")
+                    print("🎯 New closest wall: \(surface.name) (\(surfaceType)) at \(distance)m")
                 }
+            } else {
+                print("📏 Wall \(surface.name) (\(surfaceType)) too far: \(distance)m > \(snapDistance)m")
             }
+        }
+        
+        if let result = closest?.surface {
+            let surfaceType = getSurfaceTypeName(result)
+            print("✅ Found snap target: \(result.name) (\(surfaceType)) at \(closest!.distance)m")
+        } else {
+            print("❌ No surfaces within snap distance (\(snapDistance)m)")
         }
         
         return closest?.surface
@@ -848,7 +969,7 @@ class ElementViewModel: ObservableObject {
         )
         
         currentSnappedSurface = surface
-        let message = "Snapped to \(surfaceType)"
+        let message = "✅ Snapped to \(surfaceType)!"
         print("✅ \(message)")
         // Show message using existing overlay system
         setSnapStatusMessage(message)

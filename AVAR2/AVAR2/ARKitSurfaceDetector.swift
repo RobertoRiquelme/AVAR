@@ -1,16 +1,18 @@
 import RealityKit
 import ARKit
 import UIKit
+import SwiftUI
 
 @MainActor
 final class ARKitSurfaceDetector: ObservableObject {
     private let session = ARKitSession()
-    private let provider = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
+    private let provider = PlaneDetectionProvider(alignments: [.vertical])
     let rootEntity = Entity()
 
     @Published var surfaceAnchors: [PlaneAnchor] = []
     @Published var isRunning = false
     @Published var errorMessage: String?
+    @Published var entityMap: [UUID: Entity] = [:]
 
     func run() async {
         guard PlaneDetectionProvider.isSupported else {
@@ -57,80 +59,61 @@ final class ARKitSurfaceDetector: ObservableObject {
                 surfaceAnchors.append(anchor)
             }
             
-            // Create visual representation
-            createVisualEntity(for: anchor)
+            // Create or update visual representation
+            await updatePlaneVisualization(anchor)
         }
     }
     
     private func removeSurface(_ anchor: PlaneAnchor) {
         Task { @MainActor in
             surfaceAnchors.removeAll { $0.id == anchor.id }
-            
-            // Remove visual entity
-            if let entity = rootEntity.children.first(where: { $0.name == "surface_\(anchor.id)" }) {
-                entity.removeFromParent()
-            }
+            removePlaneVisualization(anchor)
         }
     }
     
-    private func createVisualEntity(for anchor: PlaneAnchor) {
-        // Remove existing entity if it exists
-        if let existingEntity = rootEntity.children.first(where: { $0.name == "surface_\(anchor.id)" }) {
-            existingEntity.removeFromParent()
+    @MainActor
+    private func updatePlaneVisualization(_ anchor: PlaneAnchor) {
+        if let entity = entityMap[anchor.id] {
+            print("🔄 Updating existing plane visualization: \(anchor.id), classification: \(anchor.classification.description)")
+            let planeEntity = entity.findEntity(named: "plane") as! ModelEntity
+            let newMesh = MeshResource.generatePlane(width: anchor.geometry.extent.width, height: anchor.geometry.extent.height)
+            planeEntity.model!.mesh = newMesh
+            planeEntity.transform = Transform(matrix: anchor.geometry.extent.anchorFromExtentTransform)
+        } else {
+            print("➕ Adding new plane visualization: \(anchor.id), classification: \(anchor.classification.description)")
+            // Create a new entity to represent this plane
+            let entity = Entity()
+            
+            // Create plane visualization with color based on classification
+            let material = UnlitMaterial(color: anchor.classification.color)
+            let planeEntity = ModelEntity(
+                mesh: .generatePlane(width: anchor.geometry.extent.width, height: anchor.geometry.extent.height),
+                materials: [material]
+            )
+            planeEntity.name = "plane"
+            planeEntity.transform = Transform(matrix: anchor.geometry.extent.anchorFromExtentTransform)
+            
+            // Add classification label
+            let textEntity = ModelEntity(
+                mesh: .generateText(anchor.classification.description)
+            )
+            textEntity.scale = SIMD3(0.01, 0.01, 0.01)
+            
+            entity.addChild(planeEntity)
+            planeEntity.addChild(textEntity)
+            
+            entityMap[anchor.id] = entity
+            rootEntity.addChild(entity)
         }
         
-        // Create new entity
-        let entity = Entity()
-        entity.name = "surface_\(anchor.id)"
-        
-        let material = UnlitMaterial(color: anchor.classification.color)
-        let planeEntity = ModelEntity(
-            mesh: .generatePlane(width: anchor.geometry.extent.width, height: anchor.geometry.extent.height),
-            materials: [material]
-        )
-        planeEntity.transform = Transform(matrix: anchor.geometry.extent.anchorFromExtentTransform)
-        
-        let textEntity = ModelEntity(
-            mesh: .generateText(anchor.classification.description)
-        )
-        textEntity.scale = SIMD3(0.01, 0.01, 0.01)
-        
-        entity.addChild(planeEntity)
-        planeEntity.addChild(textEntity)
-        
-        // Set world position
-        entity.transform = Transform(matrix: anchor.originFromAnchorTransform)
-        
-        rootEntity.addChild(entity)
+        // Update entity position and orientation in world space
+        entityMap[anchor.id]?.transform = Transform(matrix: anchor.originFromAnchorTransform)
     }
-}
-
-// Extension for surface classification colors
-extension PlaneAnchor.Classification {
-    var color: UIColor {
-        switch self {
-        case .wall:
-            return UIColor.blue.withAlphaComponent(0.65)
-        case .floor:
-            return UIColor.red.withAlphaComponent(0.65)
-        case .ceiling:
-            return UIColor.green.withAlphaComponent(0.65)
-        case .table:
-            return UIColor.yellow.withAlphaComponent(0.65)
-        case .door:
-            return UIColor.brown.withAlphaComponent(0.65)
-        case .seat:
-            return UIColor.systemPink.withAlphaComponent(0.65)
-        case .window:
-            return UIColor.orange.withAlphaComponent(0.65)
-        case .undetermined:
-            return UIColor.lightGray.withAlphaComponent(0.65)
-        case .notAvailable:
-            return UIColor.gray.withAlphaComponent(0.65)
-        case .unknown:
-            return UIColor.black.withAlphaComponent(0.65)
-        @unknown default:
-            return UIColor.purple
-        }
+    
+    @MainActor
+    private func removePlaneVisualization(_ anchor: PlaneAnchor) {
+        print("🗑️ Removing plane visualization: \(anchor.id)")
+        entityMap[anchor.id]?.removeFromParent()
+        entityMap.removeValue(forKey: anchor.id)
     }
 }

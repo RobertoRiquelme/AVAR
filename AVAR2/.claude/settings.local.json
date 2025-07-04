@@ -5,7 +5,10 @@
       "Bash(unzip:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(swift:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

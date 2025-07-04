@@ -17,47 +17,19 @@ struct ContentView: View {
     var onClose: (() -> Void)? = nil
     @StateObject private var viewModel = ElementViewModel()
     @Environment(AppModel.self) private var appModel
-    @State private var currentSceneContent: RealityViewContent?
-    
-    private var surfaceDetector: ARKitSurfaceDetector {
-        appModel.surfaceDetector
-    }
-    
-    /// Updates surface anchors in the viewModel when new surfaces are detected
-    private func updateSurfaceAnchors() {
-        // Convert PlaneAnchors to AnchorEntities for compatibility with existing ViewModel
-        let newAnchorEntities = surfaceDetector.surfaceAnchors.compactMap { planeAnchor -> AnchorEntity? in
-            let anchorEntity = AnchorEntity()
-            anchorEntity.name = "surface_\(planeAnchor.id)"
-            anchorEntity.transform = Transform(matrix: planeAnchor.originFromAnchorTransform)
-            return anchorEntity
-        }
-        
-        // Update viewModel with detected surfaces
-        viewModel.detectedSurfaceAnchors = newAnchorEntities
-    }
-    
+
     var body: some View {
         RealityView { content in
-            currentSceneContent = content
-            // Add surface detector's root entity for surface visualization
-            content.add(surfaceDetector.rootEntity)
-            // Load and display the diagram elements
             viewModel.loadElements(in: content, onClose: onClose)
+            // Add surface visualizations
+            content.add(appModel.surfaceDetector.rootEntity)
         } update: { content in
-            currentSceneContent = content
-            // Update connections as needed
             viewModel.updateConnections(in: content)
         }
         .task {
+            viewModel.setAppModel(appModel)
             await viewModel.loadData(from: filename)
-            // Start ARKit surface detection only once
-            await appModel.startSurfaceDetectionIfNeeded()
         }
-        .onChange(of: surfaceDetector.surfaceAnchors) { _, newAnchors in
-            updateSurfaceAnchors()
-        }
-        // Combined drag gesture: element drag vs window pan via grab handle
         .gesture(
             DragGesture(minimumDistance: 0).targetedToAnyEntity()
                 .onChanged { value in
@@ -102,17 +74,6 @@ struct ContentView: View {
                     }
                 }
         )
-        // Pinch gesture (on any entity) to zoom whole diagram, pivoting around touched entity
-//        .simultaneousGesture(
-//            MagnificationGesture().targetedToAnyEntity()
-//                .onChanged { value in
-//                    viewModel.handleZoomChanged(value)
-//                }
-//                .onEnded { value in
-//                    viewModel.handleZoomEnded(value)
-//                }
-//        )
-        // Alert on load error
         .alert("Error Loading Data", isPresented: Binding(
             get: { viewModel.loadErrorMessage != nil },
             set: { if !$0 { viewModel.loadErrorMessage = nil } }
@@ -120,20 +81,6 @@ struct ContentView: View {
             Button("OK", role: .cancel) { viewModel.loadErrorMessage = nil }
         } message: {
             Text(viewModel.loadErrorMessage ?? "Unknown error.")
-        }
-        .overlay(alignment: .center) {
-            if !viewModel.snapStatusMessage.isEmpty {
-                Text(viewModel.snapStatusMessage)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(16)
-                    .padding(.top, 20)
-                    .transition(.opacity)
-                    .zIndex(100)
-            }
         }
     }
 }

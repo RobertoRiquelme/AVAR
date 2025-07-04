@@ -7,6 +7,8 @@
 
 import SwiftUI
 import QuartzCore
+import RealityKit
+import RealityKitContent
 
 final class FPSMonitor: ObservableObject {
     @Published private(set) var fps: Int = 0
@@ -62,6 +64,7 @@ struct AVAR2: App {
     @State private var jsonInput: String = ""
     @State private var isJSONValid: Bool = false
 
+
     init() {
         // Find all .txt resources in the main bundle
         let names = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil)?
@@ -72,7 +75,7 @@ struct AVAR2: App {
         _selectedFile = State(initialValue: names.first ?? "")
     }
 
-    var body: some Scene {
+    var body: some SwiftUI.Scene {
         // 1. 2D launcher
         WindowGroup {
             VStack(spacing: 20) {
@@ -184,6 +187,9 @@ struct AVAR2: App {
                 }
             }
             .environment(appModel)
+            .task {
+                await appModel.startSurfaceDetectionIfNeeded()
+            }
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
