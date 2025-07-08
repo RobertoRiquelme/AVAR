@@ -186,6 +186,13 @@ struct AVAR2: App {
                     }
                 }
                 .font(.title2)
+                
+                // Debug: Toggle plane visualization
+                Button(appModel.showPlaneVisualization ? "Hide Plane Visualization" : "Show Plane Visualization") {
+                    appModel.togglePlaneVisualization()
+                }
+                .font(.title3)
+                .foregroundColor(.secondary)
 
                 Spacer()
                 Text("\(fpsMonitor.fps) FPS")

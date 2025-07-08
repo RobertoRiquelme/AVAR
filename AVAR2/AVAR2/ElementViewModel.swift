@@ -76,12 +76,26 @@ class ElementViewModel: ObservableObject {
     /// Set the AppModel reference for accessing shared surface anchors
     func setAppModel(_ appModel: AppModel) {
         self.appModel = appModel
+        print("🔧 ElementViewModel: AppModel set, using PERSISTENT surface detection")
+        print("🔧 Surface detection running: \(appModel.surfaceDetector.isRunning), anchors: \(appModel.surfaceDetector.surfaceAnchors.count)")
     }
     
     /// Get all available surface anchors with proper coordinate system handling
     private func getAllSurfaceAnchors() -> [PlaneAnchor] {
-        guard let appModel = appModel else { return [] }
-        return appModel.surfaceDetector.surfaceAnchors
+        guard let appModel = appModel else { 
+            print("⚠️ getAllSurfaceAnchors: No AppModel available")
+            return [] 
+        }
+        let anchors = appModel.surfaceDetector.surfaceAnchors
+        print("🔍 getAllSurfaceAnchors: Found \(anchors.count) PERSISTENT surface anchors")
+        
+        // Log each surface for debugging
+        for anchor in anchors {
+            let surfaceType = getSurfaceTypeName(anchor)
+            print("   📍 Surface \(anchor.id): \(surfaceType)")
+        }
+        
+        return anchors
     }
     
     /// Update the 3D snap message above the grab handle
@@ -153,8 +167,10 @@ class ElementViewModel: ObservableObject {
             content.remove(bg)
         }
 
-        // Pivot for graph origin and background plane
-        let pivot = SIMD3<Float>(0, Constants.eyeLevel, Constants.frontOffset)
+        // Get dynamic position for this diagram from AppModel - uses persistent surface detection
+        let pivot = appModel?.getNextDiagramPosition() ?? SIMD3<Float>(0, 1.0, -2.0)
+        print("📍 Loading diagram at position: \(pivot)")
+        print("📍 Available surfaces: \(appModel?.surfaceDetector.surfaceAnchors.count ?? 0)")
 
         guard let normalizationContext = self.normalizationContext else {
             logger.error("Missing normalization context; call loadData(from:) before loadElements(in:)")
@@ -753,11 +769,12 @@ class ElementViewModel: ObservableObject {
     /// Check for surface snapping during pan gestures
     private func checkForSurfaceSnapping(container: Entity, at position: SIMD3<Float>) {
         let availableSurfaces = getAllSurfaceAnchors()
-        print("🔍 checkForSurfaceSnapping called")
+        print("🔍 checkForSurfaceSnapping called with PERSISTENT surfaces")
         print("🔍 Diagram position: \(position)")
-        print("🔍 Available surfaces: \(availableSurfaces.count)")
+        print("🔍 Available PERSISTENT surfaces: \(availableSurfaces.count)")
+        
         guard !availableSurfaces.isEmpty else { 
-            print("🚫 No detected surfaces for snapping")
+            print("🚫 No PERSISTENT surfaces available for snapping")
             return 
         }
         
@@ -775,12 +792,12 @@ class ElementViewModel: ObservableObject {
         }
     }
     
-    /// Find the nearest surface for snapping - diagrams can snap to any surface
+    /// Find the nearest surface for snapping - diagrams can snap to any PERSISTENT surface
     private func findNearestWallForSnapping(diagramPosition: SIMD3<Float>) -> PlaneAnchor? {
         var closest: (surface: PlaneAnchor, distance: Float)? = nil
         
         let availableSurfaces = getAllSurfaceAnchors()
-        print("🔍 Checking \(availableSurfaces.count) surfaces for snapping at position \(diagramPosition)")
+        print("🔍 Checking \(availableSurfaces.count) PERSISTENT surfaces for snapping at position \(diagramPosition)")
         
         for surface in availableSurfaces {
             // Get surface position in world space using proper transform

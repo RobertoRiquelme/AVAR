@@ -23,6 +23,9 @@ class AppModel {
     let surfaceDetector = ARKitSurfaceDetector()
     private var surfaceDetectionStarted = false
     
+    // Debug: plane visualization toggle
+    var showPlaneVisualization = true
+    
     // Dynamic positioning for multiple diagrams
     private var nextDiagramIndex = 0
     private let diagramSpacing: Float = 3.0  // 3 meters between diagrams
@@ -59,5 +62,12 @@ class AppModel {
     func resetDiagramPositioning() {
         nextDiagramIndex = 0
         print("🔄 Reset diagram positioning")
+    }
+    
+    /// Toggle plane visualization for debugging
+    func togglePlaneVisualization() {
+        showPlaneVisualization.toggle()
+        surfaceDetector.setVisualizationVisible(showPlaneVisualization)
+        print("🎨 Plane visualization: \(showPlaneVisualization ? "ON" : "OFF")")
     }
 }

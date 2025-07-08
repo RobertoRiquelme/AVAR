@@ -13,6 +13,9 @@ final class ARKitSurfaceDetector: ObservableObject {
     @Published var isRunning = false
     @Published var errorMessage: String?
     @Published var entityMap: [UUID: Entity] = [:]
+    
+    // Debug: plane visualization toggle
+    private var visualizationVisible = true
 
     func run() async {
         guard PlaneDetectionProvider.isSupported else {
@@ -113,6 +116,9 @@ final class ARKitSurfaceDetector: ObservableObject {
         
         // Update entity position and orientation in world space
         entityMap[anchor.id]?.transform = Transform(matrix: anchor.originFromAnchorTransform)
+        
+        // Apply current visibility state
+        entityMap[anchor.id]?.isEnabled = visualizationVisible
     }
     
     @MainActor
@@ -120,5 +126,17 @@ final class ARKitSurfaceDetector: ObservableObject {
         print("🗑️ Removing plane visualization: \(anchor.id)")
         entityMap[anchor.id]?.removeFromParent()
         entityMap.removeValue(forKey: anchor.id)
+    }
+    
+    /// Toggle plane visualization visibility for debugging
+    @MainActor
+    func setVisualizationVisible(_ visible: Bool) {
+        visualizationVisible = visible
+        print("🎨 Setting plane visualization visibility: \(visible)")
+        
+        // Update visibility of all existing plane entities
+        for entity in entityMap.values {
+            entity.isEnabled = visible
+        }
     }
 }
