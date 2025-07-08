@@ -21,14 +21,14 @@ struct ContentView: View {
     var body: some View {
         RealityView { content in
             viewModel.loadElements(in: content, onClose: onClose)
-            // Add surface visualizations
-            content.add(appModel.surfaceDetector.rootEntity)
         } update: { content in
             viewModel.updateConnections(in: content)
         }
         .task {
+            print("📋 ContentView task started for: \(filename)")
             viewModel.setAppModel(appModel)
             await viewModel.loadData(from: filename)
+            print("📋 ContentView task completed for: \(filename)")
         }
         .gesture(
             DragGesture(minimumDistance: 0).targetedToAnyEntity()

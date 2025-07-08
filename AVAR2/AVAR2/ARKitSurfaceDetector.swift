@@ -22,15 +22,20 @@ final class ARKitSurfaceDetector: ObservableObject {
             return
         }
 
+        guard !isRunning else {
+            print("🚫 ARKit session already running - PERSISTENT surfaces maintained")
+            return
+        }
+
         do {
             try await session.run([provider])
             await MainActor.run {
                 isRunning = true
             }
-            print("ARKit session is running...")
+            print("🚀 ARKit session STARTED - detecting surfaces for entire app session...")
             
             for await update in provider.anchorUpdates {
-                print("Surface detected: \(update.anchor.classification.description)")
+                print("🔍 Surface update: \(update.anchor.classification.description) - \(update.event)")
                 
                 // Skip windows
                 if update.anchor.classification == .window { continue }

@@ -10,6 +10,17 @@ import QuartzCore
 import RealityKit
 import RealityKitContent
 
+/// Static surface detection view that never changes
+struct StaticSurfaceView: View {
+    @Environment(AppModel.self) private var appModel
+    
+    var body: some View {
+        RealityView { content in
+            content.add(appModel.surfaceDetector.rootEntity)
+        }
+    }
+}
+
 final class FPSMonitor: ObservableObject {
     @Published private(set) var fps: Int = 0
     private var displayLink: CADisplayLink?
@@ -58,6 +69,8 @@ struct AVAR2: App {
     @State private var hasEnteredImmersive: Bool = false
     /// List of diagrams currently loaded into the immersive space
     @State private var activeFiles: [String] = []
+    /// Track if app has launched to start immersive space automatically
+    @State private var hasLaunched: Bool = false
     @StateObject private var fpsMonitor = FPSMonitor()
 
     @State private var inputMode: InputMode = .file
@@ -134,15 +147,23 @@ struct AVAR2: App {
                     }
                 }
 
-                Button(hasEnteredImmersive ? "Add Diagram" : "Enter Immersive Space") {
+                Button("Add Diagram") {
                     Task {
                         if inputMode == .json && !isJSONValid {
                             return // Prevent invalid input
                         }
 
+                        // Ensure immersive space is open
                         if !hasEnteredImmersive {
-                            hasEnteredImmersive = true
-                            await openImmersiveSpace(id: "MainImmersive")
+                            print("🔄 Immersive space not open, opening now...")
+                            do {
+                                await openImmersiveSpace(id: "MainImmersive")
+                                hasEnteredImmersive = true
+                                print("✅ Immersive space opened for diagram")
+                            } catch {
+                                print("❌ Failed to open immersive space for diagram: \(error)")
+                                return
+                            }
                         }
 
                         let newFile = inputMode == .file ? selectedFile : "input_json_\(UUID().uuidString)"
@@ -150,23 +171,21 @@ struct AVAR2: App {
                             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(newFile).appendingPathExtension("txt")
                             try? jsonInput.write(to: tempURL, atomically: true, encoding: .utf8)
                         }
+                        print("📊 Adding diagram: \(newFile)")
                         activeFiles.append(newFile)
-
-                        // Optional: Save jsonInput to temp file here if needed
                     }
                 }
                 .font(.title2)
 
-                if hasEnteredImmersive {
-                    Button("Exit Immersive Space") {
-                        Task {
-                            await dismissImmersiveSpace()
-                            hasEnteredImmersive = false
-                            activeFiles.removeAll()
-                        }
+                Button("Exit Immersive Space") {
+                    Task {
+                        await dismissImmersiveSpace()
+                        hasEnteredImmersive = false
+                        activeFiles.removeAll()
+                        appModel.resetDiagramPositioning()
                     }
-                    .font(.title2)
                 }
+                .font(.title2)
 
                 Spacer()
                 Text("\(fpsMonitor.fps) FPS")
@@ -175,20 +194,43 @@ struct AVAR2: App {
             }
             .padding()
             .contentShape(Rectangle())
+            .task {
+                // Auto-open immersive space on launch
+                if !hasLaunched {
+                    hasLaunched = true
+                    print("🚀 App launching - starting surface detection...")
+                    // Start surface detection BEFORE opening immersive space
+                    await appModel.startSurfaceDetectionIfNeeded()
+                    
+                    print("🎯 Opening immersive space...")
+                    do {
+                        await openImmersiveSpace(id: "MainImmersive")
+                        hasEnteredImmersive = true
+                        print("✅ Immersive space opened successfully")
+                    } catch {
+                        print("❌ Failed to open immersive space: \(error)")
+                        hasEnteredImmersive = false
+                    }
+                }
+            }
         }
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
-            Group {
-                ForEach(activeFiles, id: \.self) { file in
-                    ContentView(filename: file) {
-                        activeFiles.removeAll { $0 == file }
+            ZStack {
+                // Static surface detection layer - completely independent
+                StaticSurfaceView()
+                    .environment(appModel)
+                
+                // Dynamic diagrams layer - updates when activeFiles changes
+                Group {
+                    ForEach(activeFiles, id: \.self) { file in
+                        ContentView(filename: file) {
+                            activeFiles.removeAll { $0 == file }
+                        }
                     }
                 }
-            }
-            .environment(appModel)
-            .task {
-                await appModel.startSurfaceDetectionIfNeeded()
+                .environment(appModel)
             }
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
