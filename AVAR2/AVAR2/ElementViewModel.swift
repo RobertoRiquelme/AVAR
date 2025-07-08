@@ -45,7 +45,7 @@ class ElementViewModel: ObservableObject {
     /// Flag to prevent surface snapping during active pan
     private var isPanActive: Bool = false
     /// Current surface the diagram is snapped to (if any)
-    private var currentSnappedSurface: AnchorEntity? = nil
+    private var currentSnappedSurface: PlaneAnchor? = nil
     /// Snapping distance threshold
     private let snapDistance: Float = 1.0  // 1 meter - focused on nearby surfaces
 
@@ -55,12 +55,7 @@ class ElementViewModel: ObservableObject {
     /// The world-space position at the start of the current drag
     private var draggingStartPosition: SIMD3<Float>?
     // In ElementViewModel.swift
-    @Published var tableAnchor: AnchorEntity?
-    @Published var wallAnchor: AnchorEntity?
-    /// Tracks which surface anchor (if any) the graph is currently snapped to
-    private var snappedAnchor: AnchorEntity? = nil
-    /// List of all detected surface anchors
-    @Published var detectedSurfaceAnchors: [AnchorEntity] = []
+    // Legacy AnchorEntity properties removed - now working directly with PlaneAnchor objects from AppModel
     
     /// Reference to AppModel (simplified)
     private var appModel: AppModel?
@@ -83,17 +78,10 @@ class ElementViewModel: ObservableObject {
         self.appModel = appModel
     }
     
-    /// Get all available surface anchors (simple approach)
-    private func getAllSurfaceAnchors() -> [AnchorEntity] {
-        // Convert PlaneAnchors to simple AnchorEntities for snapping
+    /// Get all available surface anchors with proper coordinate system handling
+    private func getAllSurfaceAnchors() -> [PlaneAnchor] {
         guard let appModel = appModel else { return [] }
-        
-        return appModel.surfaceDetector.surfaceAnchors.map { planeAnchor in
-            let anchor = AnchorEntity()
-            anchor.name = "surface_\(planeAnchor.classification.description)"
-            anchor.transform = Transform(matrix: planeAnchor.originFromAnchorTransform)
-            return anchor
-        }
+        return appModel.surfaceDetector.surfaceAnchors
     }
     
     /// Update the 3D snap message above the grab handle
@@ -475,7 +463,7 @@ class ElementViewModel: ObservableObject {
         let finalPosition = container.position(relativeTo: nil)
         print("🏁 Pan ended at position: \(finalPosition)")
         if let snapTarget = findNearestWallForSnapping(diagramPosition: finalPosition) {
-            print("🎯 Found snap target: \(snapTarget.name)")
+            print("🎯 Found snap target: \(snapTarget.id)")
             performSnapToSurface(container: container, surface: snapTarget)
         } else {
             print("🚫 No snap target found")
@@ -493,119 +481,19 @@ class ElementViewModel: ObservableObject {
         }
     }
 
-    /// Adds a detected surface anchor to the tracking list
-    func addDetectedSurfaceAnchor(_ anchor: AnchorEntity) {
-        if !detectedSurfaceAnchors.contains(where: { $0 === anchor }) {
-            detectedSurfaceAnchors.append(anchor)
-            print("📋 Added surface to tracking: \(anchor.name) (Total: \(detectedSurfaceAnchors.count))")
-            
-            // Update primary anchors if needed
-            if anchor.name.contains("table") && tableAnchor == nil {
-                tableAnchor = anchor
-                print("🎯 Set primary table anchor: \(anchor.name)")
-            } else if anchor.name.contains("wall") && wallAnchor == nil {
-                wallAnchor = anchor
-                print("🎯 Set primary wall anchor: \(anchor.name)")
-            }
-        } else {
-            print("⚠️ Surface already in tracking list: \(anchor.name)")
-        }
-    }
+    // Legacy surface anchor tracking removed - now using PlaneAnchor objects directly from AppModel
     
-    /// Removes a detected surface anchor from the tracking list
-    func removeDetectedSurfaceAnchor(_ anchor: AnchorEntity) {
-        detectedSurfaceAnchors.removeAll { $0 === anchor }
-        
-        if tableAnchor === anchor {
-            tableAnchor = detectedSurfaceAnchors.first { $0.name.contains("table") }
-        } else if wallAnchor === anchor {
-            wallAnchor = detectedSurfaceAnchors.first { $0.name.contains("wall") }
-        }
-    }
+    // Legacy surface anchor removal removed - now using PlaneAnchor objects directly from AppModel
     
-    /// Enhanced surface detection with better classification and proximity detection
-    private func nearestSurfaceAnchor(to worldPos: SIMD3<Float>, threshold: Float = 0.25) -> AnchorEntity? {
-        // Use all detected surface anchors, not just primary ones
-        let candidates = detectedSurfaceAnchors.filter { $0.isAnchored }
-        var closest: (anchor: AnchorEntity, distance: Float, surfaceDistance: Float)? = nil
-        
-        for anchor in candidates {
-            let anchorPos = anchor.position(relativeTo: nil)
-            let dist = simd_distance(anchorPos, worldPos)
-            
-            // Calculate distance to surface plane, not just anchor center
-            let surfaceDistance = calculateDistanceToSurface(worldPos: worldPos, anchor: anchor)
-            
-            if surfaceDistance < threshold {
-                if closest == nil || surfaceDistance < closest!.surfaceDistance {
-                    closest = (anchor, dist, surfaceDistance)
-                }
-            }
-        }
-        return closest?.anchor
-    }
+    // Legacy nearestSurfaceAnchor method removed - using PlaneAnchor objects directly
     
-    /// Calculates the actual distance from a point to the surface plane
-    private func calculateDistanceToSurface(worldPos: SIMD3<Float>, anchor: AnchorEntity) -> Float {
-        let anchorPos = anchor.position(relativeTo: nil)
-        let anchorRotation = anchor.orientation(relativeTo: nil)
-        
-        // Get the normal vector of the surface plane
-        let surfaceNormal = anchorRotation.act(SIMD3<Float>(0, 1, 0))
-        
-        // Calculate distance to plane
-        let toPoint = worldPos - anchorPos
-        let distanceToPlane = abs(simd_dot(toPoint, surfaceNormal))
-        print("📏 Distance to plane: \(distanceToPlane)")
-        return distanceToPlane
-    }
+    // Legacy calculateDistanceToSurface method removed - using PlaneAnchor objects directly
     
-    /// Checks if a surface is suitable for snapping based on orientation and size
-    private func isSurfaceSuitableForSnapping(_ anchor: AnchorEntity) -> Bool {
-// Check if anchor has sufficient size (you might need to access the underlying ARPlaneAnchor)
-        // For now, we'll assume all detected anchors are suitable
-        return anchor.isAnchored
-    }
+    // Legacy isSurfaceSuitableForSnapping method removed - using PlaneAnchor objects directly
     
-    /// Calculates the optimal snap position for a container on a surface
-    private func calculateOptimalSnapPosition(for container: Entity, on anchor: AnchorEntity) -> SIMD3<Float> {
-        let worldPos = container.position(relativeTo: nil)
-        let anchorPos = anchor.position(relativeTo: nil)
-        let anchorRotation = anchor.orientation(relativeTo: nil)
-        
-        // Get the surface normal
-        let surfaceNormal = anchorRotation.act(SIMD3<Float>(0, 1, 0))
-        
-        // Project the container position onto the surface plane
-        let toContainer = worldPos - anchorPos
-        let distanceToPlane = simd_dot(toContainer, surfaceNormal)
-        let projectedWorldPos = worldPos - (surfaceNormal * distanceToPlane)
-        
-        // Convert to anchor local space and add small offset above surface
-        let localPos = anchor.convert(position: projectedWorldPos, from: nil)
-        
-        // Add small offset to prevent z-fighting
-        let offsetAmount: Float = 0.05
-        return localPos + SIMD3<Float>(0, offsetAmount, 0)
-    }
+    // Legacy calculateOptimalSnapPosition method removed - using PlaneAnchor objects directly
     
-    /// Performs the snap animation to a surface
-    private func snapToSurface(container: Entity, anchor: AnchorEntity, localPos: SIMD3<Float>) {
-        // Animate the snap
-        container.move(
-            to: Transform(scale: container.scale, rotation: container.orientation, translation: localPos),
-            relativeTo: anchor,
-            duration: 0.25,
-            timingFunction: .easeOut
-        )
-        
-        // After animation, reparent to the anchor
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-            container.removeFromParent()
-            anchor.addChild(container)
-            container.position = localPos
-        }
-    }
+    // Legacy snapToSurface method removed - using PlaneAnchor objects directly
     
     /// Performs the unsnap animation from a surface
     private func unsnapFromSurface(container: Entity) {
@@ -630,23 +518,37 @@ class ElementViewModel: ObservableObject {
     }
     
     /// Gets a human-readable surface type name
-    private func getSurfaceTypeName(_ anchor: AnchorEntity) -> String {
-        if anchor.name.contains("table") || anchor === tableAnchor {
+    private func getSurfaceTypeName(_ anchor: PlaneAnchor) -> String {
+        switch anchor.classification {
+        case .table:
             return "Table"
-        } else if anchor.name.contains("wall") || anchor === wallAnchor || isVerticalSurface(anchor) {
+        case .wall:
             return "Wall"
-        } else if anchor.name.contains("floor") {
+        case .floor:
             return "Floor"
-        } else if anchor.name.contains("ceiling") {
+        case .ceiling:
             return "Ceiling"
-        } else {
+        case .seat:
+            return "Seat"
+        case .door:
+            return "Door"
+        case .window:
+            return "Window"
+        case .unknown:
+            // For unknown surfaces, try to detect if it's vertical (wall-like)
+            if isVerticalSurface(anchor) {
+                return "Wall"
+            } else {
+                return "Surface"
+            }
+        @unknown default:
             return "Surface"
         }
     }
     
     /// Detect if a surface is vertical (likely a wall) based on its orientation
-    private func isVerticalSurface(_ anchor: AnchorEntity) -> Bool {
-        let rotation = anchor.orientation(relativeTo: nil)
+    private func isVerticalSurface(_ anchor: PlaneAnchor) -> Bool {
+        let rotation = simd_quatf(anchor.originFromAnchorTransform)
         let normal = rotation.act(SIMD3<Float>(0, 1, 0)) // Surface normal
         
         // Check if the surface normal is mostly horizontal (pointing sideways)
@@ -655,7 +557,7 @@ class ElementViewModel: ObservableObject {
         let isVertical = abs(normal.y) < verticalThreshold
         
         if isVertical {
-            print("🧱 Detected vertical surface (wall): \(anchor.name) with normal \(normal)")
+            print("🧱 Detected vertical surface (wall): \(anchor.id) with normal \(normal)")
         }
         
         return isVertical
@@ -853,9 +755,9 @@ class ElementViewModel: ObservableObject {
         let availableSurfaces = getAllSurfaceAnchors()
         print("🔍 checkForSurfaceSnapping called")
         print("🔍 Diagram position: \(position)")
-        print("🔍 Available surfaces: \(availableSurfaces.count) (local: \(detectedSurfaceAnchors.count))")
+        print("🔍 Available surfaces: \(availableSurfaces.count)")
         guard !availableSurfaces.isEmpty else { 
-            print("🚫 No detected surfaces for snapping (local: \(detectedSurfaceAnchors.count))")
+            print("🚫 No detected surfaces for snapping")
             return 
         }
         
@@ -874,45 +776,51 @@ class ElementViewModel: ObservableObject {
     }
     
     /// Find the nearest surface for snapping - diagrams can snap to any surface
-    private func findNearestWallForSnapping(diagramPosition: SIMD3<Float>) -> AnchorEntity? {
-        var closest: (surface: AnchorEntity, distance: Float)? = nil
+    private func findNearestWallForSnapping(diagramPosition: SIMD3<Float>) -> PlaneAnchor? {
+        var closest: (surface: PlaneAnchor, distance: Float)? = nil
         
         let availableSurfaces = getAllSurfaceAnchors()
         print("🔍 Checking \(availableSurfaces.count) surfaces for snapping at position \(diagramPosition)")
         
         for surface in availableSurfaces {
-            let surfacePosition = surface.position(relativeTo: nil)
+            // Get surface position in world space using proper transform
+            let surfaceWorldTransform = surface.originFromAnchorTransform
+            let surfacePosition = SIMD3<Float>(
+                surfaceWorldTransform.columns.3.x,
+                surfaceWorldTransform.columns.3.y,
+                surfaceWorldTransform.columns.3.z
+            )
             
-            // Calculate 3D distance to surface
+            // Calculate 3D distance to surface center
             let distance = simd_distance(diagramPosition, surfacePosition)
             
             // Get surface type for better debug info
             let surfaceType = getSurfaceTypeName(surface)
-            print("📍 Surface \(surface.name) (\(surfaceType))")
+            print("📍 Surface \(surface.id) (\(surfaceType))")
             print("   📍 Surface world position: \(surfacePosition)")
             print("   📍 Diagram position: \(diagramPosition)")
             print("   📍 Distance: \(distance)m")
             
             // Only snap to walls - detect by orientation (vertical surfaces)
-            let isWall = isVerticalSurface(surface) || surface.name.contains("wall") || surfaceType == "Wall"
+            let isWall = isVerticalSurface(surface) || surfaceType == "Wall"
             if !isWall {
-                print("🚫 Skipping non-wall surface: \(surface.name) (\(surfaceType))")
+                print("🚫 Skipping non-wall surface: \(surface.id) (\(surfaceType))")
                 continue
             }
             
             if distance <= snapDistance {
                 if closest == nil || distance < closest!.distance {
                     closest = (surface, distance)
-                    print("🎯 New closest wall: \(surface.name) (\(surfaceType)) at \(distance)m")
+                    print("🎯 New closest wall: \(surface.id) (\(surfaceType)) at \(distance)m")
                 }
             } else {
-                print("📏 Wall \(surface.name) (\(surfaceType)) too far: \(distance)m > \(snapDistance)m")
+                print("📏 Wall \(surface.id) (\(surfaceType)) too far: \(distance)m > \(snapDistance)m")
             }
         }
         
         if let result = closest?.surface {
             let surfaceType = getSurfaceTypeName(result)
-            print("✅ Found snap target: \(result.name) (\(surfaceType)) at \(closest!.distance)m")
+            print("✅ Found snap target: \(result.id) (\(surfaceType)) at \(closest!.distance)m")
         } else {
             print("❌ No surfaces within snap distance (\(snapDistance)m)")
         }
@@ -921,9 +829,15 @@ class ElementViewModel: ObservableObject {
     }
     
     /// Perform smooth snap animation to any surface type
-    private func performSnapToSurface(container: Entity, surface: AnchorEntity) {
-        let surfacePosition = surface.position(relativeTo: nil)
-        let surfaceRotation = surface.orientation(relativeTo: nil)
+    private func performSnapToSurface(container: Entity, surface: PlaneAnchor) {
+        // Get surface position and orientation using proper world space transforms
+        let surfaceWorldTransform = surface.originFromAnchorTransform
+        let surfacePosition = SIMD3<Float>(
+            surfaceWorldTransform.columns.3.x,
+            surfaceWorldTransform.columns.3.y,
+            surfaceWorldTransform.columns.3.z
+        )
+        let surfaceRotation = simd_quatf(surfaceWorldTransform)
         let surfaceType = getSurfaceTypeName(surface)
         
         var snapPosition: SIMD3<Float>
@@ -933,25 +847,31 @@ class ElementViewModel: ObservableObject {
         // Determine snap behavior based on surface type
         if surfaceType.lowercased().contains("wall") {
             // For walls: position diagram vertically, facing out from wall
-            let wallNormal = surfaceRotation.act(SIMD3<Float>(0, 0, 1))
-            snapPosition = surfacePosition - (wallNormal * offsetDistance)
+            // Get the surface normal by transforming the Y axis (surface normal)
+            let wallNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+            snapPosition = surfacePosition + (wallNormal * offsetDistance)
+            
+            // Orient diagram to align with wall surface
             let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
             diagramOrientation = surfaceRotation * verticalRotation
             print("📌 Snapping to wall at \(snapPosition)")
         } else if surfaceType.lowercased().contains("table") || surfaceType.lowercased().contains("floor") {
             // For horizontal surfaces: position diagram flat on surface
-            snapPosition = surfacePosition + SIMD3<Float>(0, offsetDistance, 0)
+            let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+            snapPosition = surfacePosition + (surfaceNormal * offsetDistance)
             diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))  // Keep upright
             print("📌 Snapping to horizontal surface at \(snapPosition)")
         } else if surfaceType.lowercased().contains("ceiling") {
             // For ceiling: position diagram hanging from ceiling
-            snapPosition = surfacePosition - SIMD3<Float>(0, offsetDistance, 0)
+            let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+            snapPosition = surfacePosition - (surfaceNormal * offsetDistance)
             let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
             diagramOrientation = upsideDownRotation
             print("📌 Snapping to ceiling at \(snapPosition)")
         } else {
-            // For any other surface: use simple position matching
-            snapPosition = surfacePosition + SIMD3<Float>(0, offsetDistance, 0)
+            // For any other surface: use simple position matching with surface normal
+            let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+            snapPosition = surfacePosition + (surfaceNormal * offsetDistance)
             diagramOrientation = container.orientation(relativeTo: nil)  // Keep current orientation
             print("📌 Snapping to surface at \(snapPosition)")
         }

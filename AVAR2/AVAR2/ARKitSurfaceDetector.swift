@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 final class ARKitSurfaceDetector: ObservableObject {
     private let session = ARKitSession()
-    private let provider = PlaneDetectionProvider(alignments: [.vertical])
+    private let provider = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
     let rootEntity = Entity()
 
     @Published var surfaceAnchors: [PlaneAnchor] = []
