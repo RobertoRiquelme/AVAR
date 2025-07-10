@@ -42,6 +42,9 @@ struct ContentView: View {
                         } else if name == "grabHandle" {
                             viewModel.handlePanChanged(value)
                             return
+                        } else if name == "zoomHandle" {
+                            viewModel.handleZoomHandleDragChanged(value)
+                            return
                         }
                         entity = current.parent
                     }
@@ -55,6 +58,9 @@ struct ContentView: View {
                             return
                         } else if name == "grabHandle" {
                             viewModel.handlePanEnded(value)
+                            return
+                        } else if name == "zoomHandle" {
+                            viewModel.handleZoomHandleDragEnded(value)
                             return
                         }
                         entity = current.parent

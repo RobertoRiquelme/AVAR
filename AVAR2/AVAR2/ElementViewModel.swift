@@ -62,6 +62,12 @@ class ElementViewModel: ObservableObject {
     
     /// Reference to the grab handle for adding snap messages
     private var grabHandleEntity: Entity?
+    /// Reference to the zoom handle for scaling gestures
+    private var zoomHandleEntity: Entity?
+    /// Starting scale when zoom handle drag begins
+    private var zoomHandleStartScale: Float?
+    /// Starting drag position for zoom handle
+    private var zoomHandleStartDragPosition: SIMD3<Float>?
 
     // NEW: Snap/unsnap banner
     @Published var snapStatusMessage: String = ""
@@ -272,6 +278,12 @@ class ElementViewModel: ObservableObject {
         // Store reference for adding snap messages
         self.grabHandleEntity = handleContainer
         print("🎯 Grab handle entity set: \(handleContainer.name)")
+
+        // Add zoom handle at bottom right of diagram
+        let zoomHandleContainer = createZoomHandle(bgWidth: bgWidth, bgHeight: bgHeight)
+        background.addChild(zoomHandleContainer)
+        self.zoomHandleEntity = zoomHandleContainer
+        print("🔍 Zoom handle entity set: \(zoomHandleContainer.name)")
 
         // Clear any existing entities and lines
         entityMap.removeAll()
@@ -491,6 +503,46 @@ class ElementViewModel: ObservableObject {
         panStartOrientation = nil
         isPanActive = false
 
+        // Final update of connection lines
+        if let content = sceneContent {
+            updateConnections(in: content)
+        }
+    }
+    
+    /// Handle zoom handle drag to scale the diagram
+    func handleZoomHandleDragChanged(_ value: EntityTargetValue<DragGesture.Value>) {
+        guard let container = rootEntity else { return }
+        
+        // Initialize zoom handle drag state
+        if zoomHandleStartScale == nil {
+            zoomHandleStartScale = container.scale.x
+        }
+        
+        guard let startScale = zoomHandleStartScale else { return }
+        
+        // Use 2D translation only (completely ignores Z-axis movement)
+        let translation2D = value.gestureValue.translation
+        let dragX = Float(translation2D.width)
+        let dragY = Float(translation2D.height)
+        
+        // Use only the dominant axis for more predictable scaling
+        let dominantDrag = abs(dragX) > abs(dragY) ? dragX : -dragY // Right/up = zoom in, left/down = zoom out
+        
+        // Much smaller, continuous scale factor for smooth zooming
+        let scaleSensitivity: Float = 0.001 // Very gentle scaling for precise control
+        let scaleFactor: Float = 1.0 + (dominantDrag * scaleSensitivity)
+        let newScale = max(0.3, min(2.0, startScale * scaleFactor)) // Tighter bounds for better UX
+        
+        // Apply uniform scaling
+        container.scale = SIMD3<Float>(repeating: newScale)
+    }
+    
+    /// Handle zoom handle drag end
+    func handleZoomHandleDragEnded(_ value: EntityTargetValue<DragGesture.Value>) {
+        // Clear zoom handle drag state
+        zoomHandleStartScale = nil
+        zoomHandleStartDragPosition = nil
+        
         // Final update of connection lines
         if let content = sceneContent {
             updateConnections(in: content)
@@ -920,6 +972,59 @@ class ElementViewModel: ObservableObject {
     }
     
     // Removed 3D text message functions - using existing overlay system instead
+    
+    /// Creates an L-shaped zoom handle at the bottom right of the diagram
+    private func createZoomHandle(bgWidth: Float, bgHeight: Float) -> Entity {
+        let zoomHandleContainer = Entity()
+        zoomHandleContainer.name = "zoomHandle"
+        
+        // L-shape dimensions
+        let handleThickness: Float = 0.015
+        let handleLength: Float = 0.08
+        let handleWidth: Float = 0.015
+        
+        // Create the horizontal part of the L
+        let horizontalMesh = MeshResource.generateBox(size: [handleLength, handleWidth, handleThickness])
+        let horizontalMaterial = SimpleMaterial(color: .white, isMetallic: false)
+        let horizontalEntity = ModelEntity(mesh: horizontalMesh, materials: [horizontalMaterial])
+        horizontalEntity.name = "zoomHandleHorizontal"
+        
+        // Create the vertical part of the L  
+        let verticalMesh = MeshResource.generateBox(size: [handleWidth, handleLength, handleThickness])
+        let verticalMaterial = SimpleMaterial(color: .white, isMetallic: false)
+        let verticalEntity = ModelEntity(mesh: verticalMesh, materials: [verticalMaterial])
+        verticalEntity.name = "zoomHandleVertical"
+        
+        // Position the parts to form a mirrored L shape (⅃)
+        // Vertical part positioned normally
+        verticalEntity.position = [0, 0, 0]
+        // Horizontal part extends left from the bottom of the vertical part
+        horizontalEntity.position = [-handleLength/2 + handleWidth/2, -handleLength/2 + handleWidth/2, 0]
+        
+        // Add both parts to container
+        zoomHandleContainer.addChild(horizontalEntity)
+        zoomHandleContainer.addChild(verticalEntity)
+        
+        // Position at bottom right of diagram
+        let halfW = bgWidth / 2
+        let halfH = bgHeight / 2
+        let margin: Float = 0.05
+        zoomHandleContainer.position = [halfW - margin, -halfH + margin, 0.01]
+        
+        // Enable interaction
+        zoomHandleContainer.generateCollisionShapes(recursive: true)
+        zoomHandleContainer.components.set(InputTargetComponent())
+        let hoverEffectComponent = HoverEffectComponent()
+        zoomHandleContainer.components.set(hoverEffectComponent)
+        
+        // Enable interaction on child entities too
+        for child in zoomHandleContainer.children {
+            child.components.set(InputTargetComponent())
+            child.components.set(hoverEffectComponent)
+        }
+        
+        return zoomHandleContainer
+    }
     
     /// Add a red sphere at [0,0,0] to highlight the diagram's origin point
     private func addOriginMarker() {
