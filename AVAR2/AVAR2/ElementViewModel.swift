@@ -986,8 +986,8 @@ class ElementViewModel: ObservableObject {
             // Check if surface matches the diagram type requirements
             let isValidSurface: Bool
             if isGraph2D {
-                // 2D diagrams only snap to vertical surfaces (walls)
-                isValidSurface = isVerticalSurface(surface) || surfaceType == "Wall"
+                // 2D diagrams snap to all vertical surfaces, including unknowns
+                isValidSurface = isVerticalSurface(surface)
                 if !isValidSurface {
                     print("🚫 Skipping non-vertical surface for 2D diagram: \(surface.id) (\(surfaceType))")
                     continue
