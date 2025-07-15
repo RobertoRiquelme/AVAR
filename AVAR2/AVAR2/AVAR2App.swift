@@ -9,6 +9,7 @@ import SwiftUI
 import QuartzCore
 import RealityKit
 import RealityKitContent
+import Foundation
 
 /// Static surface detection view that never changes
 struct StaticSurfaceView: View {
@@ -76,6 +77,7 @@ struct AVAR2: App {
     @State private var inputMode: InputMode = .file
     @State private var jsonInput: String = ""
     @State private var isJSONValid: Bool = false
+    @Environment(\.scenePhase) private var scenePhase
 
 
     init() {
@@ -208,6 +210,11 @@ struct AVAR2: App {
             }
             .padding()
             .contentShape(Rectangle())
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                if newPhase == .background {
+                    exit(0)
+                }
+            }
             .task {
                 // Auto-open immersive space on launch
                 if !hasLaunched {
