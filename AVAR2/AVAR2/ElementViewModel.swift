@@ -992,6 +992,36 @@ class ElementViewModel: ObservableObject {
         }
     }
     
+    /// Find the nearest point on a surface to the given diagram position
+    private func findNearestPointOnSurface(diagramPosition: SIMD3<Float>, surface: PlaneAnchor) -> SIMD3<Float> {
+        // Get plane's transform and position
+        let planeTransform = surface.originFromAnchorTransform
+        let planePosition = SIMD3<Float>(
+            planeTransform.columns.3.x,
+            planeTransform.columns.3.y,
+            planeTransform.columns.3.z
+        )
+        let planeRotation = simd_quatf(planeTransform)
+        
+        // Get plane dimensions (convert Float16 to Float)
+        let planeExtent = surface.geometry.extent
+        let planeWidth = Float(planeExtent.width)  // Width along X axis
+        let planeHeight = Float(planeExtent.height)  // Height along Z axis
+        
+        // Transform point to plane's local space
+        let toPlane = diagramPosition - planePosition
+        let localPoint = simd_inverse(planeRotation).act(toPlane)
+        
+        // Clamp the point to the plane bounds
+        let clampedX = Swift.max(-planeWidth/2, Swift.min(planeWidth/2, localPoint.x))
+        let clampedZ = Swift.max(-planeHeight/2, Swift.min(planeHeight/2, localPoint.z))
+        
+        // Find nearest point on the plane within bounds
+        let nearestOnPlane = planeRotation.act(SIMD3<Float>(clampedX, 0, clampedZ)) + planePosition
+        
+        return nearestOnPlane
+    }
+    
     /// Calculate the distance from a point to the nearest point on a plane surface
     /// Takes into account the plane's bounds, not just the center
     private func distanceToPlane(point: SIMD3<Float>, planeAnchor: PlaneAnchor) -> Float {
@@ -1123,13 +1153,14 @@ class ElementViewModel: ObservableObject {
     
     /// Perform smooth snap animation to any surface type
     private func performSnapToSurface(container: Entity, surface: PlaneAnchor) {
-        // Get surface position and orientation using proper world space transforms
+        // Get current diagram position
+        let diagramPosition = container.position(relativeTo: nil)
+        
+        // Find the nearest point on the surface to the diagram
+        let nearestPointOnSurface = findNearestPointOnSurface(diagramPosition: diagramPosition, surface: surface)
+        
+        // Get surface orientation using proper world space transforms
         let surfaceWorldTransform = surface.originFromAnchorTransform
-        let surfacePosition = SIMD3<Float>(
-            surfaceWorldTransform.columns.3.x,
-            surfaceWorldTransform.columns.3.y,
-            surfaceWorldTransform.columns.3.z
-        )
         let surfaceRotation = simd_quatf(surfaceWorldTransform)
         let surfaceType = getSurfaceTypeName(surface)
         
@@ -1142,7 +1173,7 @@ class ElementViewModel: ObservableObject {
             // For walls: position diagram vertically, facing out from wall
             // Get the surface normal by transforming the Y axis (surface normal)
             let wallNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            snapPosition = surfacePosition + (wallNormal * offsetDistance)
+            snapPosition = nearestPointOnSurface + (wallNormal * offsetDistance)
             
             // Orient diagram to align with wall surface
             let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
@@ -1166,7 +1197,7 @@ class ElementViewModel: ObservableObject {
                 bottomOffset = offsetDistance
             }
             
-            snapPosition = surfacePosition + (surfaceNormal * bottomOffset)
+            snapPosition = nearestPointOnSurface + (surfaceNormal * bottomOffset)
             diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))  // Keep upright
             print("📌 Snapping to horizontal surface at \(snapPosition)")
         } else if surfaceType.lowercased().contains("ceiling") {
@@ -1187,14 +1218,14 @@ class ElementViewModel: ObservableObject {
                 topOffset = offsetDistance
             }
             
-            snapPosition = surfacePosition - (surfaceNormal * topOffset)
+            snapPosition = nearestPointOnSurface - (surfaceNormal * topOffset)
             let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
             diagramOrientation = upsideDownRotation
             print("📌 Snapping to ceiling at \(snapPosition)")
         } else {
             // For any other surface: use simple position matching with surface normal
             let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            snapPosition = surfacePosition + (surfaceNormal * offsetDistance)
+            snapPosition = nearestPointOnSurface + (surfaceNormal * offsetDistance)
             diagramOrientation = container.orientation(relativeTo: nil)  // Keep current orientation
             print("📌 Snapping to surface at \(snapPosition)")
         }
