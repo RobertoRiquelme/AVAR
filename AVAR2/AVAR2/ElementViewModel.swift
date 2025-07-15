@@ -210,35 +210,42 @@ class ElementViewModel: ObservableObject {
             let buttonContainer = Entity()
             buttonContainer.name = "closeButton"
 
-            let buttonRadius: Float = 0.04
-            let buttonThickness: Float = 0.005
+            // Native visionOS style close button - smaller, more refined
+            let buttonRadius: Float = 0.02  // Smaller radius for more native feel
+            let buttonThickness: Float = 0.008  // Slightly thicker for better visibility
             let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
-            let buttonMaterial = SimpleMaterial(color: .white, isMetallic: false)
+            let buttonMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.8), isMetallic: false)  // Slightly transparent
             let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
             buttonEntity.transform.rotation = simd_quatf(angle: .pi/2, axis: [1, 0, 0])
             buttonContainer.addChild(buttonEntity)
 
+            // Use a more native "×" symbol with better positioning
             let textMesh = MeshResource.generateText(
                 "×",
-                extrusionDepth: 0.001,
-                font: .systemFont(ofSize: 0.1),
+                extrusionDepth: 0.002,
+                font: .systemFont(ofSize: 0.06),  // Smaller, more proportional
                 containerFrame: .zero,
                 alignment: .center,
                 lineBreakMode: .byWordWrapping
             )
-            let textMaterial = SimpleMaterial(color: .gray, isMetallic: false)
+            let textMaterial = SimpleMaterial(color: .black.withAlphaComponent(0.7), isMetallic: false)  // Dark gray for better contrast
             let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
-            textEntity.position = [-0.03, -0.05, buttonThickness / 2 + 0.0005]
+            
+            // Center the X symbol properly by accounting for text mesh bounds
+            let textBounds = textMesh.bounds
+            let textOffset = SIMD3<Float>(-textBounds.center.x, -textBounds.center.y, buttonThickness / 2 + 0.001)
+            textEntity.position = textOffset
             buttonContainer.addChild(textEntity)
 
+            // Position close button beside the drag bar like native visionOS
             let halfW = bgWidth / 2
             let halfH = bgHeight / 2
-            let handleWidth: Float = min(bgWidth * 0.5, 0.5)
-            let handleHeight: Float = 0.01
-            let handleMargin: Float = 0.05
+            let handleWidth: Float = bgWidth * 0.55  // Match updated drag bar width
+            let handleHeight: Float = 0.018  // Match updated drag bar height
+            let handleMargin: Float = 0.015  // Match current drag bar margin
             let handlePosY = -halfH - handleHeight / 2 - handleMargin
-            let spacing: Float = 0.02
-            let closePosX = -handleWidth / 2 - buttonRadius - spacing
+            let spacing: Float = 0.015  // Small spacing between button and drag bar
+            let closePosX = -handleWidth / 2 - buttonRadius - spacing  // Position to the left of drag bar
             buttonContainer.position = [closePosX, handlePosY, 0.01]
 
             buttonContainer.generateCollisionShapes(recursive: true)
@@ -255,8 +262,8 @@ class ElementViewModel: ObservableObject {
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
         let margin: Float = 0.1
-        let handleWidth: Float = bgWidth * 0.45  // 50% smaller grab bar
-        let handleHeight: Float = 0.015  // Slightly thinner for more native feel
+        let handleWidth: Float = bgWidth * 0.55  // Wider grab bar for better usability
+        let handleHeight: Float = 0.018  // Slightly thicker for better visibility and touch target
         let handleThickness: Float = 0.008  // Thinner for more subtle appearance
         let handleMargin: Float = 0.015  // Closer to window
         let handleContainer = Entity()
@@ -544,17 +551,18 @@ class ElementViewModel: ObservableObject {
         
         guard let startScale = zoomHandleStartScale else { return }
         
-        // Use 2D translation only (completely ignores Z-axis movement)
+        // Native visionOS WindowGroup zoom behavior: simple diagonal movement from corner
         let translation2D = value.gestureValue.translation
-        let dragX = Float(translation2D.width)
-        let dragY = Float(translation2D.height)
+        let dragX = Float(translation2D.width)   // Right = positive
+        let dragY = Float(translation2D.height)  // Down = positive
         
-        // Use only the dominant axis for more predictable scaling
-        let dominantDrag = abs(dragX) > abs(dragY) ? dragX : -dragY // Right/up = zoom in, left/down = zoom out
+        // Simple diagonal calculation: down-right = zoom in, up-left = zoom out
+        // This matches native visionOS WindowGroup behavior exactly
+        let diagonalMovement = dragX + dragY  // Both right and down are positive = zoom in
         
-        // Much smaller, continuous scale factor for smooth zooming
-        let scaleSensitivity: Float = 0.001 // Very gentle scaling for precise control
-        let scaleFactor: Float = 1.0 + (dominantDrag * scaleSensitivity)
+        // Simple, direct scaling like native visionOS
+        let scaleSensitivity: Float = 0.001
+        let scaleFactor: Float = 1.0 + (diagonalMovement * scaleSensitivity)
         let newScale = max(0.3, min(2.0, startScale * scaleFactor)) // Tighter bounds for better UX
         
         // Apply uniform scaling
@@ -1002,37 +1010,38 @@ class ElementViewModel: ObservableObject {
         let zoomHandleContainer = Entity()
         zoomHandleContainer.name = "zoomHandle"
         
-        // L-shape dimensions
-        let handleThickness: Float = 0.015
-        let handleLength: Float = 0.08
-        let handleWidth: Float = 0.015
+        // Native visionOS zoom handle dimensions - wider for better usability
+        let handleThickness: Float = 0.008  // Thinner for more native feel
+        let handleLength: Float = 0.06  // Longer for easier grabbing
+        let handleWidth: Float = 0.015  // Wider for better touch target
+        let cornerRadius: Float = handleWidth * 0.3  // Rounded corners like native
         
-        // Create the horizontal part of the L
-        let horizontalMesh = MeshResource.generateBox(size: [handleLength, handleWidth, handleThickness])
-        let horizontalMaterial = SimpleMaterial(color: .white, isMetallic: false)
+        // Create the horizontal part of the L with rounded corners
+        let horizontalMesh = MeshResource.generateBox(size: [handleLength, handleWidth, handleThickness], cornerRadius: cornerRadius)
+        let horizontalMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)  // Semi-transparent like native
         let horizontalEntity = ModelEntity(mesh: horizontalMesh, materials: [horizontalMaterial])
         horizontalEntity.name = "zoomHandleHorizontal"
         
-        // Create the vertical part of the L  
-        let verticalMesh = MeshResource.generateBox(size: [handleWidth, handleLength, handleThickness])
-        let verticalMaterial = SimpleMaterial(color: .white, isMetallic: false)
+        // Create the vertical part of the L with rounded corners
+        let verticalMesh = MeshResource.generateBox(size: [handleWidth, handleLength, handleThickness], cornerRadius: cornerRadius)
+        let verticalMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)  // Semi-transparent like native
         let verticalEntity = ModelEntity(mesh: verticalMesh, materials: [verticalMaterial])
         verticalEntity.name = "zoomHandleVertical"
         
-        // Position the parts to form a mirrored L shape (⅃)
-        // Vertical part positioned normally
-        verticalEntity.position = [0, 0, 0]
-        // Horizontal part extends left from the bottom of the vertical part
-        horizontalEntity.position = [-handleLength/2 + handleWidth/2, -handleLength/2 + handleWidth/2, 0]
+        // Position the parts to form a native-style L shape (⅃) - positioned in the actual corner
+        // Vertical part positioned at the right edge
+        verticalEntity.position = [handleLength/2 - handleWidth/2, 0, 0]
+        // Horizontal part extends from the bottom of the vertical part
+        horizontalEntity.position = [0, -handleLength/2 + handleWidth/2, 0]
         
         // Add both parts to container
         zoomHandleContainer.addChild(horizontalEntity)
         zoomHandleContainer.addChild(verticalEntity)
         
-        // Position at bottom right of diagram
+        // Position exactly at the bottom right corner like native visionOS
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
-        let margin: Float = 0.05
+        let margin: Float = 0.02  // Smaller margin for tighter corner placement
         zoomHandleContainer.position = [halfW - margin, -halfH + margin, 0.01]
         
         // Enable interaction
