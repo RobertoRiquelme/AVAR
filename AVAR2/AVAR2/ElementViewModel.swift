@@ -186,6 +186,8 @@ class ElementViewModel: ObservableObject {
         // Compute size of background based on element positions
         let bgWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
         let bgHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
+        let bgDepth = normalizationContext.positionCenters.count > 2 ? 
+            Float(normalizationContext.positionRanges[2] / normalizationContext.globalRange * 2) : 0.01
 
         // Create new root container under pivot (moves and scales all graph content)
         let container = Entity()
@@ -197,7 +199,7 @@ class ElementViewModel: ObservableObject {
         // Add invisible background under the same container to capture pan/zoom gestures
         let background = Entity()
         background.name = "graphBackground"
-        let bgShape = ShapeResource.generateBox(size: [bgWidth, bgHeight, 0.01])
+        let bgShape = ShapeResource.generateBox(size: [bgWidth, bgHeight, bgDepth])
         background.components.set(CollisionComponent(shapes: [bgShape]))
         // Input is managed by handle and close button; disable background as catch-all target
         background.position = .zero
@@ -240,13 +242,15 @@ class ElementViewModel: ObservableObject {
             // Position close button beside the drag bar like native visionOS
             let halfW = bgWidth / 2
             let halfH = bgHeight / 2
-            let handleWidth: Float = bgWidth * 0.55  // Match updated drag bar width
+            let handleWidth: Float = bgWidth * 0.65  // Match updated drag bar width
             let handleHeight: Float = 0.018  // Match updated drag bar height
             let handleMargin: Float = 0.015  // Match current drag bar margin
             let handlePosY = -halfH - handleHeight / 2 - handleMargin
             let spacing: Float = 0.015  // Small spacing between button and drag bar
             let closePosX = -handleWidth / 2 - buttonRadius - spacing  // Position to the left of drag bar
-            buttonContainer.position = [closePosX, handlePosY, 0.01]
+            // Position on front face for 3D diagrams, slightly in front for 2D diagrams
+            let closePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
+            buttonContainer.position = [closePosX, handlePosY, closePosZ]
 
             buttonContainer.generateCollisionShapes(recursive: true)
             buttonContainer.components.set(InputTargetComponent())
@@ -262,7 +266,7 @@ class ElementViewModel: ObservableObject {
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
         let margin: Float = 0.1
-        let handleWidth: Float = bgWidth * 0.55  // Wider grab bar for better usability
+        let handleWidth: Float = bgWidth * 0.65  // Even wider grab bar for better usability
         let handleHeight: Float = 0.018  // Slightly thicker for better visibility and touch target
         let handleThickness: Float = 0.008  // Thinner for more subtle appearance
         let handleMargin: Float = 0.015  // Closer to window
@@ -273,7 +277,9 @@ class ElementViewModel: ObservableObject {
         let handleMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)  // More transparent like native
         let handleEntity = ModelEntity(mesh: handleMesh, materials: [handleMaterial])
         handleContainer.addChild(handleEntity)
-        handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, 0.01]
+        // Position on front face for 3D diagrams, slightly in front for 2D diagrams
+        let handlePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
+        handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, handlePosZ]
         handleContainer.generateCollisionShapes(recursive: true)
         handleContainer.components.set(InputTargetComponent())
         handleContainer.components.set(hoverEffectComponent)
@@ -288,7 +294,7 @@ class ElementViewModel: ObservableObject {
         print("🎯 Grab handle entity set: \(handleContainer.name)")
 
         // Add zoom handle at bottom right of diagram
-        let zoomHandleContainer = createZoomHandle(bgWidth: bgWidth, bgHeight: bgHeight)
+        let zoomHandleContainer = createZoomHandle(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth)
         background.addChild(zoomHandleContainer)
         self.zoomHandleEntity = zoomHandleContainer
         print("🔍 Zoom handle entity set: \(zoomHandleContainer.name)")
@@ -521,7 +527,7 @@ class ElementViewModel: ObservableObject {
         // Final snap check when pan ends
         let finalPosition = container.position(relativeTo: nil)
         print("🏁 Pan ended at position: \(finalPosition)")
-        if let snapTarget = findNearestWallForSnapping(diagramPosition: finalPosition) {
+        if let snapTarget = findNearestSurfaceForSnapping(diagramPosition: finalPosition) {
             print("🎯 Found snap target: \(snapTarget.id)")
             performSnapToSurface(container: container, surface: snapTarget)
         } else {
@@ -661,6 +667,77 @@ class ElementViewModel: ObservableObject {
         }
         
         return isVertical
+    }
+    
+    /// Find the lowest Y position of all entities in the 3D diagram, accounting for entity size
+    private func findLowestEntityPosition() -> Float {
+        guard let container = rootEntity else { return 0 }
+        
+        var lowestY: Float = Float.greatestFiniteMagnitude
+        
+        // Iterate through all entities in the container to find the lowest Y position
+        for entity in container.children {
+            if entity.name.starts(with: "element_") {
+                // Get the entity's bounds to account for its actual size
+                let bounds = entity.visualBounds(relativeTo: container)
+                let entityBottomY = bounds.center.y - bounds.extents.y / 2
+                if entityBottomY < lowestY {
+                    lowestY = entityBottomY
+                }
+            }
+        }
+        
+        // If no entities found, return 0
+        if lowestY == Float.greatestFiniteMagnitude {
+            lowestY = 0
+        }
+        
+        print("📐 Lowest entity bottom Y position: \(lowestY)")
+        return lowestY
+    }
+    
+    /// Find the highest Y position of all entities in the 3D diagram, accounting for entity size
+    private func findHighestEntityPosition() -> Float {
+        guard let container = rootEntity else { return 0 }
+        
+        var highestY: Float = -Float.greatestFiniteMagnitude
+        
+        // Iterate through all entities in the container to find the highest Y position
+        for entity in container.children {
+            if entity.name.starts(with: "element_") {
+                // Get the entity's bounds to account for its actual size
+                let bounds = entity.visualBounds(relativeTo: container)
+                let entityTopY = bounds.center.y + bounds.extents.y / 2
+                if entityTopY > highestY {
+                    highestY = entityTopY
+                }
+            }
+        }
+        
+        // If no entities found, return 0
+        if highestY == -Float.greatestFiniteMagnitude {
+            highestY = 0
+        }
+        
+        print("📐 Highest entity top Y position: \(highestY)")
+        return highestY
+    }
+    
+    /// Detect if a surface is horizontal (likely a floor, table, or ceiling) based on its orientation
+    private func isHorizontalSurface(_ anchor: PlaneAnchor) -> Bool {
+        let rotation = simd_quatf(anchor.originFromAnchorTransform)
+        let normal = rotation.act(SIMD3<Float>(0, 1, 0)) // Surface normal
+        
+        // Check if the surface normal is mostly vertical (pointing up or down)
+        // For horizontal surfaces, the Y component should be close to 1 or -1
+        let horizontalThreshold: Float = 0.7 // Adjust this value as needed
+        let isHorizontal = abs(normal.y) > horizontalThreshold
+        
+        if isHorizontal {
+            print("🏢 Detected horizontal surface (floor/table/ceiling): \(anchor.id) with normal \(normal)")
+        }
+        
+        return isHorizontal
     }
     
     /// Provides haptic feedback for snapping actions
@@ -862,7 +939,7 @@ class ElementViewModel: ObservableObject {
             return 
         }
         
-        if let nearestSurface = findNearestWallForSnapping(diagramPosition: position) {
+        if let nearestSurface = findNearestSurfaceForSnapping(diagramPosition: position) {
             // Show visual feedback that snapping is available
             let surfaceType = getSurfaceTypeName(nearestSurface)
             let message = "📍 Near \(surfaceType) - Release to Snap!"
@@ -876,12 +953,16 @@ class ElementViewModel: ObservableObject {
         }
     }
     
-    /// Find the nearest surface for snapping - diagrams can snap to any PERSISTENT surface
-    private func findNearestWallForSnapping(diagramPosition: SIMD3<Float>) -> PlaneAnchor? {
+    /// Find the nearest surface for snapping based on diagram type
+    /// 2D diagrams snap to vertical surfaces (walls), 3D diagrams snap to horizontal surfaces (floors/tables)
+    private func findNearestSurfaceForSnapping(diagramPosition: SIMD3<Float>) -> PlaneAnchor? {
         var closest: (surface: PlaneAnchor, distance: Float)? = nil
         
         let availableSurfaces = getAllSurfaceAnchors()
-        print("🔍 Checking \(availableSurfaces.count) PERSISTENT surfaces for snapping at position \(diagramPosition)")
+        let diagramType = isGraph2D ? "2D" : "3D"
+        let targetSurfaceType = isGraph2D ? "vertical (walls)" : "horizontal (floors/tables)"
+        
+        print("🔍 Checking \(availableSurfaces.count) PERSISTENT surfaces for \(diagramType) diagram snapping to \(targetSurfaceType) at position \(diagramPosition)")
         
         for surface in availableSurfaces {
             // Get surface position in world space using proper transform
@@ -902,28 +983,39 @@ class ElementViewModel: ObservableObject {
             print("   📍 Diagram position: \(diagramPosition)")
             print("   📍 Distance: \(distance)m")
             
-            // Only snap to walls - detect by orientation (vertical surfaces)
-            let isWall = isVerticalSurface(surface) || surfaceType == "Wall"
-            if !isWall {
-                print("🚫 Skipping non-wall surface: \(surface.id) (\(surfaceType))")
-                continue
+            // Check if surface matches the diagram type requirements
+            let isValidSurface: Bool
+            if isGraph2D {
+                // 2D diagrams only snap to vertical surfaces (walls)
+                isValidSurface = isVerticalSurface(surface) || surfaceType == "Wall"
+                if !isValidSurface {
+                    print("🚫 Skipping non-vertical surface for 2D diagram: \(surface.id) (\(surfaceType))")
+                    continue
+                }
+            } else {
+                // 3D diagrams only snap to horizontal surfaces (floors, tables, ceilings)
+                isValidSurface = isHorizontalSurface(surface) || surfaceType == "Floor" || surfaceType == "Table"
+                if !isValidSurface {
+                    print("🚫 Skipping non-horizontal surface for 3D diagram: \(surface.id) (\(surfaceType))")
+                    continue
+                }
             }
             
             if distance <= snapDistance {
                 if closest == nil || distance < closest!.distance {
                     closest = (surface, distance)
-                    print("🎯 New closest wall: \(surface.id) (\(surfaceType)) at \(distance)m")
+                    print("🎯 New closest \(isGraph2D ? "wall" : "horizontal surface"): \(surface.id) (\(surfaceType)) at \(distance)m")
                 }
             } else {
-                print("📏 Wall \(surface.id) (\(surfaceType)) too far: \(distance)m > \(snapDistance)m")
+                print("📏 Surface \(surface.id) (\(surfaceType)) too far: \(distance)m > \(snapDistance)m")
             }
         }
         
         if let result = closest?.surface {
             let surfaceType = getSurfaceTypeName(result)
-            print("✅ Found snap target: \(result.id) (\(surfaceType)) at \(closest!.distance)m")
+            print("✅ Found snap target for \(diagramType) diagram: \(result.id) (\(surfaceType)) at \(closest!.distance)m")
         } else {
-            print("❌ No surfaces within snap distance (\(snapDistance)m)")
+            print("❌ No \(targetSurfaceType) surfaces within snap distance (\(snapDistance)m) for \(diagramType) diagram")
         }
         
         return closest?.surface
@@ -959,13 +1051,43 @@ class ElementViewModel: ObservableObject {
         } else if surfaceType.lowercased().contains("table") || surfaceType.lowercased().contains("floor") {
             // For horizontal surfaces: position diagram flat on surface
             let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            snapPosition = surfacePosition + (surfaceNormal * offsetDistance)
+            
+            // For 3D diagrams, calculate the bottom offset using the lowest entity position
+            let bottomOffset: Float
+            if !isGraph2D {
+                // For 3D diagrams, we need to lift the diagram so the lowest entity sits on the surface
+                let lowestEntityY = findLowestEntityPosition()
+                // The lowest entity needs to be lifted to sit on the surface
+                // We lift by the absolute value of the lowest Y position plus the surface offset
+                bottomOffset = offsetDistance - lowestEntityY  // Lift by the depth of the lowest entity
+                print("📌 3D diagram bottom offset: \(bottomOffset), lowest entity Y: \(lowestEntityY)")
+            } else {
+                // For 2D diagrams, use standard offset
+                bottomOffset = offsetDistance
+            }
+            
+            snapPosition = surfacePosition + (surfaceNormal * bottomOffset)
             diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))  // Keep upright
             print("📌 Snapping to horizontal surface at \(snapPosition)")
         } else if surfaceType.lowercased().contains("ceiling") {
             // For ceiling: position diagram hanging from ceiling
             let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            snapPosition = surfacePosition - (surfaceNormal * offsetDistance)
+            
+            // For 3D diagrams, calculate the top offset using the highest entity position
+            let topOffset: Float
+            if !isGraph2D {
+                // For 3D diagrams, we need to lower the diagram so the highest entity touches the ceiling
+                let highestEntityY = findHighestEntityPosition()
+                // The highest entity needs to be lowered to touch the ceiling
+                // We lower by the absolute value of the highest Y position plus the surface offset
+                topOffset = offsetDistance + highestEntityY  // Lower by the height of the highest entity
+                print("📌 3D diagram top offset: \(topOffset), highest entity Y: \(highestEntityY)")
+            } else {
+                // For 2D diagrams, use standard offset
+                topOffset = offsetDistance
+            }
+            
+            snapPosition = surfacePosition - (surfaceNormal * topOffset)
             let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
             diagramOrientation = upsideDownRotation
             print("📌 Snapping to ceiling at \(snapPosition)")
@@ -1006,14 +1128,14 @@ class ElementViewModel: ObservableObject {
     // Removed 3D text message functions - using existing overlay system instead
     
     /// Creates an L-shaped zoom handle at the bottom right of the diagram
-    private func createZoomHandle(bgWidth: Float, bgHeight: Float) -> Entity {
+    private func createZoomHandle(bgWidth: Float, bgHeight: Float, bgDepth: Float) -> Entity {
         let zoomHandleContainer = Entity()
         zoomHandleContainer.name = "zoomHandle"
         
         // Native visionOS zoom handle dimensions - wider for better usability
         let handleThickness: Float = 0.008  // Thinner for more native feel
-        let handleLength: Float = 0.06  // Longer for easier grabbing
-        let handleWidth: Float = 0.015  // Wider for better touch target
+        let handleLength: Float = 0.08  // Even longer for easier grabbing
+        let handleWidth: Float = 0.02   // Even wider for better touch target
         let cornerRadius: Float = handleWidth * 0.3  // Rounded corners like native
         
         // Create the horizontal part of the L with rounded corners
@@ -1042,7 +1164,9 @@ class ElementViewModel: ObservableObject {
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
         let margin: Float = 0.02  // Smaller margin for tighter corner placement
-        zoomHandleContainer.position = [halfW - margin, -halfH + margin, 0.01]
+        // Position on front face for 3D diagrams, slightly in front for 2D diagrams
+        let zoomPosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
+        zoomHandleContainer.position = [halfW - margin, -halfH + margin, zoomPosZ]
         
         // Enable interaction
         zoomHandleContainer.generateCollisionShapes(recursive: true)
