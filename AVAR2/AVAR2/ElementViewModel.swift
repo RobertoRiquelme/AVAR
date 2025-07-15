@@ -450,92 +450,82 @@ class ElementViewModel: ObservableObject {
         zoomPivotLocal = nil
     }
 
-    /// Handle pan gesture to move the entire graph origin like native visionOS windows
+    /// Handle pan gesture with native visionOS WindowGroup-like behavior
     func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
 
-        // Get gesture translation in full 3D space
+        // Get gesture translation in 3D space
         let translation = value.gestureValue.translation3D
         let gestureOffset = SIMD3<Float>(
             Float(translation.x),
-            -Float(translation.y),  // Invert Y axis
-            Float(translation.z)    // Include Z movement
+            -Float(translation.y),  // Invert Y axis for visionOS coordinate system
+            Float(translation.z)
         )
         
-        // On first pan, just store the starting position
+        // Initialize pan state on first gesture
         if panStartPosition == nil {
             panStartPosition = container.position(relativeTo: nil)
             isPanActive = true
             return
         }
         
-        // Store initial orientation on first pan
-        if panStartOrientation == nil {
-            panStartOrientation = container.orientation(relativeTo: nil)
-        }
+        // Simple 1:1 movement with proper sensitivity
+        let sensitivity: Float = 0.0008
+        let scaledGesture = gestureOffset * sensitivity
         
-        // Native visionOS windows: lateral movement orbits around user, forward/back movement changes distance
-        let userPosition = SIMD3<Float>(0, panStartPosition!.y, 0)  // User at same Y level as start
-        let startDistanceFromUser = simd_length(panStartPosition! - userPosition)
+        // Calculate new position directly - no complex logic
+        let newPosition = panStartPosition! + scaledGesture
         
-        // Use X movement for orbital rotation (inverted to match natural movement)
-        // Add deadzone to prevent unwanted sideways movement during natural forward/back gestures
-        let orbitalSensitivity: Float = 0.0008  // Match sensitivity with up/down and forward/back
-        let xDeadzone: Float = 0.02  // Ignore small X movements to prevent unnatural sideways drift
-        let filteredXMovement = abs(gestureOffset.x) > xDeadzone ? gestureOffset.x : 0
-        let orbitalAngle = -filteredXMovement * orbitalSensitivity  // Invert X movement
-        
-        // Use Z movement for forward/backward distance changes
-        let distanceSensitivity: Float = 0.0008  // Match sensitivity with up/down and sideways
-        let newDistanceFromUser = startDistanceFromUser - (gestureOffset.z * distanceSensitivity)  // Invert Z movement
-        
-        // Calculate new position on orbital path around user
-        let startDirection = normalize(panStartPosition! - userPosition)
-        let startAngle = atan2(startDirection.x, startDirection.z)
-        let newAngle = startAngle + orbitalAngle
-        
-        let newPosition = SIMD3<Float>(
-            userPosition.x + sin(newAngle) * newDistanceFromUser,
-            panStartPosition!.y + (gestureOffset.y * 0.0008),  // Allow vertical movement
-            userPosition.z + cos(newAngle) * newDistanceFromUser
-        )
-        
-        // Set position in 3D space
+        // Update position directly
         container.setPosition(newPosition, relativeTo: nil)
         
-        // Rotate to face user like native windows
+        // Keep diagram facing user
+        let userPosition = SIMD3<Float>(0, newPosition.y, 0)
         let windowToUser = userPosition - newPosition
         let distanceToUser = simd_length(windowToUser)
         
         if distanceToUser > 0.001 {
-            // Calculate direction to user, keeping window parallel to ground
             let directionToUser = normalize(SIMD3<Float>(windowToUser.x, 0, windowToUser.z))
-            
-            // Create rotation to face user - smooth rotation like native windows
-            let targetOrientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: directionToUser)
+            let angle = atan2(directionToUser.x, directionToUser.z)
+            let targetOrientation = simd_quatf(angle: angle, axis: SIMD3<Float>(0, 1, 0))
             container.setOrientation(targetOrientation, relativeTo: nil)
         }
         
-        // Surface snapping during pan
-        print("🎯 Pan gesture active - checking for surface snapping")
+        // Check for surface snapping during pan
         checkForSurfaceSnapping(container: container, at: newPosition)
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
         
-        // Final snap check when pan ends
+        // Final position after pan gesture
         let finalPosition = container.position(relativeTo: nil)
-        print("🏁 Pan ended at position: \(finalPosition)")
-        if let snapTarget = findNearestSurfaceForSnapping(diagramPosition: finalPosition) {
-            print("🎯 Found snap target: \(snapTarget.id)")
+        
+        // Apply final comfort zone snapping
+        let comfortPosition = applyComfortZoneSnapping(finalPosition)
+        
+        // Smooth transition to final position with damping
+        let dampingFactor: Float = 0.85
+        let finalSmoothedPosition = mix(finalPosition, comfortPosition, t: dampingFactor)
+        
+        // Animate to final position
+        container.move(
+            to: Transform(
+                scale: container.scale,
+                rotation: container.orientation(relativeTo: nil),
+                translation: finalSmoothedPosition
+            ),
+            relativeTo: nil,
+            duration: 0.3,
+            timingFunction: .easeOut
+        )
+        
+        // Check for surface snapping at final position
+        if let snapTarget = findNearestSurfaceForSnapping(diagramPosition: finalSmoothedPosition) {
             performSnapToSurface(container: container, surface: snapTarget)
-        } else {
-            print("🚫 No snap target found")
         }
         
-        // Native visionOS windows don't have momentum - they stop immediately
-        // Just clear the pan state
+        // Reset pan state
         panStartPosition = nil
         panStartOrientation = nil
         isPanActive = false
@@ -586,20 +576,6 @@ class ElementViewModel: ObservableObject {
             updateConnections(in: content)
         }
     }
-
-    // Legacy surface anchor tracking removed - now using PlaneAnchor objects directly from AppModel
-    
-    // Legacy surface anchor removal removed - now using PlaneAnchor objects directly from AppModel
-    
-    // Legacy nearestSurfaceAnchor method removed - using PlaneAnchor objects directly
-    
-    // Legacy calculateDistanceToSurface method removed - using PlaneAnchor objects directly
-    
-    // Legacy isSurfaceSuitableForSnapping method removed - using PlaneAnchor objects directly
-    
-    // Legacy calculateOptimalSnapPosition method removed - using PlaneAnchor objects directly
-    
-    // Legacy snapToSurface method removed - using PlaneAnchor objects directly
     
     /// Performs the unsnap animation from a surface
     private func unsnapFromSurface(container: Entity) {
@@ -927,6 +903,130 @@ class ElementViewModel: ObservableObject {
         return labelEntity
     }
     
+    /// Apply spatial constraints to keep windows within user's comfortable field of view
+    private func applySpatialConstraints(_ position: SIMD3<Float>) -> SIMD3<Float> {
+        let boundaries = (
+            x: (-2.0 as Float, 2.0 as Float),
+            y: (-1.0 as Float, 1.5 as Float),
+            z: (0.5 as Float, 3.0 as Float)
+        )
+        
+        // Apply soft boundary resistance
+        var constrainedPosition = position
+        let resistanceThreshold: Float = 0.2  // Start applying resistance 20cm before boundary
+        let maxResistance: Float = 0.8  // Maximum 80% resistance
+        
+        // X-axis constraints
+        if position.x < boundaries.x.0 + resistanceThreshold {
+            let overshoot = (boundaries.x.0 + resistanceThreshold) - position.x
+            let resistance = min(maxResistance, overshoot / resistanceThreshold)
+            constrainedPosition.x = boundaries.x.0 + (position.x - boundaries.x.0) * (1.0 - resistance)
+        } else if position.x > boundaries.x.1 - resistanceThreshold {
+            let overshoot = position.x - (boundaries.x.1 - resistanceThreshold)
+            let resistance = min(maxResistance, overshoot / resistanceThreshold)
+            constrainedPosition.x = boundaries.x.1 - (boundaries.x.1 - position.x) * (1.0 - resistance)
+        }
+        
+        // Y-axis constraints
+        if position.y < boundaries.y.0 + resistanceThreshold {
+            let overshoot = (boundaries.y.0 + resistanceThreshold) - position.y
+            let resistance = min(maxResistance, overshoot / resistanceThreshold)
+            constrainedPosition.y = boundaries.y.0 + (position.y - boundaries.y.0) * (1.0 - resistance)
+        } else if position.y > boundaries.y.1 - resistanceThreshold {
+            let overshoot = position.y - (boundaries.y.1 - resistanceThreshold)
+            let resistance = min(maxResistance, overshoot / resistanceThreshold)
+            constrainedPosition.y = boundaries.y.1 - (boundaries.y.1 - position.y) * (1.0 - resistance)
+        }
+        
+        // Z-axis constraints
+        if position.z < boundaries.z.0 + resistanceThreshold {
+            let overshoot = (boundaries.z.0 + resistanceThreshold) - position.z
+            let resistance = min(maxResistance, overshoot / resistanceThreshold)
+            constrainedPosition.z = boundaries.z.0 + (position.z - boundaries.z.0) * (1.0 - resistance)
+        } else if position.z > boundaries.z.1 - resistanceThreshold {
+            let overshoot = position.z - (boundaries.z.1 - resistanceThreshold)
+            let resistance = min(maxResistance, overshoot / resistanceThreshold)
+            constrainedPosition.z = boundaries.z.1 - (boundaries.z.1 - position.z) * (1.0 - resistance)
+        }
+        
+        return constrainedPosition
+    }
+    
+    /// Apply comfort zone snapping that pulls windows to optimal viewing distance
+    private func applyComfortZoneSnapping(_ position: SIMD3<Float>) -> SIMD3<Float> {
+        let comfortDistance: Float = 1.2  // Optimal viewing distance
+        let snapThreshold: Float = 0.1    // 10cm snap threshold
+        let snapStrength: Float = 0.3     // Interpolation factor
+        
+        let userPosition = SIMD3<Float>(0, position.y, 0)  // User at same Y level
+        let distanceFromUser = simd_distance(position, userPosition)
+        
+        // Apply magnetic attraction to comfort zone
+        if abs(distanceFromUser - comfortDistance) < snapThreshold {
+            let direction = normalize(position - userPosition)
+            let comfortPosition = userPosition + direction * comfortDistance
+            return mix(position, comfortPosition, t: snapStrength)
+        }
+        
+        return position
+    }
+    
+    /// Update window orientation to face user while maintaining natural behavior
+    private func updateWindowOrientation(container: Entity, position: SIMD3<Float>) {
+        let userPosition = SIMD3<Float>(0, position.y, 0)
+        let windowToUser = userPosition - position
+        let distanceToUser = simd_length(windowToUser)
+        
+        if distanceToUser > 0.001 {
+            // Calculate direction to user, keeping window parallel to ground
+            let directionToUser = normalize(SIMD3<Float>(windowToUser.x, 0, windowToUser.z))
+            
+            // Create stable rotation using atan2
+            let angle = atan2(directionToUser.x, directionToUser.z)
+            let targetOrientation = simd_quatf(angle: angle, axis: SIMD3<Float>(0, 1, 0))
+            
+            // Apply lighter smoothing to orientation changes to prevent losing orientation
+            let currentOrientation = container.orientation(relativeTo: nil)
+            let smoothedOrientation = simd_slerp(currentOrientation, targetOrientation, 0.03)
+            container.setOrientation(smoothedOrientation, relativeTo: nil)
+        }
+    }
+    
+    /// Calculate the distance from a point to the nearest point on a plane surface
+    /// Takes into account the plane's bounds, not just the center
+    private func distanceToPlane(point: SIMD3<Float>, planeAnchor: PlaneAnchor) -> Float {
+        // Get plane's transform and position
+        let planeTransform = planeAnchor.originFromAnchorTransform
+        let planePosition = SIMD3<Float>(
+            planeTransform.columns.3.x,
+            planeTransform.columns.3.y,
+            planeTransform.columns.3.z
+        )
+        let planeRotation = simd_quatf(planeTransform)
+        
+        // Get plane normal (Y axis in plane's local space)
+        let planeNormal = planeRotation.act(SIMD3<Float>(0, 1, 0))
+        
+        // Get plane dimensions (convert Float16 to Float)
+        let planeExtent = planeAnchor.geometry.extent
+        let planeWidth = Float(planeExtent.width)  // Width along X axis
+        let planeHeight = Float(planeExtent.height)  // Height along Z axis
+        
+        // Transform point to plane's local space
+        let toPlane = planePosition - point
+        let localPoint = simd_inverse(planeRotation).act(toPlane)
+        
+        // Clamp the point to the plane bounds
+        let clampedX = Swift.max(-planeWidth/2, Swift.min(planeWidth/2, localPoint.x))
+        let clampedZ = Swift.max(-planeHeight/2, Swift.min(planeHeight/2, localPoint.z))
+        
+        // Find nearest point on the plane within bounds
+        let nearestOnPlane = planeRotation.act(SIMD3<Float>(clampedX, 0, clampedZ)) + planePosition
+        
+        // Calculate distance to the nearest point on the plane
+        return simd_distance(point, nearestOnPlane)
+    }
+    
     /// Check for surface snapping during pan gestures
     private func checkForSurfaceSnapping(container: Entity, at position: SIMD3<Float>) {
         let availableSurfaces = getAllSurfaceAnchors()
@@ -973,8 +1073,8 @@ class ElementViewModel: ObservableObject {
                 surfaceWorldTransform.columns.3.z
             )
             
-            // Calculate 3D distance to surface center
-            let distance = simd_distance(diagramPosition, surfacePosition)
+            // Calculate distance to nearest point on surface, not just center
+            let distance = distanceToPlane(point: diagramPosition, planeAnchor: surface)
             
             // Get surface type for better debug info
             let surfaceType = getSurfaceTypeName(surface)
