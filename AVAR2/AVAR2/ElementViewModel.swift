@@ -251,18 +251,19 @@ class ElementViewModel: ObservableObject {
             background.addChild(buttonContainer)
         }
 
-        // Add grab handle for dragging the entire window
+        // Add grab handle for dragging the entire window - full width like native visionOS
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
         let margin: Float = 0.1
-        let handleWidth: Float = min(bgWidth * 0.5, 0.5)
-        let handleHeight: Float = 0.025
-        let handleThickness: Float = 0.01
-        let handleMargin: Float = 0.02
+        let handleWidth: Float = bgWidth * 0.45  // 50% smaller grab bar
+        let handleHeight: Float = 0.015  // Slightly thinner for more native feel
+        let handleThickness: Float = 0.008  // Thinner for more subtle appearance
+        let handleMargin: Float = 0.015  // Closer to window
         let handleContainer = Entity()
         handleContainer.name = "grabHandle"
-        let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness])
-        let handleMaterial = SimpleMaterial(color: .white, isMetallic: false)
+        // Use rounded box for more native visionOS appearance
+        let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness], cornerRadius: handleHeight * 0.4)
+        let handleMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)  // More transparent like native
         let handleEntity = ModelEntity(mesh: handleMesh, materials: [handleMaterial])
         handleContainer.addChild(handleEntity)
         handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, 0.01]
@@ -455,28 +456,51 @@ class ElementViewModel: ObservableObject {
             return
         }
         
-        // Scale down the movement to match native visionOS sensitivity
-        let moveScale: Float = 0.0005  // Reduce sensitivity
-        let scaledOffset = gestureOffset * moveScale
-        let newPosition = panStartPosition! + scaledOffset
+        // Store initial orientation on first pan
+        if panStartOrientation == nil {
+            panStartOrientation = container.orientation(relativeTo: nil)
+        }
+        
+        // Native visionOS windows: lateral movement orbits around user, forward/back movement changes distance
+        let userPosition = SIMD3<Float>(0, panStartPosition!.y, 0)  // User at same Y level as start
+        let startDistanceFromUser = simd_length(panStartPosition! - userPosition)
+        
+        // Use X movement for orbital rotation (inverted to match natural movement)
+        // Add deadzone to prevent unwanted sideways movement during natural forward/back gestures
+        let orbitalSensitivity: Float = 0.0008  // Match sensitivity with up/down and forward/back
+        let xDeadzone: Float = 0.02  // Ignore small X movements to prevent unnatural sideways drift
+        let filteredXMovement = abs(gestureOffset.x) > xDeadzone ? gestureOffset.x : 0
+        let orbitalAngle = -filteredXMovement * orbitalSensitivity  // Invert X movement
+        
+        // Use Z movement for forward/backward distance changes
+        let distanceSensitivity: Float = 0.0008  // Match sensitivity with up/down and sideways
+        let newDistanceFromUser = startDistanceFromUser - (gestureOffset.z * distanceSensitivity)  // Invert Z movement
+        
+        // Calculate new position on orbital path around user
+        let startDirection = normalize(panStartPosition! - userPosition)
+        let startAngle = atan2(startDirection.x, startDirection.z)
+        let newAngle = startAngle + orbitalAngle
+        
+        let newPosition = SIMD3<Float>(
+            userPosition.x + sin(newAngle) * newDistanceFromUser,
+            panStartPosition!.y + (gestureOffset.y * 0.0008),  // Allow vertical movement
+            userPosition.z + cos(newAngle) * newDistanceFromUser
+        )
         
         // Set position in 3D space
         container.setPosition(newPosition, relativeTo: nil)
         
-        // Auto-rotate to face user but keep parallel to ground like native visionOS windows
-        let userPosition = SIMD3<Float>(0, newPosition.y, 0)  // User at same Y level as window
+        // Rotate to face user like native windows
         let windowToUser = userPosition - newPosition
         let distanceToUser = simd_length(windowToUser)
         
         if distanceToUser > 0.001 {
-            // Only rotate around Y axis to face user, keeping window parallel to ground
-            let directionToUser = normalize(SIMD3<Float>(windowToUser.x, 0, windowToUser.z))  // Zero out Y component
+            // Calculate direction to user, keeping window parallel to ground
+            let directionToUser = normalize(SIMD3<Float>(windowToUser.x, 0, windowToUser.z))
             
-            // Create rotation only around Y axis
-            if simd_length(scaledOffset) > 0.00001 {  // Only rotate on meaningful movement
-                let targetOrientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: directionToUser)
-                container.setOrientation(targetOrientation, relativeTo: nil)
-            }
+            // Create rotation to face user - smooth rotation like native windows
+            let targetOrientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: directionToUser)
+            container.setOrientation(targetOrientation, relativeTo: nil)
         }
         
         // Surface snapping during pan

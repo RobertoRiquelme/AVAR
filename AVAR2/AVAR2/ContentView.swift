@@ -31,7 +31,7 @@ struct ContentView: View {
             print("📋 ContentView task completed for: \(filename)")
         }
         .gesture(
-            DragGesture(minimumDistance: 0).targetedToAnyEntity()
+            DragGesture(minimumDistance: 5).targetedToAnyEntity()  // Small threshold like native visionOS
                 .onChanged { value in
                     var entity: Entity? = value.entity
                     while let current = entity {
