@@ -195,6 +195,13 @@ struct AVAR2: App {
                 .foregroundColor(.secondary)
 
                 Spacer()
+                
+                Button("Quit App") {
+                    exit(0)
+                }
+                .font(.title2)
+                .foregroundColor(.red)
+                
                 Text("\(fpsMonitor.fps) FPS")
                     .font(.title)
                     .padding(.bottom)
