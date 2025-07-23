@@ -161,175 +161,196 @@ class ElementViewModel: ObservableObject {
     /// Creates and positions all element entities in the scene.
     /// - Parameter onClose: Optional callback to invoke when the close button is tapped.
     func loadElements(in content: RealityViewContent, onClose: (() -> Void)? = nil) {
-
-        // Keep reference for dynamic updates
+        setupSceneContent(content)
+        
+        guard let normalizationContext = self.normalizationContext else {
+            logger.error("Missing normalization context; call loadData(from:) before loadElements(in:)")
+            return
+        }
+        
+        let container = createRootContainer(content: content, normalizationContext: normalizationContext)
+        let background = createBackgroundEntity(container: container, normalizationContext: normalizationContext)
+        
+        setupUIControls(background: background, normalizationContext: normalizationContext, onClose: onClose)
+        createAndPositionElements(container: container, normalizationContext: normalizationContext)
+        
+        updateConnections(in: content)
+        addOriginMarker()
+    }
+    
+    private func setupSceneContent(_ content: RealityViewContent) {
         self.sceneContent = content
-
-        // Remove previous graph container and background
+        
         if let existing = rootEntity {
             content.remove(existing)
         }
         if let bg = backgroundEntity {
             content.remove(bg)
         }
-
-        // Get dynamic position for this diagram from AppModel - uses persistent surface detection
+    }
+    
+    private func createRootContainer(content: RealityViewContent, normalizationContext: NormalizationContext) -> Entity {
         let pivot = appModel?.getNextDiagramPosition() ?? SIMD3<Float>(0, 1.0, -2.0)
         print("📍 Loading diagram at position: \(pivot)")
         print("📍 Available surfaces: \(appModel?.surfaceDetector.surfaceAnchors.count ?? 0)")
-
-        guard let normalizationContext = self.normalizationContext else {
-            logger.error("Missing normalization context; call loadData(from:) before loadElements(in:)")
-            return
-        }
-
-        // Compute size of background based on element positions
-        let bgWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
-        let bgHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
-        let bgDepth = normalizationContext.positionCenters.count > 2 ? 
-            Float(normalizationContext.positionRanges[2] / normalizationContext.globalRange * 2) : 0.01
-
-        // Create new root container under pivot (moves and scales all graph content)
+        
         let container = Entity()
         container.name = "graphRoot"
         container.position = pivot
         content.add(container)
         self.rootEntity = container
-
-        // Add invisible background under the same container to capture pan/zoom gestures
+        
+        return container
+    }
+    
+    private func createBackgroundEntity(container: Entity, normalizationContext: NormalizationContext) -> Entity {
+        let bgWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
+        let bgHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
+        let bgDepth = normalizationContext.positionCenters.count > 2 ? 
+            Float(normalizationContext.positionRanges[2] / normalizationContext.globalRange * 2) : 0.01
+        
         let background = Entity()
         background.name = "graphBackground"
         let bgShape = ShapeResource.generateBox(size: [bgWidth, bgHeight, bgDepth])
         background.components.set(CollisionComponent(shapes: [bgShape]))
-        // Input is managed by handle and close button; disable background as catch-all target
         background.position = .zero
         container.addChild(background)
         self.backgroundEntity = background
-
-        let hoverEffectComponent = HoverEffectComponent()
-
+        
+        return background
+    }
+    
+    private func setupUIControls(background: Entity, normalizationContext: NormalizationContext, onClose: (() -> Void)?) {
+        let bgWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
+        let bgHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
+        let bgDepth = normalizationContext.positionCenters.count > 2 ? 
+            Float(normalizationContext.positionRanges[2] / normalizationContext.globalRange * 2) : 0.01
+        
         if let onClose = onClose {
-            let buttonContainer = Entity()
-            buttonContainer.name = "closeButton"
-
-            // Native visionOS style close button - smaller, more refined
-            let buttonRadius: Float = 0.02  // Smaller radius for more native feel
-            let buttonThickness: Float = 0.008  // Slightly thicker for better visibility
-            let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
-            let buttonMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.8), isMetallic: false)  // Slightly transparent
-            let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
-            buttonEntity.transform.rotation = simd_quatf(angle: .pi/2, axis: [1, 0, 0])
-            buttonContainer.addChild(buttonEntity)
-
-            // Use a more native "×" symbol with better positioning
-            let textMesh = MeshResource.generateText(
-                "×",
-                extrusionDepth: 0.002,
-                font: .systemFont(ofSize: 0.06),  // Smaller, more proportional
-                containerFrame: .zero,
-                alignment: .center,
-                lineBreakMode: .byWordWrapping
-            )
-            let textMaterial = SimpleMaterial(color: .black.withAlphaComponent(0.7), isMetallic: false)  // Dark gray for better contrast
-            let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
-            
-            // Center the X symbol properly by accounting for text mesh bounds
-            let textBounds = textMesh.bounds
-            let textOffset = SIMD3<Float>(-textBounds.center.x, -textBounds.center.y, buttonThickness / 2 + 0.001)
-            textEntity.position = textOffset
-            buttonContainer.addChild(textEntity)
-
-            // Position close button beside the drag bar like native visionOS
-            let halfW = bgWidth / 2
-            let halfH = bgHeight / 2
-            let handleWidth: Float = bgWidth * 0.65  // Match updated drag bar width
-            let handleHeight: Float = 0.018  // Match updated drag bar height
-            let handleMargin: Float = 0.015  // Match current drag bar margin
-            let handlePosY = -halfH - handleHeight / 2 - handleMargin
-            let spacing: Float = 0.015  // Small spacing between button and drag bar
-            let closePosX = -handleWidth / 2 - buttonRadius - spacing  // Position to the left of drag bar
-            // Position on front face for 3D diagrams, slightly in front for 2D diagrams
-            let closePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
-            buttonContainer.position = [closePosX, handlePosY, closePosZ]
-
-            buttonContainer.generateCollisionShapes(recursive: true)
-            buttonContainer.components.set(InputTargetComponent())
-            buttonContainer.components.set(hoverEffectComponent)
-            for child in buttonContainer.children {
-                child.components.set(InputTargetComponent())
-                child.components.set(hoverEffectComponent)
-            }
-            background.addChild(buttonContainer)
+            let closeButton = createCloseButton(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth, onClose: onClose)
+            background.addChild(closeButton)
         }
-
-        // Add grab handle for dragging the entire window - full width like native visionOS
-        let halfW = bgWidth / 2
+        
+        let grabHandle = createGrabHandle(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth)
+        background.addChild(grabHandle)
+        self.grabHandleEntity = grabHandle
+        print("🎯 Grab handle entity set: \(grabHandle.name)")
+        
+        let zoomHandle = createZoomHandle(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth)
+        background.addChild(zoomHandle)
+        self.zoomHandleEntity = zoomHandle
+        print("🔍 Zoom handle entity set: \(zoomHandle.name)")
+    }
+    
+    private func createCloseButton(bgWidth: Float, bgHeight: Float, bgDepth: Float, onClose: @escaping () -> Void) -> Entity {
+        let buttonContainer = Entity()
+        buttonContainer.name = "closeButton"
+        
+        let buttonRadius: Float = 0.02
+        let buttonThickness: Float = 0.008
+        let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
+        let buttonMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.8), isMetallic: false)
+        let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
+        buttonEntity.transform.rotation = simd_quatf(angle: .pi/2, axis: [1, 0, 0])
+        buttonContainer.addChild(buttonEntity)
+        
+        let textMesh = MeshResource.generateText(
+            "×",
+            extrusionDepth: 0.002,
+            font: .systemFont(ofSize: 0.06),
+            containerFrame: .zero,
+            alignment: .center,
+            lineBreakMode: .byWordWrapping
+        )
+        let textMaterial = SimpleMaterial(color: .black.withAlphaComponent(0.7), isMetallic: false)
+        let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
+        
+        let textBounds = textMesh.bounds
+        let textOffset = SIMD3<Float>(-textBounds.center.x, -textBounds.center.y, buttonThickness / 2 + 0.001)
+        textEntity.position = textOffset
+        buttonContainer.addChild(textEntity)
+        
+        positionCloseButton(buttonContainer, bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth, buttonRadius: buttonRadius)
+        setupButtonInteraction(buttonContainer)
+        
+        return buttonContainer
+    }
+    
+    private func positionCloseButton(_ buttonContainer: Entity, bgWidth: Float, bgHeight: Float, bgDepth: Float, buttonRadius: Float) {
         let halfH = bgHeight / 2
-        let margin: Float = 0.1
-        let handleWidth: Float = bgWidth * 0.65  // Even wider grab bar for better usability
-        let handleHeight: Float = 0.018  // Slightly thicker for better visibility and touch target
-        let handleThickness: Float = 0.008  // Thinner for more subtle appearance
-        let handleMargin: Float = 0.015  // Closer to window
+        let handleWidth: Float = bgWidth * 0.65
+        let handleHeight: Float = 0.018
+        let handleMargin: Float = 0.015
+        let handlePosY = -halfH - handleHeight / 2 - handleMargin
+        let spacing: Float = 0.015
+        let closePosX = -handleWidth / 2 - buttonRadius - spacing
+        let closePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
+        buttonContainer.position = [closePosX, handlePosY, closePosZ]
+    }
+    
+    private func createGrabHandle(bgWidth: Float, bgHeight: Float, bgDepth: Float) -> Entity {
+        let halfH = bgHeight / 2
+        let handleWidth: Float = bgWidth * 0.65
+        let handleHeight: Float = 0.018
+        let handleThickness: Float = 0.008
+        let handleMargin: Float = 0.015
         let handleContainer = Entity()
         handleContainer.name = "grabHandle"
-        // Use rounded box for more native visionOS appearance
+        
         let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness], cornerRadius: handleHeight * 0.4)
-        let handleMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)  // More transparent like native
+        let handleMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)
         let handleEntity = ModelEntity(mesh: handleMesh, materials: [handleMaterial])
         handleContainer.addChild(handleEntity)
-        // Position on front face for 3D diagrams, slightly in front for 2D diagrams
+        
         let handlePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
         handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, handlePosZ]
-        handleContainer.generateCollisionShapes(recursive: true)
-        handleContainer.components.set(InputTargetComponent())
-        handleContainer.components.set(hoverEffectComponent)
-        for child in handleContainer.children {
+        
+        setupButtonInteraction(handleContainer)
+        
+        return handleContainer
+    }
+    
+    private func setupButtonInteraction(_ buttonContainer: Entity) {
+        let hoverEffectComponent = HoverEffectComponent()
+        buttonContainer.generateCollisionShapes(recursive: true)
+        buttonContainer.components.set(InputTargetComponent())
+        buttonContainer.components.set(hoverEffectComponent)
+        for child in buttonContainer.children {
             child.components.set(InputTargetComponent())
             child.components.set(hoverEffectComponent)
         }
-        background.addChild(handleContainer)
-        
-        // Store reference for adding snap messages
-        self.grabHandleEntity = handleContainer
-        print("🎯 Grab handle entity set: \(handleContainer.name)")
-
-        // Add zoom handle at bottom right of diagram
-        let zoomHandleContainer = createZoomHandle(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth)
-        background.addChild(zoomHandleContainer)
-        self.zoomHandleEntity = zoomHandleContainer
-        print("🔍 Zoom handle entity set: \(zoomHandleContainer.name)")
-
-        // Clear any existing entities and lines
+    }
+    
+    private func createAndPositionElements(container: Entity, normalizationContext: NormalizationContext) {
         entityMap.removeAll()
         lineEntities.removeAll()
+        let hoverEffectComponent = HoverEffectComponent()
+        
         for element in elements {
             guard let coords = element.position else { continue }
             let entity = createEntity(for: element)
-
-            let dims = normalizationContext.positionCenters.count
-            let rawX = coords.count > 0 ? coords[0] : 0
-            let rawY = coords.count > 1 ? coords[1] : 0
-            let rawZ = dims > 2 && coords.count > 2 ? coords[2] : 0
-            let globalRange = normalizationContext.globalRange
-            let normX = (rawX - normalizationContext.positionCenters[0]) / globalRange * 2
-            let normY = (rawY - normalizationContext.positionCenters[1]) / globalRange * 2
-            let normZ = dims > 2
-                ? (rawZ - normalizationContext.positionCenters[2]) / globalRange * 2
-                : 0
-            let yPos = normalizationContext.is2D ? -Float(normY) : Float(normY)
-            let localPos = SIMD3<Float>(Float(normX), yPos, Float(normZ))
+            
+            let localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
             entity.position = localPos
             entity.components.set(hoverEffectComponent)
             container.addChild(entity)
             entityMap[element.id] = entity
         }
-
-        // Draw connections and grid under root
-        updateConnections(in: content)
-        //addCoordinateGrid()
-        
-        // Add red sphere at [0,0,0] to show diagram center
-        addOriginMarker()
+    }
+    
+    private func calculateElementPosition(coords: [Double], normalizationContext: NormalizationContext) -> SIMD3<Float> {
+        let dims = normalizationContext.positionCenters.count
+        let rawX = coords.count > 0 ? coords[0] : 0
+        let rawY = coords.count > 1 ? coords[1] : 0
+        let rawZ = dims > 2 && coords.count > 2 ? coords[2] : 0
+        let globalRange = normalizationContext.globalRange
+        let normX = (rawX - normalizationContext.positionCenters[0]) / globalRange * 2
+        let normY = (rawY - normalizationContext.positionCenters[1]) / globalRange * 2
+        let normZ = dims > 2
+            ? (rawZ - normalizationContext.positionCenters[2]) / globalRange * 2
+            : 0
+        let yPos = normalizationContext.is2D ? -Float(normY) : Float(normY)
+        return SIMD3<Float>(Float(normX), yPos, Float(normZ))
     }
 
     /// Draws lines for each edge specified by fromId/toId on edge elements.
@@ -453,35 +474,50 @@ class ElementViewModel: ObservableObject {
     /// Handle pan gesture with native visionOS WindowGroup-like behavior
     func handlePanChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
-
-        // Get gesture translation in 3D space
+        
+        let gestureOffset = extractGestureOffset(from: value)
+        
+        if !initializePanStateIfNeeded(container: container) {
+            return
+        }
+        
+        let newPosition = calculateNewPanPosition(gestureOffset: gestureOffset)
+        updateContainerPosition(container: container, position: newPosition)
+        updateContainerOrientation(container: container, position: newPosition)
+        checkForSurfaceSnapping(container: container, at: newPosition)
+    }
+    
+    private func extractGestureOffset(from value: EntityTargetValue<DragGesture.Value>) -> SIMD3<Float> {
         let translation = value.gestureValue.translation3D
-        let gestureOffset = SIMD3<Float>(
+        return SIMD3<Float>(
             Float(translation.x),
             -Float(translation.y),  // Invert Y axis for visionOS coordinate system
             Float(translation.z)
         )
-        
-        // Initialize pan state on first gesture
+    }
+    
+    private func initializePanStateIfNeeded(container: Entity) -> Bool {
         if panStartPosition == nil {
             panStartPosition = container.position(relativeTo: nil)
             isPanActive = true
-            return
+            return false
         }
-        
-        // Simple 1:1 movement with proper sensitivity
+        return true
+    }
+    
+    private func calculateNewPanPosition(gestureOffset: SIMD3<Float>) -> SIMD3<Float> {
         let sensitivity: Float = 0.0008
         let scaledGesture = gestureOffset * sensitivity
-        
-        // Calculate new position directly - no complex logic
-        let newPosition = panStartPosition! + scaledGesture
-        
-        // Update position directly
-        container.setPosition(newPosition, relativeTo: nil)
-        
-        // Keep diagram facing user
-        let userPosition = SIMD3<Float>(0, newPosition.y, 0)
-        let windowToUser = userPosition - newPosition
+        return panStartPosition! + scaledGesture
+    }
+    
+    private func updateContainerPosition(container: Entity, position: SIMD3<Float>) {
+        container.setPosition(position, relativeTo: nil)
+    }
+    
+    private func updateContainerOrientation(container: Entity, position: SIMD3<Float>) {
+        let userPosition = SIMD3<Float>(0, position.y, 0)
+        let windowToUser = userPosition - position
         let distanceToUser = simd_length(windowToUser)
         
         if distanceToUser > 0.001 {
@@ -490,47 +526,52 @@ class ElementViewModel: ObservableObject {
             let targetOrientation = simd_quatf(angle: angle, axis: SIMD3<Float>(0, 1, 0))
             container.setOrientation(targetOrientation, relativeTo: nil)
         }
-        
-        // Check for surface snapping during pan
-        checkForSurfaceSnapping(container: container, at: newPosition)
     }
 
     func handlePanEnded(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity else { return }
         
-        // Final position after pan gesture
         let finalPosition = container.position(relativeTo: nil)
+        let smoothedPosition = calculateFinalPanPosition(finalPosition)
         
-        // Apply final comfort zone snapping
+        animateToFinalPosition(container: container, position: smoothedPosition)
+        handleSurfaceSnappingOnPanEnd(container: container, position: smoothedPosition)
+        resetPanState()
+        updateConnectionsAfterPan()
+    }
+    
+    private func calculateFinalPanPosition(_ finalPosition: SIMD3<Float>) -> SIMD3<Float> {
         let comfortPosition = applyComfortZoneSnapping(finalPosition)
-        
-        // Smooth transition to final position with damping
         let dampingFactor: Float = 0.85
-        let finalSmoothedPosition = mix(finalPosition, comfortPosition, t: dampingFactor)
-        
-        // Animate to final position
+        return mix(finalPosition, comfortPosition, t: dampingFactor)
+    }
+    
+    private func animateToFinalPosition(container: Entity, position: SIMD3<Float>) {
         container.move(
             to: Transform(
                 scale: container.scale,
                 rotation: container.orientation(relativeTo: nil),
-                translation: finalSmoothedPosition
+                translation: position
             ),
             relativeTo: nil,
             duration: 0.3,
             timingFunction: .easeOut
         )
-        
-        // Check for surface snapping at final position
-        if let snapTarget = findNearestSurfaceForSnapping(diagramPosition: finalSmoothedPosition) {
+    }
+    
+    private func handleSurfaceSnappingOnPanEnd(container: Entity, position: SIMD3<Float>) {
+        if let snapTarget = findNearestSurfaceForSnapping(diagramPosition: position) {
             performSnapToSurface(container: container, surface: snapTarget)
         }
-        
-        // Reset pan state
+    }
+    
+    private func resetPanState() {
         panStartPosition = nil
         panStartOrientation = nil
         isPanActive = false
-
-        // Final update of connection lines
+    }
+    
+    private func updateConnectionsAfterPan() {
         if let content = sceneContent {
             updateConnections(in: content)
         }
@@ -623,6 +664,10 @@ class ElementViewModel: ObservableObject {
             } else {
                 return "Surface"
             }
+        case .notAvailable:
+            return "Surface"
+        case .undetermined:
+            return "Surface"
         @unknown default:
             return "Surface"
         }
@@ -1034,8 +1079,8 @@ class ElementViewModel: ObservableObject {
         )
         let planeRotation = simd_quatf(planeTransform)
         
-        // Get plane normal (Y axis in plane's local space)
-        let planeNormal = planeRotation.act(SIMD3<Float>(0, 1, 0))
+        // Get plane normal (Y axis in plane's local space) - used for distance calculations
+        _ = planeRotation.act(SIMD3<Float>(0, 1, 0))
         
         // Get plane dimensions (convert Float16 to Float)
         let planeExtent = planeAnchor.geometry.extent
@@ -1086,50 +1131,49 @@ class ElementViewModel: ObservableObject {
     /// Find the nearest surface for snapping based on diagram type
     /// 2D diagrams snap to vertical surfaces (walls), 3D diagrams snap to horizontal surfaces (floors/tables)
     private func findNearestSurfaceForSnapping(diagramPosition: SIMD3<Float>) -> PlaneAnchor? {
-        var closest: (surface: PlaneAnchor, distance: Float)? = nil
-        
         let availableSurfaces = getAllSurfaceAnchors()
         let diagramType = isGraph2D ? "2D" : "3D"
         let targetSurfaceType = isGraph2D ? "vertical (walls)" : "horizontal (floors/tables)"
         
         print("🔍 Checking \(availableSurfaces.count) PERSISTENT surfaces for \(diagramType) diagram snapping to \(targetSurfaceType) at position \(diagramPosition)")
         
-        for surface in availableSurfaces {
-            // Get surface position in world space using proper transform
-            let surfaceWorldTransform = surface.originFromAnchorTransform
-            let surfacePosition = SIMD3<Float>(
-                surfaceWorldTransform.columns.3.x,
-                surfaceWorldTransform.columns.3.y,
-                surfaceWorldTransform.columns.3.z
-            )
-            
-            // Calculate distance to nearest point on surface, not just center
-            let distance = distanceToPlane(point: diagramPosition, planeAnchor: surface)
-            
-            // Get surface type for better debug info
+        let validSurfaces = filterValidSurfaces(availableSurfaces)
+        let closest = findClosestSurface(validSurfaces, diagramPosition: diagramPosition)
+        
+        logSnapResult(closest: closest, diagramType: diagramType, targetSurfaceType: targetSurfaceType)
+        return closest?.surface
+    }
+    
+    private func filterValidSurfaces(_ surfaces: [PlaneAnchor]) -> [PlaneAnchor] {
+        return surfaces.filter { surface in
             let surfaceType = getSurfaceTypeName(surface)
-            print("📍 Surface \(surface.id) (\(surfaceType))")
-            print("   📍 Surface world position: \(surfacePosition)")
-            print("   📍 Diagram position: \(diagramPosition)")
-            print("   📍 Distance: \(distance)m")
-            
-            // Check if surface matches the diagram type requirements
             let isValidSurface: Bool
+            
             if isGraph2D {
-                // 2D diagrams snap to all vertical surfaces, including unknowns
                 isValidSurface = isVerticalSurface(surface)
                 if !isValidSurface {
                     print("🚫 Skipping non-vertical surface for 2D diagram: \(surface.id) (\(surfaceType))")
-                    continue
                 }
             } else {
-                // 3D diagrams only snap to horizontal surfaces (floors, tables, ceilings)
                 isValidSurface = isHorizontalSurface(surface) || surfaceType == "Floor" || surfaceType == "Table"
                 if !isValidSurface {
                     print("🚫 Skipping non-horizontal surface for 3D diagram: \(surface.id) (\(surfaceType))")
-                    continue
                 }
             }
+            
+            return isValidSurface
+        }
+    }
+    
+    private func findClosestSurface(_ surfaces: [PlaneAnchor], diagramPosition: SIMD3<Float>) -> (surface: PlaneAnchor, distance: Float)? {
+        var closest: (surface: PlaneAnchor, distance: Float)? = nil
+        
+        for surface in surfaces {
+            let surfacePosition = extractSurfacePosition(surface)
+            let distance = distanceToPlane(point: diagramPosition, planeAnchor: surface)
+            let surfaceType = getSurfaceTypeName(surface)
+            
+            logSurfaceInfo(surface: surface, surfaceType: surfaceType, surfacePosition: surfacePosition, diagramPosition: diagramPosition, distance: distance)
             
             if distance <= snapDistance {
                 if closest == nil || distance < closest!.distance {
@@ -1141,114 +1185,148 @@ class ElementViewModel: ObservableObject {
             }
         }
         
+        return closest
+    }
+    
+    private func extractSurfacePosition(_ surface: PlaneAnchor) -> SIMD3<Float> {
+        let surfaceWorldTransform = surface.originFromAnchorTransform
+        return SIMD3<Float>(
+            surfaceWorldTransform.columns.3.x,
+            surfaceWorldTransform.columns.3.y,
+            surfaceWorldTransform.columns.3.z
+        )
+    }
+    
+    private func logSurfaceInfo(surface: PlaneAnchor, surfaceType: String, surfacePosition: SIMD3<Float>, diagramPosition: SIMD3<Float>, distance: Float) {
+        print("📍 Surface \(surface.id) (\(surfaceType))")
+        print("   📍 Surface world position: \(surfacePosition)")
+        print("   📍 Diagram position: \(diagramPosition)")
+        print("   📍 Distance: \(distance)m")
+    }
+    
+    private func logSnapResult(closest: (surface: PlaneAnchor, distance: Float)?, diagramType: String, targetSurfaceType: String) {
         if let result = closest?.surface {
             let surfaceType = getSurfaceTypeName(result)
             print("✅ Found snap target for \(diagramType) diagram: \(result.id) (\(surfaceType)) at \(closest!.distance)m")
         } else {
             print("❌ No \(targetSurfaceType) surfaces within snap distance (\(snapDistance)m) for \(diagramType) diagram")
         }
-        
-        return closest?.surface
     }
     
     /// Perform smooth snap animation to any surface type
     private func performSnapToSurface(container: Entity, surface: PlaneAnchor) {
-        // Get current diagram position
         let diagramPosition = container.position(relativeTo: nil)
-        
-        // Find the nearest point on the surface to the diagram
         let nearestPointOnSurface = findNearestPointOnSurface(diagramPosition: diagramPosition, surface: surface)
-        
-        // Get surface orientation using proper world space transforms
         let surfaceWorldTransform = surface.originFromAnchorTransform
         let surfaceRotation = simd_quatf(surfaceWorldTransform)
         let surfaceType = getSurfaceTypeName(surface)
         
-        var snapPosition: SIMD3<Float>
-        var diagramOrientation: simd_quatf
-        let offsetDistance: Float = 0.05  // 5cm offset
+        let (snapPosition, diagramOrientation) = calculateSnapPositionAndOrientation(
+            nearestPointOnSurface: nearestPointOnSurface,
+            surfaceRotation: surfaceRotation,
+            surfaceType: surfaceType,
+            container: container
+        )
         
-        // Determine snap behavior based on surface type
+        animateToSnapPosition(container: container, position: snapPosition, orientation: diagramOrientation)
+        finalizeSnap(surface: surface, surfaceType: surfaceType)
+    }
+    
+    private func calculateSnapPositionAndOrientation(
+        nearestPointOnSurface: SIMD3<Float>,
+        surfaceRotation: simd_quatf,
+        surfaceType: String,
+        container: Entity
+    ) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+        let offsetDistance: Float = 0.05
+        
         if surfaceType.lowercased().contains("wall") {
-            // For walls: position diagram vertically, facing out from wall
-            // Get the surface normal by transforming the Y axis (surface normal)
-            let wallNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            snapPosition = nearestPointOnSurface + (wallNormal * offsetDistance)
-            
-            // Orient diagram to align with wall surface
-            let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
-            diagramOrientation = surfaceRotation * verticalRotation
-            print("📌 Snapping to wall at \(snapPosition)")
+            return calculateWallSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance)
         } else if surfaceType.lowercased().contains("table") || surfaceType.lowercased().contains("floor") {
-            // For horizontal surfaces: position diagram flat on surface
-            let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            
-            // For 3D diagrams, calculate the bottom offset using the lowest entity position
-            let bottomOffset: Float
-            if !isGraph2D {
-                // For 3D diagrams, we need to lift the diagram so the lowest entity sits on the surface
-                let lowestEntityY = findLowestEntityPosition()
-                // The lowest entity needs to be lifted to sit on the surface
-                // We lift by the absolute value of the lowest Y position plus the surface offset
-                bottomOffset = offsetDistance - lowestEntityY  // Lift by the depth of the lowest entity
-                print("📌 3D diagram bottom offset: \(bottomOffset), lowest entity Y: \(lowestEntityY)")
-            } else {
-                // For 2D diagrams, use standard offset
-                bottomOffset = offsetDistance
-            }
-            
-            snapPosition = nearestPointOnSurface + (surfaceNormal * bottomOffset)
-            diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))  // Keep upright
-            print("📌 Snapping to horizontal surface at \(snapPosition)")
+            return calculateHorizontalSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance)
         } else if surfaceType.lowercased().contains("ceiling") {
-            // For ceiling: position diagram hanging from ceiling
-            let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            
-            // For 3D diagrams, calculate the top offset using the highest entity position
-            let topOffset: Float
-            if !isGraph2D {
-                // For 3D diagrams, we need to lower the diagram so the highest entity touches the ceiling
-                let highestEntityY = findHighestEntityPosition()
-                // The highest entity needs to be lowered to touch the ceiling
-                // We lower by the absolute value of the highest Y position plus the surface offset
-                topOffset = offsetDistance + highestEntityY  // Lower by the height of the highest entity
-                print("📌 3D diagram top offset: \(topOffset), highest entity Y: \(highestEntityY)")
-            } else {
-                // For 2D diagrams, use standard offset
-                topOffset = offsetDistance
-            }
-            
-            snapPosition = nearestPointOnSurface - (surfaceNormal * topOffset)
-            let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
-            diagramOrientation = upsideDownRotation
-            print("📌 Snapping to ceiling at \(snapPosition)")
+            return calculateCeilingSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance)
         } else {
-            // For any other surface: use simple position matching with surface normal
-            let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
-            snapPosition = nearestPointOnSurface + (surfaceNormal * offsetDistance)
-            diagramOrientation = container.orientation(relativeTo: nil)  // Keep current orientation
-            print("📌 Snapping to surface at \(snapPosition)")
+            return calculateGenericSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance, container: container)
         }
-        
-        // Animate to snap position
+    }
+    
+    private func calculateWallSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+        let wallNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+        let snapPosition = nearestPointOnSurface + (wallNormal * offsetDistance)
+        let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
+        let diagramOrientation = surfaceRotation * verticalRotation
+        print("📌 Snapping to wall at \(snapPosition)")
+        return (snapPosition, diagramOrientation)
+    }
+    
+    private func calculateHorizontalSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+        let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+        let bottomOffset = calculateBottomOffset(offsetDistance: offsetDistance)
+        let snapPosition = nearestPointOnSurface + (surfaceNormal * bottomOffset)
+        let diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+        print("📌 Snapping to horizontal surface at \(snapPosition)")
+        return (snapPosition, diagramOrientation)
+    }
+    
+    private func calculateCeilingSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+        let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+        let topOffset = calculateTopOffset(offsetDistance: offsetDistance)
+        let snapPosition = nearestPointOnSurface - (surfaceNormal * topOffset)
+        let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
+        print("📌 Snapping to ceiling at \(snapPosition)")
+        return (snapPosition, upsideDownRotation)
+    }
+    
+    private func calculateGenericSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float, container: Entity) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+        let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
+        let snapPosition = nearestPointOnSurface + (surfaceNormal * offsetDistance)
+        let diagramOrientation = container.orientation(relativeTo: nil)
+        print("📌 Snapping to surface at \(snapPosition)")
+        return (snapPosition, diagramOrientation)
+    }
+    
+    private func calculateBottomOffset(offsetDistance: Float) -> Float {
+        if !isGraph2D {
+            let lowestEntityY = findLowestEntityPosition()
+            let bottomOffset = offsetDistance - lowestEntityY
+            print("📌 3D diagram bottom offset: \(bottomOffset), lowest entity Y: \(lowestEntityY)")
+            return bottomOffset
+        } else {
+            return offsetDistance
+        }
+    }
+    
+    private func calculateTopOffset(offsetDistance: Float) -> Float {
+        if !isGraph2D {
+            let highestEntityY = findHighestEntityPosition()
+            let topOffset = offsetDistance + highestEntityY
+            print("📌 3D diagram top offset: \(topOffset), highest entity Y: \(highestEntityY)")
+            return topOffset
+        } else {
+            return offsetDistance
+        }
+    }
+    
+    private func animateToSnapPosition(container: Entity, position: SIMD3<Float>, orientation: simd_quatf) {
         container.move(
             to: Transform(
                 scale: container.scale,
-                rotation: diagramOrientation,
-                translation: snapPosition
+                rotation: orientation,
+                translation: position
             ),
             relativeTo: nil,
             duration: 0.4,
             timingFunction: .easeOut
         )
-        
+    }
+    
+    private func finalizeSnap(surface: PlaneAnchor, surfaceType: String) {
         currentSnappedSurface = surface
         let message = "✅ Snapped to \(surfaceType)!"
         print("✅ \(message)")
-        // Show message using existing overlay system
         setSnapStatusMessage(message)
         
-        // Auto-clear message after 3 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
             if self.snapStatusMessage.contains("Snapped") {
                 self.setSnapStatusMessage("")

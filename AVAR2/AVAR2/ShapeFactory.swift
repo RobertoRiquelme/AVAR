@@ -55,7 +55,12 @@ struct NormalizationContext {
 extension ElementDTO {
     /// Builds the mesh and material for this element, using the given normalization context.
     func meshAndMaterial(normalization: NormalizationContext) -> (mesh: MeshResource, material: SimpleMaterial) {
-        // Determine base color
+        let material = createMaterial()
+        let mesh = createMesh(normalization: normalization)
+        return (mesh, material)
+    }
+    
+    private func createMaterial() -> SimpleMaterial {
         let rgba = self.color ?? self.shape?.color ?? [0.2, 0.4, 1.0, 1.0]
         let uiColor = UIColor(
             red: CGFloat(rgba[0]),
@@ -63,52 +68,91 @@ extension ElementDTO {
             blue: CGFloat(rgba[2]),
             alpha: rgba.count > 3 ? CGFloat(rgba[3]) : 1.0
         )
-        let material = SimpleMaterial(color: uiColor, roughness: 0.5, isMetallic: false)
-
+        return SimpleMaterial(color: uiColor, roughness: 0.5, isMetallic: false)
+    }
+    
+    private func createMesh(normalization: NormalizationContext) -> MeshResource {
         let desc = shape?.shapeDescription?.lowercased() ?? ""
         let extent = shape?.extent ?? []
-
-        func normalized(_ index: Int, defaultValue: Double) -> Float {
+        
+        let normalized = createNormalizationFunction(extent: extent, normalization: normalization)
+        
+        if desc.contains("rt") {
+            return createRTMesh(desc: desc, normalized: normalized)
+        } else {
+            return create3DMesh(desc: desc, normalized: normalized)
+        }
+    }
+    
+    private func createNormalizationFunction(extent: [Double], normalization: NormalizationContext) -> (Int, Double) -> Float {
+        return { index, defaultValue in
             guard index < extent.count else { return Float(defaultValue) }
             return Float(extent[index] / normalization.globalRange * 2)
         }
-
-        let mesh: MeshResource
-        if desc.contains("rt") {
-            if desc.contains("box") {
-                let w = normalized(0, defaultValue: 0.1)
-                let h = normalized(1, defaultValue: 0.1)
-                let d = normalized(2, defaultValue: 0.01)
-                mesh = MeshResource.generateBox(size: SIMD3(w, h, d))
-            } else if desc.contains("ellipse") {
-                let h = normalized(0, defaultValue: 0.01)
-                let r = normalized(1, defaultValue: Double(h * 2))
-                mesh = MeshResource.generateCylinder(height: h, radius: r)
-            } else {
-                mesh = MeshResource.generateBox(size: SIMD3<Float>(0, 0, 0))
-            }
+    }
+    
+    private func createRTMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
+        if desc.contains("box") {
+            return createRTBox(normalized: normalized)
+        } else if desc.contains("ellipse") {
+            return createRTEllipse(normalized: normalized)
         } else {
-            if desc.contains("cube") {
-                let w = normalized(0, defaultValue: 0.1)
-                let h = normalized(1, defaultValue: 0.1)
-                let d = normalized(2, defaultValue: 0.1)
-                mesh = MeshResource.generateBox(size: SIMD3(w, h, d))
-            } else if desc.contains("sphere") {
-                let r = normalized(0, defaultValue: 0.05)
-                mesh = MeshResource.generateSphere(radius: r)
-            } else if desc.contains("cylinder") {
-                let r = normalized(0, defaultValue: 0.05)
-                let h = normalized(1, defaultValue: Double(r * 2))
-                mesh = MeshResource.generateCylinder(height: h, radius: r)
-            } else if desc.contains("cone") {
-                let r = normalized(0, defaultValue: 0.05)
-                let h = normalized(1, defaultValue: Double(r * 2))
-                mesh = MeshResource.generateCone(height: h, radius: r)
-            } else {
-                mesh = MeshResource.generateBox(size: SIMD3<Float>(0, 0, 0))
-            }
+            return createEmptyMesh()
         }
-
-        return (mesh, material)
+    }
+    
+    private func create3DMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
+        if desc.contains("cube") {
+            return createCube(normalized: normalized)
+        } else if desc.contains("sphere") {
+            return createSphere(normalized: normalized)
+        } else if desc.contains("cylinder") {
+            return createCylinder(normalized: normalized)
+        } else if desc.contains("cone") {
+            return createCone(normalized: normalized)
+        } else {
+            return createEmptyMesh()
+        }
+    }
+    
+    private func createRTBox(normalized: (Int, Double) -> Float) -> MeshResource {
+        let w = normalized(0, 0.1)
+        let h = normalized(1, 0.1)
+        let d = normalized(2, 0.01)
+        return MeshResource.generateBox(size: SIMD3(w, h, d))
+    }
+    
+    private func createRTEllipse(normalized: (Int, Double) -> Float) -> MeshResource {
+        let h = normalized(0, 0.01)
+        let r = normalized(1, Double(h * 2))
+        return MeshResource.generateCylinder(height: h, radius: r)
+    }
+    
+    private func createCube(normalized: (Int, Double) -> Float) -> MeshResource {
+        let w = normalized(0, 0.1)
+        let h = normalized(1, 0.1)
+        let d = normalized(2, 0.1)
+        return MeshResource.generateBox(size: SIMD3(w, h, d))
+    }
+    
+    private func createSphere(normalized: (Int, Double) -> Float) -> MeshResource {
+        let r = normalized(0, 0.05)
+        return MeshResource.generateSphere(radius: r)
+    }
+    
+    private func createCylinder(normalized: (Int, Double) -> Float) -> MeshResource {
+        let r = normalized(0, 0.05)
+        let h = normalized(1, Double(r * 2))
+        return MeshResource.generateCylinder(height: h, radius: r)
+    }
+    
+    private func createCone(normalized: (Int, Double) -> Float) -> MeshResource {
+        let r = normalized(0, 0.05)
+        let h = normalized(1, Double(r * 2))
+        return MeshResource.generateCone(height: h, radius: r)
+    }
+    
+    private func createEmptyMesh() -> MeshResource {
+        return MeshResource.generateBox(size: SIMD3<Float>(0, 0, 0))
     }
 }
