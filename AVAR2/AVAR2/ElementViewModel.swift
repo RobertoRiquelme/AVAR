@@ -68,6 +68,12 @@ class ElementViewModel: ObservableObject {
     private var zoomHandleStartScale: Float?
     /// Starting drag position for zoom handle
     private var zoomHandleStartDragPosition: SIMD3<Float>?
+    /// Reference to the rotation button for Y-axis rotation (3D diagrams only)
+    private var rotationButtonEntity: Entity?
+    /// Starting rotation when rotation drag begins
+    private var rotationStartAngle: Float?
+    /// Starting drag position for rotation
+    private var rotationStartDragPosition: SIMD3<Float>?
 
     // NEW: Snap/unsnap banner
     @Published var snapStatusMessage: String = ""
@@ -218,6 +224,33 @@ class ElementViewModel: ObservableObject {
         self.backgroundEntity = background
         
         return background
+    }
+    
+    /// Update the background entity's collision shapes to match the current scale
+    /// This ensures snapping calculations use the correct scaled dimensions
+    private func updateBackgroundEntityCollisionShapes(scale: Float) {
+        guard let background = backgroundEntity,
+              let normalizationContext = self.normalizationContext else { 
+            print("⚠️ Cannot update background collision shapes - missing background entity or normalization context")
+            return 
+        }
+        
+        // Calculate scaled dimensions
+        let baseWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
+        let baseHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
+        let baseDepth = normalizationContext.positionCenters.count > 2 ? 
+            Float(normalizationContext.positionRanges[2] / normalizationContext.globalRange * 2) : 0.01
+        
+        // Apply scale to dimensions
+        let scaledWidth = baseWidth * scale
+        let scaledHeight = baseHeight * scale
+        let scaledDepth = baseDepth * scale
+        
+        // Create new collision shape with scaled dimensions
+        let scaledShape = ShapeResource.generateBox(size: [scaledWidth, scaledHeight, scaledDepth])
+        background.components.set(CollisionComponent(shapes: [scaledShape]))
+        
+        print("📦 Updated background collision shapes: \(scaledWidth) x \(scaledHeight) x \(scaledDepth) (scale: \(scale))")
     }
     
     private func setupUIControls(background: Entity, normalizationContext: NormalizationContext, onClose: (() -> Void)?) {
@@ -455,6 +488,10 @@ class ElementViewModel: ObservableObject {
         // compute new uniform scale
         let newScale = zoomStartScale! * current
         container.scale = SIMD3<Float>(repeating: newScale)
+        
+        // Update background entity's collision shapes to match new scale
+        updateBackgroundEntityCollisionShapes(scale: newScale)
+        
         // reposition container so that pivotWorld remains fixed under the pinch
         if let pivotWorld = zoomPivotWorld, let pivotLocal = zoomPivotLocal {
             // compute local pivot after scaling
@@ -604,6 +641,9 @@ class ElementViewModel: ObservableObject {
         
         // Apply uniform scaling
         container.scale = SIMD3<Float>(repeating: newScale)
+        
+        // Update background entity's collision shapes to match new scale
+        updateBackgroundEntityCollisionShapes(scale: newScale)
     }
     
     /// Handle zoom handle drag end
@@ -616,6 +656,71 @@ class ElementViewModel: ObservableObject {
         if let content = sceneContent {
             updateConnections(in: content)
         }
+    }
+    
+    /// Handle rotation button drag to rotate 3D diagrams on Y-axis
+    func handleRotationButtonDragChanged(_ value: EntityTargetValue<DragGesture.Value>) {
+        guard let container = rootEntity, !isGraph2D else { 
+            print("⚠️ Rotation only available for 3D diagrams")
+            return 
+        }
+        
+        // Initialize rotation drag state
+        if rotationStartAngle == nil {
+            let currentRotation = container.orientation(relativeTo: nil)
+            // Extract Y-axis rotation angle from quaternion
+            rotationStartAngle = extractYAxisRotation(from: currentRotation)
+            rotationStartDragPosition = SIMD3<Float>(
+                Float(value.gestureValue.startLocation3D.x),
+                Float(value.gestureValue.startLocation3D.y),
+                Float(value.gestureValue.startLocation3D.z)
+            )
+        }
+        
+        guard let startAngle = rotationStartAngle,
+              let startPos = rotationStartDragPosition else { return }
+        
+        // Calculate rotation based on horizontal drag movement
+        let currentPos = SIMD3<Float>(
+            Float(value.gestureValue.location3D.x),
+            Float(value.gestureValue.location3D.y),
+            Float(value.gestureValue.location3D.z)
+        )
+        
+        // Use horizontal movement for rotation
+        let deltaX = currentPos.x - startPos.x
+        let rotationSensitivity: Float = 0.001  // Reduced sensitivity for more precise control
+        let rotationDelta = deltaX * rotationSensitivity
+        
+        let newAngle = startAngle + rotationDelta
+        let newRotation = simd_quatf(angle: newAngle, axis: SIMD3<Float>(0, 1, 0))
+        
+        // Apply rotation to container
+        container.setOrientation(newRotation, relativeTo: nil)
+        
+        print("🔄 Rotating 3D diagram: angle=\(newAngle) radians (\(newAngle * 180 / .pi) degrees)")
+    }
+    
+    /// Handle rotation button drag end
+    func handleRotationButtonDragEnded(_ value: EntityTargetValue<DragGesture.Value>) {
+        // Clear rotation drag state
+        rotationStartAngle = nil
+        rotationStartDragPosition = nil
+        
+        // Final update of connection lines
+        if let content = sceneContent {
+            updateConnections(in: content)
+        }
+        
+        print("🔄 Rotation gesture ended")
+    }
+    
+    /// Extract Y-axis rotation angle from a quaternion
+    private func extractYAxisRotation(from quaternion: simd_quatf) -> Float {
+        // Convert quaternion to Euler angles and extract Y rotation
+        let yRotation = atan2(2.0 * (quaternion.vector.w * quaternion.vector.y + quaternion.vector.x * quaternion.vector.z),
+                             1.0 - 2.0 * (quaternion.vector.y * quaternion.vector.y + quaternion.vector.z * quaternion.vector.z))
+        return yRotation
     }
     
     /// Performs the unsnap animation from a surface
@@ -1038,6 +1143,7 @@ class ElementViewModel: ObservableObject {
     }
     
     /// Find the nearest point on a surface to the given diagram position
+    /// This allows diagrams to snap anywhere on the surface, not just the center
     private func findNearestPointOnSurface(diagramPosition: SIMD3<Float>, surface: PlaneAnchor) -> SIMD3<Float> {
         // Get plane's transform and position
         let planeTransform = surface.originFromAnchorTransform
@@ -1053,22 +1159,32 @@ class ElementViewModel: ObservableObject {
         let planeWidth = Float(planeExtent.width)  // Width along X axis
         let planeHeight = Float(planeExtent.height)  // Height along Z axis
         
+        print("📐 Surface dimensions: \(planeWidth)m x \(planeHeight)m")
+        print("📐 Surface center: \(planePosition)")
+        print("📐 Diagram position: \(diagramPosition)")
+        
         // Transform point to plane's local space
         let toPlane = diagramPosition - planePosition
         let localPoint = simd_inverse(planeRotation).act(toPlane)
         
-        // Clamp the point to the plane bounds
+        print("📐 Local point on surface: \(localPoint)")
+        
+        // Clamp the point to the plane bounds - this enables snapping anywhere on surface
         let clampedX = Swift.max(-planeWidth/2, Swift.min(planeWidth/2, localPoint.x))
         let clampedZ = Swift.max(-planeHeight/2, Swift.min(planeHeight/2, localPoint.z))
         
+        print("📐 Clamped local point: x=\(clampedX), z=\(clampedZ)")
+        
         // Find nearest point on the plane within bounds
         let nearestOnPlane = planeRotation.act(SIMD3<Float>(clampedX, 0, clampedZ)) + planePosition
+        
+        print("📐 Final snap point: \(nearestOnPlane)")
         
         return nearestOnPlane
     }
     
     /// Calculate the distance from a point to the nearest point on a plane surface
-    /// Takes into account the plane's bounds, not just the center
+    /// Takes into account the plane's bounds, enabling snapping anywhere on the surface, not just the center
     private func distanceToPlane(point: SIMD3<Float>, planeAnchor: PlaneAnchor) -> Float {
         // Get plane's transform and position
         let planeTransform = planeAnchor.originFromAnchorTransform
@@ -1130,12 +1246,14 @@ class ElementViewModel: ObservableObject {
     
     /// Find the nearest surface for snapping based on diagram type
     /// 2D diagrams snap to vertical surfaces (walls), 3D diagrams snap to horizontal surfaces (floors/tables)
+    /// Both support snapping anywhere on the detected surface, not just the center
     private func findNearestSurfaceForSnapping(diagramPosition: SIMD3<Float>) -> PlaneAnchor? {
         let availableSurfaces = getAllSurfaceAnchors()
         let diagramType = isGraph2D ? "2D" : "3D"
         let targetSurfaceType = isGraph2D ? "vertical (walls)" : "horizontal (floors/tables)"
         
         print("🔍 Checking \(availableSurfaces.count) PERSISTENT surfaces for \(diagramType) diagram snapping to \(targetSurfaceType) at position \(diagramPosition)")
+        print("🔍 3D diagrams can snap anywhere on horizontal surfaces, not just the center")
         
         let validSurfaces = filterValidSurfaces(availableSurfaces)
         let closest = findClosestSurface(validSurfaces, diagramPosition: diagramPosition)
@@ -1225,7 +1343,8 @@ class ElementViewModel: ObservableObject {
             nearestPointOnSurface: nearestPointOnSurface,
             surfaceRotation: surfaceRotation,
             surfaceType: surfaceType,
-            container: container
+            container: container,
+            isGraph2D: isGraph2D
         )
         
         animateToSnapPosition(container: container, position: snapPosition, orientation: diagramOrientation)
@@ -1236,46 +1355,76 @@ class ElementViewModel: ObservableObject {
         nearestPointOnSurface: SIMD3<Float>,
         surfaceRotation: simd_quatf,
         surfaceType: String,
-        container: Entity
+        container: Entity,
+        isGraph2D: Bool
     ) -> (position: SIMD3<Float>, orientation: simd_quatf) {
         let offsetDistance: Float = 0.05
         
         if surfaceType.lowercased().contains("wall") {
-            return calculateWallSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance)
+            return calculateWallSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance, isGraph2D: isGraph2D, container: container)
         } else if surfaceType.lowercased().contains("table") || surfaceType.lowercased().contains("floor") {
-            return calculateHorizontalSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance)
+            return calculateHorizontalSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance, isGraph2D: isGraph2D, container: container)
         } else if surfaceType.lowercased().contains("ceiling") {
-            return calculateCeilingSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance)
+            return calculateCeilingSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance, isGraph2D: isGraph2D, container: container)
         } else {
             return calculateGenericSnapPosition(nearestPointOnSurface: nearestPointOnSurface, surfaceRotation: surfaceRotation, offsetDistance: offsetDistance, container: container)
         }
     }
     
-    private func calculateWallSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+    private func calculateWallSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float, isGraph2D: Bool, container: Entity) -> (position: SIMD3<Float>, orientation: simd_quatf) {
         let wallNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
         let snapPosition = nearestPointOnSurface + (wallNormal * offsetDistance)
-        let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
-        let diagramOrientation = surfaceRotation * verticalRotation
-        print("📌 Snapping to wall at \(snapPosition)")
+        
+        // Only rotate 2D diagrams to align with walls, 3D diagrams keep their orientation
+        let diagramOrientation: simd_quatf
+        if isGraph2D {
+            let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
+            diagramOrientation = surfaceRotation * verticalRotation
+            print("📌 Snapping 2D diagram to wall at \(snapPosition) with rotation")
+        } else {
+            diagramOrientation = container.orientation(relativeTo: nil)
+            print("📌 Snapping 3D diagram to wall at \(snapPosition) preserving orientation")
+        }
+        
         return (snapPosition, diagramOrientation)
     }
     
-    private func calculateHorizontalSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+    private func calculateHorizontalSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float, isGraph2D: Bool, container: Entity) -> (position: SIMD3<Float>, orientation: simd_quatf) {
         let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
         let bottomOffset = calculateBottomOffset(offsetDistance: offsetDistance)
+        // Use nearestPointOnSurface which allows snapping anywhere on the surface, not just center
         let snapPosition = nearestPointOnSurface + (surfaceNormal * bottomOffset)
-        let diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
-        print("📌 Snapping to horizontal surface at \(snapPosition)")
+        
+        // 3D diagrams preserve their orientation, 2D diagrams use default upright orientation
+        let diagramOrientation: simd_quatf
+        if isGraph2D {
+            diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)) // Default upright for 2D
+            print("📌 Snapping 2D diagram to horizontal surface at \(snapPosition) with default orientation")
+        } else {
+            diagramOrientation = container.orientation(relativeTo: nil) // Preserve current orientation for 3D
+            print("📌 Snapping 3D diagram to horizontal surface at \(snapPosition) preserving orientation")
+        }
+        
         return (snapPosition, diagramOrientation)
     }
     
-    private func calculateCeilingSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float) -> (position: SIMD3<Float>, orientation: simd_quatf) {
+    private func calculateCeilingSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float, isGraph2D: Bool, container: Entity) -> (position: SIMD3<Float>, orientation: simd_quatf) {
         let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
         let topOffset = calculateTopOffset(offsetDistance: offsetDistance)
         let snapPosition = nearestPointOnSurface - (surfaceNormal * topOffset)
-        let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
-        print("📌 Snapping to ceiling at \(snapPosition)")
-        return (snapPosition, upsideDownRotation)
+        
+        // 2D diagrams flip upside down for ceiling mounting, 3D diagrams preserve orientation
+        let diagramOrientation: simd_quatf
+        if isGraph2D {
+            let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
+            diagramOrientation = upsideDownRotation
+            print("📌 Snapping 2D diagram to ceiling at \(snapPosition) with upside-down rotation")
+        } else {
+            diagramOrientation = container.orientation(relativeTo: nil)
+            print("📌 Snapping 3D diagram to ceiling at \(snapPosition) preserving orientation")
+        }
+        
+        return (snapPosition, diagramOrientation)
     }
     
     private func calculateGenericSnapPosition(nearestPointOnSurface: SIMD3<Float>, surfaceRotation: simd_quatf, offsetDistance: Float, container: Entity) -> (position: SIMD3<Float>, orientation: simd_quatf) {
@@ -1289,8 +1438,10 @@ class ElementViewModel: ObservableObject {
     private func calculateBottomOffset(offsetDistance: Float) -> Float {
         if !isGraph2D {
             let lowestEntityY = findLowestEntityPosition()
-            let bottomOffset = offsetDistance - lowestEntityY
-            print("📌 3D diagram bottom offset: \(bottomOffset), lowest entity Y: \(lowestEntityY)")
+            let currentScale = rootEntity?.scale.x ?? 1.0
+            let scaledLowestY = lowestEntityY * currentScale
+            let bottomOffset = offsetDistance - scaledLowestY
+            print("📌 3D diagram bottom offset: \(bottomOffset), lowest entity Y: \(lowestEntityY), scale: \(currentScale), scaled lowest Y: \(scaledLowestY)")
             return bottomOffset
         } else {
             return offsetDistance
@@ -1300,8 +1451,10 @@ class ElementViewModel: ObservableObject {
     private func calculateTopOffset(offsetDistance: Float) -> Float {
         if !isGraph2D {
             let highestEntityY = findHighestEntityPosition()
-            let topOffset = offsetDistance + highestEntityY
-            print("📌 3D diagram top offset: \(topOffset), highest entity Y: \(highestEntityY)")
+            let currentScale = rootEntity?.scale.x ?? 1.0
+            let scaledHighestY = highestEntityY * currentScale
+            let topOffset = offsetDistance + scaledHighestY
+            print("📌 3D diagram top offset: \(topOffset), highest entity Y: \(highestEntityY), scale: \(currentScale), scaled highest Y: \(scaledHighestY)")
             return topOffset
         } else {
             return offsetDistance
@@ -1369,6 +1522,14 @@ class ElementViewModel: ObservableObject {
         zoomHandleContainer.addChild(horizontalEntity)
         zoomHandleContainer.addChild(verticalEntity)
         
+        // Add rotation button for 3D diagrams only
+        if !isGraph2D {
+            let rotationButton = createRotationButton(handleWidth: handleWidth, handleLength: handleLength, handleThickness: handleThickness)
+            zoomHandleContainer.addChild(rotationButton)
+            // Store reference for gesture handling
+            self.rotationButtonEntity = rotationButton
+        }
+        
         // Position exactly at the bottom right corner like native visionOS
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
@@ -1390,6 +1551,52 @@ class ElementViewModel: ObservableObject {
         }
         
         return zoomHandleContainer
+    }
+    
+    /// Creates a circular rotation button for 3D diagrams
+    /// Positioned on top of the bottom of the L and to the left of the upper part
+    private func createRotationButton(handleWidth: Float, handleLength: Float, handleThickness: Float) -> Entity {
+        let rotationButtonContainer = Entity()
+        rotationButtonContainer.name = "rotationButton"
+        
+        // Create circular button (cylinder)
+        let buttonRadius: Float = handleWidth * 0.8  // Slightly smaller than handle width
+        let buttonThickness: Float = handleThickness * 1.5  // Slightly thicker than handle
+        let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
+        
+        // Use a different color to distinguish from zoom handle
+        let buttonMaterial = SimpleMaterial(color: .systemBlue.withAlphaComponent(0.8), isMetallic: false)
+        let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
+        buttonEntity.name = "rotationButtonCylinder"
+        
+        // Rotate the cylinder to lie flat (perpendicular to Z axis)
+        buttonEntity.transform.rotation = simd_quatf(angle: .pi/2, axis: [1, 0, 0])
+        
+        rotationButtonContainer.addChild(buttonEntity)
+        
+        // Position: "on top of the bottom of the scale L, and to the left of the upper part of the L"
+        // Bottom of L (horizontal part) is at [0, -handleLength/2 + handleWidth/2, 0]
+        // Upper part of L (vertical part) is at [handleLength/2 - handleWidth/2, 0, 0]
+        // So position should be to the left of vertical part and on top of horizontal part
+        let buttonX = handleLength/2 - handleWidth/2 - buttonRadius * 2 - 0.025  // To the left of vertical part
+        let buttonY = -handleLength/2 + handleWidth/2 + buttonRadius + 0.03 // On top of horizontal part
+        let buttonZ = buttonThickness/2 + handleThickness/2 - 0.01 // + 0.002  // Slightly in front
+        
+        rotationButtonContainer.position = [buttonX, buttonY, buttonZ]
+        
+        // Enable interaction
+        rotationButtonContainer.generateCollisionShapes(recursive: true)
+        rotationButtonContainer.components.set(InputTargetComponent())
+        let hoverEffectComponent = HoverEffectComponent()
+        rotationButtonContainer.components.set(hoverEffectComponent)
+        
+        // Enable interaction on child entities too
+        for child in rotationButtonContainer.children {
+            child.components.set(InputTargetComponent())
+            child.components.set(hoverEffectComponent)
+        }
+        
+        return rotationButtonContainer
     }
     
     /// Add a red sphere at [0,0,0] to highlight the diagram's origin point
