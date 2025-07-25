@@ -45,7 +45,7 @@ struct ImmersiveSpaceWrapper: View {
                 
                 // Use PhysicallyBasedMaterial for better transparency support
                 var material = PhysicallyBasedMaterial()
-                let alphaValue = Float(max(0.0, immersionLevel * 0.8))
+                let alphaValue = Float(max(0.0, immersionLevel * 1.5))
                 material.baseColor = .init(tint: .black.withAlphaComponent(CGFloat(alphaValue)), texture: nil)
                 material.blending = .transparent(opacity: PhysicallyBasedMaterial.Opacity(floatLiteral: alphaValue))
                 
@@ -72,7 +72,7 @@ struct ImmersiveSpaceWrapper: View {
                     
                     // Use PhysicallyBasedMaterial for better transparency support
                     var material = PhysicallyBasedMaterial()
-                    let alphaValue = Float(max(0.0, immersionLevel * 0.8))
+                    let alphaValue = Float(max(0.0, immersionLevel * 1.2))
                     material.baseColor = .init(tint: .black.withAlphaComponent(CGFloat(alphaValue)), texture: nil)
                     material.blending = .transparent(opacity: PhysicallyBasedMaterial.Opacity(floatLiteral: alphaValue))
                     
