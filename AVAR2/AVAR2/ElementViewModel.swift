@@ -1044,12 +1044,6 @@ class ElementViewModel: ObservableObject {
         print("RTLabel [\(element.id)] transform:\n\(labelEntity.transform.matrix)")
         let bounds = labelEntity.visualBounds(relativeTo: nil)
         print("RTLabel [\(element.id)] bounds center: \(bounds.center), extents: \(bounds.extents)")
-        // Debug: add a small red sphere at the label origin
-        let debugDot = ModelEntity(
-            mesh: MeshResource.generateSphere(radius: 0.01),
-            materials: [SimpleMaterial(color: .red, isMetallic: false)]
-        )
-        labelEntity.addChild(debugDot)
         return labelEntity
     }
     
@@ -1604,7 +1598,7 @@ class ElementViewModel: ObservableObject {
         guard let container = rootEntity else { return }
         
         // Create small red sphere
-        let sphereRadius: Float = 0.02  // 2cm radius
+        let sphereRadius: Float = 0.005  // 2cm radius
         let sphereMesh = MeshResource.generateSphere(radius: sphereRadius)
         let sphereMaterial = SimpleMaterial(color: .red, isMetallic: false)
         let sphereEntity = ModelEntity(mesh: sphereMesh, materials: [sphereMaterial])
@@ -1618,6 +1612,7 @@ class ElementViewModel: ObservableObject {
         
         print("🔴 Added red origin marker at [0,0,0]")
     }
+    
 }
 
 // MARK: - Camera Transform Helpers
