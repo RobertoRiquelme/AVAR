@@ -246,6 +246,16 @@ final class FPSMonitor: ObservableObject {
     }
 }
 
+/// Isolated FPS display view to prevent picker reloads
+struct FPSDisplayView: View {
+    @StateObject private var fpsMonitor = FPSMonitor()
+    
+    var body: some View {
+        Text("\(fpsMonitor.fps) FPS")
+            .font(.title)
+    }
+}
+
 @main
 struct AVAR2: App {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
@@ -264,7 +274,6 @@ struct AVAR2: App {
     @State private var activeFiles: [String] = []
     /// Track if app has launched to start immersive space automatically
     @State private var hasLaunched: Bool = false
-    @StateObject private var fpsMonitor = FPSMonitor()
 
     @State private var inputMode: InputMode = .file
     @State private var jsonInput: String = ""
@@ -367,26 +376,14 @@ struct AVAR2: App {
                         }
                         print("📊 Adding diagram: \(newFile)")
                         activeFiles.append(newFile)
+                        
+                        // Ensure plane visualization starts disabled for new diagrams
+                        appModel.showPlaneVisualization = false
+                        appModel.surfaceDetector.setVisualizationVisible(false)
                     }
                 }
                 .font(.title2)
 
-                Button("Exit Immersive Space") {
-                    Task {
-                        await dismissImmersiveSpace()
-                        hasEnteredImmersive = false
-                        activeFiles.removeAll()
-                        appModel.resetDiagramPositioning()
-                    }
-                }
-                .font(.title2)
-                
-                // Debug: Toggle plane visualization
-                Button(appModel.showPlaneVisualization ? "Hide Plane Visualization" : "Show Plane Visualization") {
-                    appModel.togglePlaneVisualization()
-                }
-                .font(.title3)
-                .foregroundColor(.secondary)
                 
                 // Immersion Test Buttons
                 VStack(spacing: 12) {
@@ -449,14 +446,35 @@ struct AVAR2: App {
 
                 Spacer()
                 
-                Button("Quit App") {
-                    exit(0)
+                // Bottom row buttons - Exit Immersive Space and Show Plane Visualization on the left, Quit App on the right
+                HStack {
+                    Button("Exit Immersive Space") {
+                        Task {
+                            await dismissImmersiveSpace()
+                            hasEnteredImmersive = false
+                            activeFiles.removeAll()
+                            appModel.resetDiagramPositioning()
+                        }
+                    }
+                    .font(.title3)
+                    
+                    Button(appModel.showPlaneVisualization ? "Hide Plane Visualization" : "Show Plane Visualization") {
+                        appModel.togglePlaneVisualization()
+                    }
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Button("Quit App") {
+                        exit(0)
+                    }
+                    .font(.title2)
+                    .foregroundColor(.red)
                 }
-                .font(.title2)
-                .foregroundColor(.red)
                 
-                Text("\(fpsMonitor.fps) FPS")
-                    .font(.title)
+                // Isolate FPS display to prevent picker reloads
+                FPSDisplayView()
                     .padding(.bottom)
             }
             .padding()

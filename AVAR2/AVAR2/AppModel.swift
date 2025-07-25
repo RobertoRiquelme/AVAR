@@ -23,8 +23,8 @@ class AppModel {
     let surfaceDetector = ARKitSurfaceDetector()
     private var surfaceDetectionStarted = false
     
-    // Debug: plane visualization toggle
-    var showPlaneVisualization = true
+    // Debug: plane visualization toggle (start disabled)
+    var showPlaneVisualization = false
     
     // Dynamic positioning for multiple diagrams
     private var nextDiagramIndex = 0
