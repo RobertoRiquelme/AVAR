@@ -8,8 +8,10 @@
       "Bash(rm:*)",
       "mcp__ide__getDiagnostics",
       "Bash(swift:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "WebFetch(domain:docs.anthropic.com)"
     ],
     "deny": []
-  }
+  },
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }

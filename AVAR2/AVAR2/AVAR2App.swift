@@ -261,9 +261,10 @@ struct AVAR2: App {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @State private var appModel = AppModel()
+    @StateObject private var httpServer = HTTPServer()
 
     enum InputMode: String {
-        case file, json
+        case file, json, server
     }
 
     // Gather all example files in the bundle (without extension)
@@ -302,6 +303,7 @@ struct AVAR2: App {
                 Picker("Input Source", selection: $inputMode) {
                     Text("From File").tag(InputMode.file)
                     Text("From JSON").tag(InputMode.json)
+                    Text("HTTP Server").tag(InputMode.server)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -314,7 +316,7 @@ struct AVAR2: App {
                     }
                     .pickerStyle(.menu)
                     .padding(.horizontal)
-                } else {
+                } else if inputMode == .json {
                     VStack(alignment: .leading) {
                         Text("Paste JSON Diagram:")
                             .font(.headline)
@@ -346,6 +348,65 @@ struct AVAR2: App {
                             Text("Invalid JSON format")
                                 .foregroundColor(.red)
                                 .padding(.horizontal)
+                        }
+                    }
+                } else {
+                    // HTTP Server tab
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("HTTP Server Controls")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        
+                        HStack {
+                            Button(httpServer.isRunning ? "Stop Server" : "Start Server") {
+                                if httpServer.isRunning {
+                                    httpServer.stop()
+                                } else {
+                                    httpServer.start()
+                                }
+                            }
+                            .font(.title3)
+                            .buttonStyle(.borderedProminent)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Server Status:")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .padding(.horizontal)
+                            
+                            Text(httpServer.serverStatus)
+                                .font(.body)
+                                .foregroundColor(httpServer.isRunning ? .green : .secondary)
+                                .padding(.horizontal)
+                            
+                            if httpServer.isRunning {
+                                Text("URL: \(httpServer.serverURL)")
+                                    .font(.body)
+                                    .foregroundColor(.blue)
+                                    .padding(.horizontal)
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Last Received JSON:")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .padding(.horizontal)
+                            
+                            ScrollView {
+                                Text(httpServer.lastReceivedJSON.isEmpty ? "No data received yet" : httpServer.lastReceivedJSON)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                            .frame(height: 120)
+                            .padding(.horizontal)
                         }
                     }
                 }
@@ -500,6 +561,47 @@ struct AVAR2: App {
                     } catch {
                         print("❌ Failed to open immersive space: \(error)")
                         hasEnteredImmersive = false
+                    }
+                }
+                
+                // Set up HTTP server callback for automatic diagram loading
+                httpServer.onJSONReceived = { scriptOutput in
+                    Task { @MainActor in
+                        // Ensure immersive space is open
+                        if !hasEnteredImmersive {
+                            print("🔄 Immersive space not open, opening now for HTTP diagram...")
+                            do {
+                                await openImmersiveSpace(id: "MainImmersive")
+                                hasEnteredImmersive = true
+                                print("✅ Immersive space opened for HTTP diagram")
+                            } catch {
+                                print("❌ Failed to open immersive space for HTTP diagram: \(error)")
+                                return
+                            }
+                        }
+                        
+                        // Create a unique filename for the received JSON
+                        let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
+                        
+                        // Save the JSON to a temporary file
+                        let tempURL = FileManager.default.temporaryDirectory
+                            .appendingPathComponent(newFile)
+                            .appendingPathExtension("txt")
+                        
+                        do {
+                            let jsonData = try JSONEncoder().encode(scriptOutput)
+                            try jsonData.write(to: tempURL)
+                            
+                            print("📊 Adding HTTP diagram: \(newFile)")
+                            activeFiles.append(newFile)
+                            
+                            // Ensure plane visualization starts disabled for new diagrams
+                            appModel.showPlaneVisualization = false
+                            appModel.surfaceDetector.setVisualizationVisible(false)
+                            
+                        } catch {
+                            print("❌ Failed to save HTTP diagram: \(error)")
+                        }
                     }
                 }
             }
