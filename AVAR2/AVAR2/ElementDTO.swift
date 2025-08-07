@@ -28,6 +28,15 @@ struct ScriptOutput: Codable {
 
     // -- your custom decoder --
     init(from decoder: Decoder) throws {
+        // Try to decode as a direct array first (new format)
+        if let directElements = try? decoder.singleValueContainer().decode([ElementDTO].self) {
+            self.elements = directElements
+            self.is2D = false // Default for direct array format
+            self.id = nil // No root-level ID in direct array format
+            return
+        }
+        
+        // Fall back to object format (old format)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let els = try? container.decode([ElementDTO].self, forKey: .elements) {
             self.elements = els
@@ -64,7 +73,7 @@ struct ElementDTO: Codable {
     let shape: ShapeDTO?        // e.g. Box, Line, Sphere, etc.
     let position: [Double]?     // 2D or 3D coordinates
     let color: [Double]?        // RGBA, etc.
-    let id: Int                 // numeric ID
+    let id: Int?                // optional numeric ID
     let type: String            // e.g. "camera", "RTelement", etc.
     let fromId: Int?            // for edges: source element ID
     let toId: Int?              // for edges: destination element ID
@@ -95,7 +104,7 @@ struct ElementDTO: Codable {
         self.extent = try c.decodeIfPresent([Double].self, forKey: .extent)
         self.model = try c.decodeIfPresent(String.self, forKey: .model)
 
-        // Decode id as Int (primary) or convert from String/Double
+        // Decode id as Int (primary) or convert from String/Double, or leave nil
         if let intID = try? c.decode(Int.self, forKey: .id) {
             self.id = intID
         } else if let doubleID = try? c.decode(Double.self, forKey: .id) {
@@ -103,8 +112,8 @@ struct ElementDTO: Codable {
         } else if let strID = try? c.decode(String.self, forKey: .id), let intFromString = Int(strID) {
             self.id = intFromString
         } else {
-            // If id is completely missing or invalid, generate one
-            self.id = Int.random(in: 100000...999999)
+            // No ID provided - leave as nil for new format compatibility
+            self.id = nil
         }
 
         // Try to decode type, fall back to model, or use default

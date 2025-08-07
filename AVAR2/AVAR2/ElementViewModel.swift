@@ -367,7 +367,8 @@ class ElementViewModel: ObservableObject {
             entity.position = localPos
             entity.components.set(hoverEffectComponent)
             container.addChild(entity)
-            entityMap[String(element.id)] = entity
+            let elementIdKey = element.id != nil ? String(element.id!) : "element_\(UUID().uuidString.prefix(8))"
+            entityMap[elementIdKey] = entity
         }
     }
     
@@ -921,7 +922,7 @@ class ElementViewModel: ObservableObject {
         logger.log("Create Entity - \(desc)")
         if desc.contains("rtlabel") {
             let entity = createRTLabelEntity(for: element, normalization: normalizationContext)
-            entity.name = "element_\(element.id)"
+            entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
             entity.generateCollisionShapes(recursive: true)
             entity.components.set(InputTargetComponent())
             return entity
@@ -932,7 +933,7 @@ class ElementViewModel: ObservableObject {
         if desc.contains("rtellipse") {
             entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
         }
-        entity.name = "element_\(element.id)"
+        entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
 
         // Add a label if meaningful for non-RTlabel shapes: skip if shape.text is "nil" or empty
         let rawText = element.shape?.text
@@ -941,7 +942,7 @@ class ElementViewModel: ObservableObject {
                t.lowercased() != "nil" {
                 return t
             }
-            return element.id == 0 ? nil : ""
+            return element.id == nil ? nil : ""
         }()
         if let text = labelText {
             let labelEntity = createLabelEntity(text: text)
