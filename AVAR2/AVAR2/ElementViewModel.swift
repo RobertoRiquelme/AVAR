@@ -367,7 +367,7 @@ class ElementViewModel: ObservableObject {
             entity.position = localPos
             entity.components.set(hoverEffectComponent)
             container.addChild(entity)
-            entityMap[element.id] = entity
+            entityMap[String(element.id)] = entity
         }
     }
     
@@ -396,7 +396,7 @@ class ElementViewModel: ObservableObject {
         // For each element that defines an edge, connect fromId -> toId
         for edge in elements {
             if let from = edge.fromId, let to = edge.toId,
-               let line = createLineBetween(from, and: to, colorComponents: edge.color ?? edge.shape?.color) {
+               let line = createLineBetween(String(from), and: String(to), colorComponents: edge.color ?? edge.shape?.color) {
                 container.addChild(line)
                 lineEntities.append(line)
             }
@@ -941,7 +941,7 @@ class ElementViewModel: ObservableObject {
                t.lowercased() != "nil" {
                 return t
             }
-            return element.id.isEmpty ? nil : ""
+            return element.id == 0 ? nil : ""
         }()
         if let text = labelText {
             let labelEntity = createLabelEntity(text: text)

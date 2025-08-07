@@ -15,6 +15,132 @@ extension Notification.Name {
     static let setImmersionLevel = Notification.Name("setImmersionLevel")
 }
 
+/// Separate view for HTTP Server tab to reduce complexity
+struct HTTPServerTabView: View {
+    @ObservedObject var httpServer: HTTPServer
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("HTTP Server Controls")
+                .font(.headline)
+                .padding(.horizontal)
+            
+            HStack {
+                Button(httpServer.isRunning ? "Stop Server" : "Start Server") {
+                    if httpServer.isRunning {
+                        httpServer.stop()
+                    } else {
+                        httpServer.start()
+                    }
+                }
+                .font(.title3)
+                .buttonStyle(.borderedProminent)
+                
+                Spacer()
+            }
+            .padding(.horizontal)
+            
+            ServerStatusView(httpServer: httpServer)
+            ServerLogsView(httpServer: httpServer)
+        }
+    }
+}
+
+/// Server status section
+struct ServerStatusView: View {
+    @ObservedObject var httpServer: HTTPServer
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Server Status:")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal)
+            
+            Text(httpServer.serverStatus)
+                .font(.body)
+                .foregroundColor(httpServer.isRunning ? .green : .secondary)
+                .padding(.horizontal)
+            
+            if httpServer.isRunning {
+                Text("URL: \(httpServer.serverURL)")
+                    .font(.body)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal)
+            }
+        }
+    }
+}
+
+/// Server logs section
+struct ServerLogsView: View {
+    @ObservedObject var httpServer: HTTPServer
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Server Logs:")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal)
+            
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        if httpServer.serverLogs.isEmpty {
+                            Text("No logs yet")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .padding(8)
+                        } else {
+                            ForEach(Array(httpServer.serverLogs.enumerated()), id: \.offset) { index, log in
+                                Text(log)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .id(index)
+                            }
+                        }
+                    }
+                    .padding(4)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                .frame(height: 120)
+                .onChange(of: httpServer.serverLogs.count) { _, _ in
+                    if !httpServer.serverLogs.isEmpty {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(httpServer.serverLogs.count - 1, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            
+            // Last received JSON in a collapsible section
+            if !httpServer.lastReceivedJSON.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Last Received JSON:")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal)
+                    
+                    ScrollView {
+                        Text(httpServer.lastReceivedJSON)
+                            .font(.system(.caption2, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(6)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(6)
+                    }
+                    .frame(height: 60)
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+}
+
 /// Static surface detection view that never changes
 struct StaticSurfaceView: View {
     @Environment(AppModel.self) private var appModel
@@ -352,63 +478,7 @@ struct AVAR2: App {
                     }
                 } else {
                     // HTTP Server tab
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("HTTP Server Controls")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        HStack {
-                            Button(httpServer.isRunning ? "Stop Server" : "Start Server") {
-                                if httpServer.isRunning {
-                                    httpServer.stop()
-                                } else {
-                                    httpServer.start()
-                                }
-                            }
-                            .font(.title3)
-                            .buttonStyle(.borderedProminent)
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Server Status:")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .padding(.horizontal)
-                            
-                            Text(httpServer.serverStatus)
-                                .font(.body)
-                                .foregroundColor(httpServer.isRunning ? .green : .secondary)
-                                .padding(.horizontal)
-                            
-                            if httpServer.isRunning {
-                                Text("URL: \(httpServer.serverURL)")
-                                    .font(.body)
-                                    .foregroundColor(.blue)
-                                    .padding(.horizontal)
-                            }
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Last Received JSON:")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .padding(.horizontal)
-                            
-                            ScrollView {
-                                Text(httpServer.lastReceivedJSON.isEmpty ? "No data received yet" : httpServer.lastReceivedJSON)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8)
-                                    .background(Color.gray.opacity(0.1))
-                                    .cornerRadius(8)
-                            }
-                            .frame(height: 120)
-                            .padding(.horizontal)
-                        }
-                    }
+                    HTTPServerTabView(httpServer: httpServer)
                 }
 
                 Button("Add Diagram") {
@@ -580,28 +650,85 @@ struct AVAR2: App {
                             }
                         }
                         
-                        // Create a unique filename for the received JSON
-                        let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
-                        
-                        // Save the JSON to a temporary file
-                        let tempURL = FileManager.default.temporaryDirectory
-                            .appendingPathComponent(newFile)
-                            .appendingPathExtension("txt")
-                        
-                        do {
-                            let jsonData = try JSONEncoder().encode(scriptOutput)
-                            try jsonData.write(to: tempURL)
+                        // Handle diagram ID logic
+                        if let diagramId = scriptOutput.id {
+                            // Diagram has ID - check if it exists
+                            if let existingInfo = appModel.getDiagramInfo(for: diagramId) {
+                                // Diagram exists - update/redraw it
+                                print("🔄 Updating existing diagram with ID: \(diagramId)")
+                                
+                                // Find and remove the existing diagram from activeFiles
+                                activeFiles.removeAll { $0 == existingInfo.filename }
+                                
+                                // Create new filename for the update
+                                let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
+                                
+                                // Save updated JSON to temporary file
+                                let tempURL = FileManager.default.temporaryDirectory
+                                    .appendingPathComponent(newFile)
+                                    .appendingPathExtension("txt")
+                                
+                                do {
+                                    let jsonData = try JSONEncoder().encode(scriptOutput)
+                                    try jsonData.write(to: tempURL)
+                                    
+                                    print("🔄 Redrawing diagram with ID: \(diagramId)")
+                                    activeFiles.append(newFile)
+                                    
+                                    // Update AppModel tracking
+                                    appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
+                                    
+                                } catch {
+                                    print("❌ Failed to save updated HTTP diagram: \(error)")
+                                }
+                            } else {
+                                // New diagram with ID
+                                print("➕ Creating new diagram with ID: \(diagramId)")
+                                
+                                let newFile = "http_diagram_\(diagramId)"
+                                let tempURL = FileManager.default.temporaryDirectory
+                                    .appendingPathComponent(newFile)
+                                    .appendingPathExtension("txt")
+                                
+                                do {
+                                    let jsonData = try JSONEncoder().encode(scriptOutput)
+                                    try jsonData.write(to: tempURL)
+                                    
+                                    print("📊 Adding new HTTP diagram: \(newFile)")
+                                    let diagramIndex = activeFiles.count
+                                    activeFiles.append(newFile)
+                                    
+                                    // Register in AppModel
+                                    appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
+                                    
+                                } catch {
+                                    print("❌ Failed to save new HTTP diagram: \(error)")
+                                }
+                            }
+                        } else {
+                            // No ID - create new diagram
+                            print("➕ Creating new diagram without ID")
                             
-                            print("📊 Adding HTTP diagram: \(newFile)")
-                            activeFiles.append(newFile)
+                            let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
+                            let tempURL = FileManager.default.temporaryDirectory
+                                .appendingPathComponent(newFile)
+                                .appendingPathExtension("txt")
                             
-                            // Ensure plane visualization starts disabled for new diagrams
-                            appModel.showPlaneVisualization = false
-                            appModel.surfaceDetector.setVisualizationVisible(false)
-                            
-                        } catch {
-                            print("❌ Failed to save HTTP diagram: \(error)")
+                            do {
+                                let jsonData = try JSONEncoder().encode(scriptOutput)
+                                try jsonData.write(to: tempURL)
+                                
+                                print("📊 Adding HTTP diagram: \(newFile)")
+                                activeFiles.append(newFile)
+                                
+                            } catch {
+                                print("❌ Failed to save HTTP diagram: \(error)")
+                            }
                         }
+                        
+                        // Ensure plane visualization starts disabled for new diagrams
+                        appModel.showPlaneVisualization = false
+                        appModel.surfaceDetector.setVisualizationVisible(false)
                     }
                 }
             }

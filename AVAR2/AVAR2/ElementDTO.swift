@@ -11,15 +11,19 @@ import Foundation
 
 /// Top‐level DTO that can decode either
 /// { "elements": [...] } or { "RTelements": [...] }.
+/// Now also supports an optional root-level "id" for diagram identification.
 
 struct ScriptOutput: Codable {
     let elements: [ElementDTO]
     /// True if decoded from the "RTelements" key (i.e. a 2D/RT graph)
     let is2D: Bool
+    /// Optional diagram ID for tracking/updating diagrams
+    let id: Int?
 
     private enum CodingKeys: String, CodingKey {
         case elements
         case RTelements
+        case id
     }
 
     // -- your custom decoder --
@@ -32,6 +36,17 @@ struct ScriptOutput: Codable {
             self.elements = try container.decode([ElementDTO].self, forKey: .RTelements)
             self.is2D = true
         }
+        
+        // Decode optional root-level id (Int, Double, or String)
+        if let intID = try? container.decode(Int.self, forKey: .id) {
+            self.id = intID
+        } else if let doubleID = try? container.decode(Double.self, forKey: .id) {
+            self.id = Int(doubleID)
+        } else if let strID = try? container.decode(String.self, forKey: .id), let intFromString = Int(strID) {
+            self.id = intFromString
+        } else {
+            self.id = nil
+        }
     }
 
     // -- now add this to satisfy Encodable --
@@ -40,22 +55,25 @@ struct ScriptOutput: Codable {
         // choose whichever key you prefer when re-encoding;
         // here we re-emit under "elements":
         try container.encode(elements, forKey: .elements)
+        try container.encodeIfPresent(id, forKey: .id)
     }
 }
 
-/// One “node” or “shape” in your visualization.
+/// One "node" or "shape" in your visualization.
 struct ElementDTO: Codable {
     let shape: ShapeDTO?        // e.g. Box, Line, Sphere, etc.
     let position: [Double]?     // 2D or 3D coordinates
     let color: [Double]?        // RGBA, etc.
-    let id: String              // always exposed as String
+    let id: Int                 // numeric ID
     let type: String            // e.g. "camera", "RTelement", etc.
-    let fromId: String?         // for edges: source element ID
-    let toId: String?           // for edges: destination element ID
+    let fromId: Int?            // for edges: source element ID
+    let toId: Int?              // for edges: destination element ID
     let interactions: [String]? // defines interactions for elements
+    let extent: [Double]?       // element-level extent/size
+    let model: String?          // alternative to type field
 
     private enum CodingKeys: String, CodingKey {
-        case shape, position, color, id, type, interactions
+        case shape, position, color, id, type, interactions, extent, model
         case fromId = "from_id", toId = "to_id"
     }
 
@@ -74,28 +92,45 @@ struct ElementDTO: Codable {
         self.position = try c.decodeIfPresent([Double].self, forKey: .position)
         self.color    = try c.decodeIfPresent([Double].self, forKey: .color)
         self.interactions = try c.decodeIfPresent([String].self, forKey: .interactions)
+        self.extent = try c.decodeIfPresent([Double].self, forKey: .extent)
+        self.model = try c.decodeIfPresent(String.self, forKey: .model)
 
-        // Decode id as Int or String
+        // Decode id as Int (primary) or convert from String/Double
         if let intID = try? c.decode(Int.self, forKey: .id) {
-            self.id = String(intID)
-        } else if let strID = try? c.decode(String.self, forKey: .id) {
-            self.id = strID
+            self.id = intID
+        } else if let doubleID = try? c.decode(Double.self, forKey: .id) {
+            self.id = Int(doubleID)
+        } else if let strID = try? c.decode(String.self, forKey: .id), let intFromString = Int(strID) {
+            self.id = intFromString
         } else {
-            self.id = ""
+            // If id is completely missing or invalid, generate one
+            self.id = Int.random(in: 100000...999999)
         }
 
-        self.type = try c.decode(String.self, forKey: .type)
-        // Decode from_id as Int or String
-        if let fromInt = try? c.decode(Int.self, forKey: .fromId) {
-            self.fromId = String(fromInt)
+        // Try to decode type, fall back to model, or use default
+        if let typeValue = try? c.decode(String.self, forKey: .type) {
+            self.type = typeValue
+        } else if let modelValue = try? c.decode(String.self, forKey: .model) {
+            self.type = modelValue
         } else {
-            self.fromId = try c.decodeIfPresent(String.self, forKey: .fromId)
+            self.type = "element" // default type
         }
-        // Decode to_id as Int or String
-        if let toInt = try? c.decode(Int.self, forKey: .toId) {
-            self.toId = String(toInt)
+        // Decode from_id as Int (primary) or convert from String
+        if let fromInt = try? c.decode(Int.self, forKey: .fromId) {
+            self.fromId = fromInt
+        } else if let fromString = try? c.decode(String.self, forKey: .fromId), let intFromString = Int(fromString) {
+            self.fromId = intFromString
         } else {
-            self.toId = try c.decodeIfPresent(String.self, forKey: .toId)
+            self.fromId = nil
+        }
+        
+        // Decode to_id as Int (primary) or convert from String
+        if let toInt = try? c.decode(Int.self, forKey: .toId) {
+            self.toId = toInt
+        } else if let toString = try? c.decode(String.self, forKey: .toId), let intFromString = Int(toString) {
+            self.toId = intFromString
+        } else {
+            self.toId = nil
         }
     }
 }
@@ -106,7 +141,7 @@ struct ShapeDTO: Codable {
     let extent: [Double]?   // e.g. [width, height, depth]
     let text: String?       // any label
     let color: [Double]?    // sometimes color appears here
-    let id: String?         // some shapes carry their own id
+    let id: Int?            // some shapes carry their own id
 
     private enum CodingKeys: String, CodingKey {
         case shapeDescription, extent, text, color, id

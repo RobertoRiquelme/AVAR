@@ -30,6 +30,10 @@ class AppModel {
     private var nextDiagramIndex = 0
     private let diagramSpacing: Float = 3.0  // 3 meters between diagrams
     
+    // Track active diagrams by ID for updates/redraw
+    private var activeDiagrams: [Int: Int] = [:] // id -> diagram index
+    private var diagramFiles: [Int: String] = [:] // id -> filename
+    
     func startSurfaceDetectionIfNeeded() async {
         guard !surfaceDetectionStarted else { 
             print("🚫 Surface detection already started - skipping")
@@ -58,9 +62,34 @@ class AppModel {
         return position
     }
     
+    /// Register a diagram with ID for tracking
+    func registerDiagram(id: Int, filename: String, index: Int) {
+        activeDiagrams[id] = index
+        diagramFiles[id] = filename
+        print("📝 Registered diagram: id=\(id), filename=\(filename), index=\(index)")
+    }
+    
+    /// Check if diagram exists and get its info
+    func getDiagramInfo(for id: Int) -> (filename: String, index: Int)? {
+        guard let index = activeDiagrams[id],
+              let filename = diagramFiles[id] else {
+            return nil
+        }
+        return (filename: filename, index: index)
+    }
+    
+    /// Remove diagram from tracking
+    func removeDiagram(id: Int) {
+        activeDiagrams.removeValue(forKey: id)
+        diagramFiles.removeValue(forKey: id)
+        print("🗑️ Removed diagram: id=\(id)")
+    }
+    
     /// Reset diagram positioning (when exiting immersive space)
     func resetDiagramPositioning() {
         nextDiagramIndex = 0
+        activeDiagrams.removeAll()
+        diagramFiles.removeAll()
         print("🔄 Reset diagram positioning")
     }
     

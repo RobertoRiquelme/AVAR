@@ -1,17 +1,86 @@
 import Foundation
 import Network
 
+#if canImport(Darwin)
+import Darwin
+#endif
+
+// MARK: - DateFormatter Extension
+extension DateFormatter {
+    static let logFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+}
+
+// MARK: - Network Utilities
+extension HTTPServer {
+    /// Get the device's local IP address
+    private func getLocalIPAddress() -> String {
+        var address: String?
+        
+        // Get list of all interfaces on the local machine:
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0 else { return "localhost" }
+        guard let firstAddr = ifaddr else { return "localhost" }
+        
+        // For each interface ...
+        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
+            let flags = Int32(ptr.pointee.ifa_flags)
+            var addr = ptr.pointee.ifa_addr.pointee
+            
+            // Check for running IPv4, IPv6 interfaces. Skip the loopback interface.
+            if (flags & (IFF_UP|IFF_RUNNING|IFF_LOOPBACK)) == (IFF_UP|IFF_RUNNING) {
+                if addr.sa_family == UInt8(AF_INET) || addr.sa_family == UInt8(AF_INET6) {
+                    
+                    // Convert interface address to a human readable string:
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    if (getnameinfo(&addr, socklen_t(addr.sa_len), &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST) == 0) {
+                        address = String(cString: hostname)
+                        
+                        // Prefer IPv4 over IPv6, and non-loopback addresses
+                        if addr.sa_family == UInt8(AF_INET) && address != "127.0.0.1" {
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        
+        freeifaddrs(ifaddr)
+        return address ?? "localhost"
+    }
+}
+
 class HTTPServer: ObservableObject {
     @Published var isRunning = false
     @Published var serverURL = ""
     @Published var lastReceivedJSON = ""
     @Published var serverStatus = "Stopped"
+    @Published var serverLogs: [String] = []
     
     private var listener: NWListener?
     private let port: UInt16 = 8080
     private let queue = DispatchQueue(label: "HTTPServer")
+    private let maxLogs = 50 // Limit log entries to prevent memory issues
     
     var onJSONReceived: ((ScriptOutput) -> Void)?
+    
+    /// Add a log entry to both console and UI logs
+    private func log(_ message: String) {
+        print(message)
+        DispatchQueue.main.async {
+            let timestamp = DateFormatter.logFormatter.string(from: Date())
+            let logEntry = "[\(timestamp)] \(message)"
+            self.serverLogs.append(logEntry)
+            
+            // Limit log size
+            if self.serverLogs.count > self.maxLogs {
+                self.serverLogs.removeFirst(self.serverLogs.count - self.maxLogs)
+            }
+        }
+    }
     
     func start() {
         guard !isRunning else { return }
@@ -31,18 +100,19 @@ class HTTPServer: ObservableObject {
                     switch state {
                     case .ready:
                         self?.isRunning = true
-                        self?.serverURL = "http://localhost:\(self?.port ?? 8080)/avar"
-                        self?.serverStatus = "Running on port \(self?.port ?? 8080)"
-                        print("🌐 HTTP Server started on port \(self?.port ?? 8080)")
+                        let deviceIP = self?.getLocalIPAddress() ?? "localhost"
+                        self?.serverURL = "http://\(deviceIP):\(self?.port ?? 8080)/avar"
+                        self?.serverStatus = "Running on \(deviceIP):\(self?.port ?? 8080)"
+                        self?.log("🌐 HTTP Server started on \(deviceIP):\(self?.port ?? 8080)")
                     case .failed(let error):
                         self?.isRunning = false
                         self?.serverStatus = "Failed: \(error.localizedDescription)"
-                        print("❌ HTTP Server failed: \(error)")
+                        self?.log("❌ HTTP Server failed: \(error.localizedDescription)")
                     case .cancelled:
                         self?.isRunning = false
                         self?.serverURL = ""
                         self?.serverStatus = "Stopped"
-                        print("🛑 HTTP Server stopped")
+                        self?.log("🛑 HTTP Server stopped")
                     default:
                         break
                     }
@@ -55,7 +125,7 @@ class HTTPServer: ObservableObject {
             DispatchQueue.main.async {
                 self.serverStatus = "Error: \(error.localizedDescription)"
             }
-            print("❌ Failed to start HTTP server: \(error)")
+            log("❌ Failed to start HTTP server: \(error.localizedDescription)")
         }
     }
     
@@ -74,7 +144,7 @@ class HTTPServer: ObservableObject {
             if case .ready = state {
                 self.receiveRequest(connection)
             } else if case .failed(let error) = state {
-                print("❌ Connection failed: \(error)")
+                self.log("❌ Connection failed: \(error.localizedDescription)")
                 connection.cancel()
             }
         }
@@ -85,7 +155,7 @@ class HTTPServer: ObservableObject {
     private func receiveRequest(_ connection: NWConnection) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, context, isComplete, error in
             if let error = error {
-                print("❌ Receive error: \(error)")
+                self?.log("❌ Receive error: \(error.localizedDescription)")
                 connection.cancel()
                 return
             }
@@ -96,7 +166,7 @@ class HTTPServer: ObservableObject {
             }
             
             let requestString = String(data: data, encoding: .utf8) ?? ""
-            print("📥 Received request: \(requestString.prefix(200))...")
+            self?.log("📥 Received request: \(requestString.prefix(200))...")
             
             self?.processHTTPRequest(requestString, connection: connection)
         }
@@ -142,9 +212,9 @@ class HTTPServer: ObservableObject {
         
         """
         
-        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { error in
+        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { [weak self] error in
             if let error = error {
-                print("❌ Send error: \(error)")
+                self?.log("❌ Send error: \(error.localizedDescription)")
             }
             connection.cancel()
         })
@@ -181,10 +251,11 @@ class HTTPServer: ObservableObject {
             <p>Expected format: {"elements": [...]} or {"RTelements": [...]}</p>
             <h2>Example:</h2>
             <pre>
-            curl -X POST http://localhost:8080/avar \\
+            curl -X POST http://\(getLocalIPAddress()):8080/avar \\
                 -H "Content-Type: application/json" \\
-                -d '{"elements": [{"id": "1", "type": "node", "shape": "Box", "position": [0,0,0]}]}'
+                -d '{"id": "diagram1", "elements": [{"id": "1", "type": "node", "shape": "Box", "position": [0,0,0]}]}'
             </pre>
+            <p><strong>Note:</strong> You can now include an "id" field at the root level to update existing diagrams.</p>
         </body>
         </html>
         """
@@ -202,9 +273,50 @@ class HTTPServer: ObservableObject {
         }
         
         let bodyLines = lines[(emptyLineIndex + 1)...]
-        let body = bodyLines.joined(separator: "\r\n")
+        let rawBody = bodyLines.joined(separator: "\r\n")
         
-        guard let jsonData = body.data(using: .utf8) else {
+        // Clean the JSON body by removing formatting whitespace and fixing various quote escaping
+        var cleanedBody = rawBody
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\t", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Handle different forms of escaped quotes
+        cleanedBody = cleanedBody
+            .replacingOccurrences(of: "\\\"", with: "\"")  // Standard escaped quotes
+            .replacingOccurrences(of: "\u{005C}\u{0022}", with: "\"")  // Unicode escaped quotes
+        
+        // If the entire JSON is wrapped in quotes, remove them
+        if cleanedBody.hasPrefix("\"") && cleanedBody.hasSuffix("\"") && cleanedBody.count > 1 {
+            cleanedBody = String(cleanedBody.dropFirst().dropLast())
+            // After unwrapping, clean escaped quotes again
+            cleanedBody = cleanedBody.replacingOccurrences(of: "\\\"", with: "\"")
+        }
+        
+        log("📥 Raw body length: \(rawBody.count)")
+        log("🧹 Cleaned JSON: \(cleanedBody.prefix(200))...")
+        
+        // Test if it's valid JSON first
+        do {
+            _ = try JSONSerialization.jsonObject(with: cleanedBody.data(using: .utf8) ?? Data())
+            log("✅ JSON syntax is valid")
+        } catch {
+            log("❌ Invalid JSON syntax: \(error.localizedDescription)")
+            
+            // Try additional cleaning for common issues
+            var extraCleanedBody = cleanedBody
+                .replacingOccurrences(of: "\\\\", with: "\\")  // Fix double backslashes
+                .replacingOccurrences(of: "\\/", with: "/")    // Fix escaped forward slashes
+                .replacingOccurrences(of: "\\n", with: "")     // Remove literal \n strings
+                .replacingOccurrences(of: "\\t", with: "")     // Remove literal \t strings
+                .replacingOccurrences(of: "\\r", with: "")     // Remove literal \r strings
+            
+            log("🔧 Extra cleaned JSON: \(extraCleanedBody.prefix(200))...")
+            cleanedBody = extraCleanedBody
+        }
+        
+        guard let jsonData = cleanedBody.data(using: .utf8) else {
             sendResponse(connection: connection, statusCode: 400, body: "Invalid JSON data")
             return
         }
@@ -213,15 +325,34 @@ class HTTPServer: ObservableObject {
             let scriptOutput = try JSONDecoder().decode(ScriptOutput.self, from: jsonData)
             
             DispatchQueue.main.async {
-                self.lastReceivedJSON = body
+                self.lastReceivedJSON = cleanedBody
                 self.onJSONReceived?(scriptOutput)
             }
             
             sendResponse(connection: connection, statusCode: 200, body: "Diagram received successfully")
-            print("✅ Successfully parsed and processed diagram with \(scriptOutput.elements.count) elements")
+            log("✅ Successfully parsed and processed diagram with \(scriptOutput.elements.count) elements")
             
+        } catch let decodingError as DecodingError {
+            let errorMessage = "JSON decoding error: \(decodingError.localizedDescription)"
+            log("❌ \(errorMessage)")
+            
+            // Provide more specific error details
+            switch decodingError {
+            case .keyNotFound(let key, let context):
+                log("🔑 Missing key: \(key.stringValue) at \(context.codingPath)")
+            case .typeMismatch(let type, let context):
+                log("🔄 Type mismatch: expected \(type) at \(context.codingPath)")
+            case .valueNotFound(let type, let context):
+                log("❓ Value not found: \(type) at \(context.codingPath)")
+            case .dataCorrupted(let context):
+                log("💥 Data corrupted at: \(context.codingPath)")
+            @unknown default:
+                log("🤷 Unknown decoding error")
+            }
+            
+            sendResponse(connection: connection, statusCode: 400, body: "Invalid JSON format: \(errorMessage)")
         } catch {
-            print("❌ JSON parsing error: \(error)")
+            log("❌ JSON parsing error: \(error.localizedDescription)")
             sendResponse(connection: connection, statusCode: 400, body: "Invalid JSON format: \(error.localizedDescription)")
         }
     }
@@ -238,9 +369,9 @@ class HTTPServer: ObservableObject {
         \(body)
         """
         
-        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { error in
+        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { [weak self] error in
             if let error = error {
-                print("❌ Send error: \(error)")
+                self?.log("❌ Send error: \(error.localizedDescription)")
             }
             connection.cancel()
         })

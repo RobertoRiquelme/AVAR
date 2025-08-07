@@ -102,7 +102,7 @@ extension ElementDTO {
     }
     
     private func create3DMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
-        if desc.contains("cube") {
+        if desc.contains("cube") || desc.contains("box") {
             return createCube(normalized: normalized)
         } else if desc.contains("sphere") {
             return createSphere(normalized: normalized)
