@@ -102,15 +102,21 @@ extension ElementDTO {
     }
     
     private func create3DMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
+        print("🎯 Creating 3D mesh for shape: '\(desc)'")
         if desc.contains("cube") || desc.contains("box") {
+            print("📦 Creating cube mesh")
             return createCube(normalized: normalized)
         } else if desc.contains("sphere") {
+            print("🔮 Creating sphere mesh")
             return createSphere(normalized: normalized)
         } else if desc.contains("cylinder") {
+            print("🗼 Creating cylinder mesh")
             return createCylinder(normalized: normalized)
         } else if desc.contains("cone") {
+            print("📐 Creating cone mesh")
             return createCone(normalized: normalized)
         } else {
+            print("❌ Unknown 3D shape description: '\(desc)' - creating empty mesh")
             return createEmptyMesh()
         }
     }
@@ -129,30 +135,35 @@ extension ElementDTO {
     }
     
     private func createCube(normalized: (Int, Double) -> Float) -> MeshResource {
-        let w = normalized(0, 0.1)
-        let h = normalized(1, 0.1)
-        let d = normalized(2, 0.1)
+        let w = max(0.01, normalized(0, 0.1))  // Ensure minimum size
+        let h = max(0.01, normalized(1, 0.1))  // Ensure minimum size
+        let d = max(0.01, normalized(2, 0.1))  // Ensure minimum size
+        print("📦 Cube dimensions: w=\(w), h=\(h), d=\(d)")
         return MeshResource.generateBox(size: SIMD3(w, h, d))
     }
     
     private func createSphere(normalized: (Int, Double) -> Float) -> MeshResource {
-        let r = normalized(0, 0.05)
+        let r = max(0.01, normalized(0, 0.05))  // Ensure minimum size
+        print("🔮 Sphere radius: r=\(r)")
         return MeshResource.generateSphere(radius: r)
     }
     
     private func createCylinder(normalized: (Int, Double) -> Float) -> MeshResource {
-        let r = normalized(0, 0.05)
-        let h = normalized(1, Double(r * 2))
+        let r = max(0.01, normalized(0, 0.05))  // Ensure minimum size
+        let h = max(0.01, normalized(1, Double(r * 2)))  // Ensure minimum size
+        print("🗼 Cylinder dimensions: r=\(r), h=\(h)")
         return MeshResource.generateCylinder(height: h, radius: r)
     }
     
     private func createCone(normalized: (Int, Double) -> Float) -> MeshResource {
-        let r = normalized(0, 0.05)
-        let h = normalized(1, Double(r * 2))
+        let r = max(0.01, normalized(0, 0.05))  // Ensure minimum size
+        let h = max(0.01, normalized(1, Double(r * 2)))  // Ensure minimum size
+        print("📐 Cone dimensions: r=\(r), h=\(h)")
         return MeshResource.generateCone(height: h, radius: r)
     }
     
     private func createEmptyMesh() -> MeshResource {
-        return MeshResource.generateBox(size: SIMD3<Float>(0, 0, 0))
+        print("⚠️ Creating fallback cube mesh (0.1x0.1x0.1) - original shape was not recognized!")
+        return MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))  // Fallback visible cube for debugging
     }
 }

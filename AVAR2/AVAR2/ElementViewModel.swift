@@ -359,17 +359,28 @@ class ElementViewModel: ObservableObject {
         lineEntities.removeAll()
         let hoverEffectComponent = HoverEffectComponent()
         
+        print("🔄 Creating and positioning \(elements.count) elements")
+        var validElements = 0
+        
         for element in elements {
-            guard let coords = element.position else { continue }
-            let entity = createEntity(for: element)
+            guard let coords = element.position else { 
+                print("⚠️ Element \(element.id?.description ?? "unknown") has no position - skipping")
+                continue 
+            }
             
+            let entity = createEntity(for: element)
             let localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
+            print("📍 Element \(element.id?.description ?? "unknown") positioned at \(localPos)")
+            
             entity.position = localPos
             entity.components.set(hoverEffectComponent)
             container.addChild(entity)
             let elementIdKey = element.id != nil ? String(element.id!) : "element_\(UUID().uuidString.prefix(8))"
             entityMap[elementIdKey] = entity
+            validElements += 1
         }
+        
+        print("✅ Successfully created \(validElements) out of \(elements.count) elements")
     }
     
     private func calculateElementPosition(coords: [Double], normalizationContext: NormalizationContext) -> SIMD3<Float> {
@@ -626,14 +637,16 @@ class ElementViewModel: ObservableObject {
         
         guard let startScale = zoomHandleStartScale else { return }
         
-        // Native visionOS WindowGroup zoom behavior: simple diagonal movement from corner
+        // Native visionOS WindowGroup zoom behavior: diagonal movement from corner
         let translation2D = value.gestureValue.translation
         let dragX = Float(translation2D.width)   // Right = positive
         let dragY = Float(translation2D.height)  // Down = positive
         
-        // Simple diagonal calculation: down-right = zoom in, up-left = zoom out
-        // This matches native visionOS WindowGroup behavior exactly
-        let diagonalMovement = dragX + dragY  // Both right and down are positive = zoom in
+        // Use distance-based calculation for consistent diagonal behavior
+        // Determine zoom direction based on the dominant movement away from/toward origin
+        let distance = sqrt(dragX * dragX + dragY * dragY)
+        let direction: Float = (dragX + dragY) >= 0 ? 1.0 : -1.0  // Down-right = zoom in, up-left = zoom out
+        let diagonalMovement = distance * direction
         
         // Simple, direct scaling like native visionOS
         let scaleSensitivity: Float = 0.001
@@ -1042,9 +1055,9 @@ class ElementViewModel: ObservableObject {
         // Orient label into XZ-plane so it faces camera in 2D mode, lift slightly to avoid z-fighting
         labelEntity.position.y += 0.001
         // Debug: print world transform and bounds
-        print("RTLabel [\(element.id)] transform:\n\(labelEntity.transform.matrix)")
+        print("RTLabel [\(String(describing: element.id))] transform:\n\(labelEntity.transform.matrix)")
         let bounds = labelEntity.visualBounds(relativeTo: nil)
-        print("RTLabel [\(element.id)] bounds center: \(bounds.center), extents: \(bounds.extents)")
+        print("RTLabel [\(String(describing: element.id))] bounds center: \(bounds.center), extents: \(bounds.extents)")
         return labelEntity
     }
     

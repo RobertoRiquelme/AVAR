@@ -329,7 +329,7 @@ class HTTPServer: ObservableObject {
                 self.onJSONReceived?(scriptOutput)
             }
             
-            sendResponse(connection: connection, statusCode: 200, body: "Diagram received successfully")
+            sendResponse(connection: connection, statusCode: 200, body: "done", contentType: "application/json")
             log("✅ Successfully parsed and processed diagram with \(scriptOutput.elements.count) elements")
             
         } catch let decodingError as DecodingError {

@@ -733,6 +733,7 @@ struct AVAR2: App {
                 }
             }
         }
+        .defaultSize(width: 1000, height: 1000)
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
