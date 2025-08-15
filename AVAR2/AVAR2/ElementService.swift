@@ -57,6 +57,15 @@ enum ElementService {
         }
 
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(ScriptOutput.self, from: data)
+        print("📄 Loading JSON file: \(filename) (\(data.count) bytes)")
+        let decoded = try JSONDecoder().decode(ScriptOutput.self, from: data)
+        print("📋 Decoded \(decoded.elements.count) elements, is2D: \(decoded.is2D)")
+        for (index, element) in decoded.elements.enumerated() {
+            print("   Element \(index): id=\(element.id ?? -1), type='\(element.type)', hasShape=\(element.shape != nil)")
+            if let shape = element.shape {
+                print("      Shape: desc='\(shape.shapeDescription ?? "nil")', extent=\(shape.extent ?? [])")
+            }
+        }
+        return decoded
     }
 }

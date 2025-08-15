@@ -23,6 +23,8 @@ class ElementViewModel: ObservableObject {
     @Published var loadErrorMessage: String? = nil
     /// True when the loaded graph came from RTelements (2D) rather than elements (3D)
     @Published private(set) var isGraph2D: Bool = false
+    /// The filename this view model is displaying
+    private var filename: String?
     private var normalizationContext: NormalizationContext?
     private var entityMap: [String: Entity] = [:]
     private var lineEntities: [Entity] = []
@@ -151,6 +153,7 @@ class ElementViewModel: ObservableObject {
     }
 
     func loadData(from filename: String) async {
+        self.filename = filename  // Store filename for position tracking
         do {
             let output = try ElementService.loadScriptOutput(from: filename)
             self.elements = output.elements
@@ -196,7 +199,7 @@ class ElementViewModel: ObservableObject {
     }
     
     private func createRootContainer(content: RealityViewContent, normalizationContext: NormalizationContext) -> Entity {
-        let pivot = appModel?.getNextDiagramPosition() ?? SIMD3<Float>(0, 1.0, -2.0)
+        let pivot = appModel?.getNextDiagramPosition(for: filename ?? "unknown") ?? SIMD3<Float>(0, 1.0, -2.0)
         print("📍 Loading diagram at position: \(pivot)")
         print("📍 Available surfaces: \(appModel?.surfaceDetector.surfaceAnchors.count ?? 0)")
         
@@ -366,6 +369,12 @@ class ElementViewModel: ObservableObject {
             guard let coords = element.position else { 
                 print("⚠️ Element \(element.id?.description ?? "unknown") has no position - skipping")
                 continue 
+            }
+            
+            // Skip camera elements - they don't need visual representation
+            if element.type.lowercased() == "camera" {
+                print("📷 Skipping camera element \(element.id?.description ?? "unknown")")
+                continue
             }
             
             let entity = createEntity(for: element)

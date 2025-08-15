@@ -90,12 +90,24 @@ struct ElementDTO: Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
 
         // Try decoding shape as ShapeDTO or fallback to string and wrap
-        if let shapeDTO = try? c.decode(ShapeDTO.self, forKey: .shape) {
+        let rawId = try? c.decode(String.self, forKey: .id)
+        print("🔧 Processing element with ID: '\(rawId ?? "nil")'")
+        
+        do {
+            let shapeDTO = try c.decode(ShapeDTO.self, forKey: .shape)
+            print("✅ Successfully decoded ShapeDTO, shapeDescription: '\(shapeDTO.shapeDescription ?? "nil")'")
             self.shape = shapeDTO
-        } else if let shapeString = try? c.decode(String.self, forKey: .shape) {
-            self.shape = ShapeDTO(shapeDescription: shapeString)
-        } else {
-            self.shape = nil
+        } catch {
+            print("❌ ShapeDTO decoding failed with error: \(error)")
+            if let shapeString = try? c.decode(String.self, forKey: .shape) {
+                print("✅ Decoded shape as string '\(shapeString)'")
+                self.shape = ShapeDTO(shapeDescription: shapeString)
+            } else {
+                print("🚨 No shape found for element - checking if shape key exists in JSON")
+                let hasShapeKey = c.contains(.shape)
+                print("   Shape key exists: \(hasShapeKey)")
+                self.shape = nil
+            }
         }
 
         self.position = try c.decodeIfPresent([Double].self, forKey: .position)
@@ -164,4 +176,29 @@ struct ShapeDTO: Codable {
         self.color = nil
         self.id = nil
     }
+    
+    // Custom decoder to debug shape parsing
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        print("🔍 ShapeDTO decoder - available keys: \(container.allKeys)")
+        
+        self.shapeDescription = try container.decodeIfPresent(String.self, forKey: .shapeDescription)
+        print("   shapeDescription: '\(self.shapeDescription ?? "nil")'")
+        
+        self.extent = try container.decodeIfPresent([Double].self, forKey: .extent)
+        print("   extent: \(self.extent ?? [])")
+        
+        self.text = try container.decodeIfPresent(String.self, forKey: .text)
+        self.color = try container.decodeIfPresent([Double].self, forKey: .color)
+        
+        // Decode id as Int (primary) or convert from String, or leave nil (same logic as ElementDTO)
+        if let intID = try? container.decode(Int.self, forKey: .id) {
+            self.id = intID
+        } else if let strID = try? container.decode(String.self, forKey: .id), let intFromString = Int(strID) {
+            self.id = intFromString
+        } else {
+            self.id = nil
+        }
+    }
+    
 }

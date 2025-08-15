@@ -734,11 +734,13 @@ struct AVAR2: App {
             }
         }
         .defaultSize(width: 1000, height: 1000)
+        .windowResizability(.contentMinSize)
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
             ImmersiveSpaceWrapper(activeFiles: activeFiles) { file in
                 activeFiles.removeAll { $0 == file }
+                appModel.freeDiagramPosition(filename: file)
             }
             .environment(appModel)
         }

@@ -72,8 +72,17 @@ extension ElementDTO {
     }
     
     private func createMesh(normalization: NormalizationContext) -> MeshResource {
+        // Debug: Print detailed shape information
+        print("🔍 createMesh called for element ID: \(self.id ?? 0)")
+        print("   - shape object exists: \(shape != nil)")
+        print("   - shapeDescription raw: '\(shape?.shapeDescription ?? "nil")'")
+        print("   - extent: \(shape?.extent ?? [])")
+        
         let desc = shape?.shapeDescription?.lowercased() ?? ""
         let extent = shape?.extent ?? []
+        
+        print("   - processed desc: '\(desc)'")
+        print("   - will check RT: \(desc.contains("rt"))")
         
         let normalized = createNormalizationFunction(extent: extent, normalization: normalization)
         
