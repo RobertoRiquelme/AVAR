@@ -62,6 +62,9 @@ class ElementViewModel: ObservableObject {
     /// Reference to AppModel (simplified)
     private var appModel: AppModel?
     
+    /// Reference to Collaborative Session Manager
+    private var collaborativeManager: SimplifiedCollaborativeSessionManager?
+    
     /// Reference to the grab handle for adding snap messages
     private var grabHandleEntity: Entity?
     /// Reference to the zoom handle for scaling gestures
@@ -92,6 +95,14 @@ class ElementViewModel: ObservableObject {
         self.appModel = appModel
         print("🔧 ElementViewModel: AppModel set, using PERSISTENT surface detection")
         print("🔧 Surface detection running: \(appModel.surfaceDetector.isRunning), anchors: \(appModel.surfaceDetector.surfaceAnchors.count)")
+    }
+    
+    /// Set the CollaborativeSessionManager for entity synchronization
+    func setCollaborativeManager(_ manager: SimplifiedCollaborativeSessionManager?) {
+        self.collaborativeManager = manager
+        if manager != nil {
+            print("📡 ElementViewModel: Collaborative manager set - entities will sync across participants")
+        }
     }
     
     /// Get all available surface anchors with proper coordinate system handling
@@ -179,6 +190,13 @@ class ElementViewModel: ObservableObject {
         
         let container = createRootContainer(content: content, normalizationContext: normalizationContext)
         let background = createBackgroundEntity(container: container, normalizationContext: normalizationContext)
+        
+        // Make the root container collaborative for position synchronization
+        if let collaborativeManager = self.collaborativeManager {
+            let diagramId = filename ?? "unknown_\(UUID().uuidString.prefix(8))"
+            container.makeCollaborative(with: collaborativeManager, identifier: "diagram_\(diagramId)")
+            print("📡 Made diagram container collaborative: diagram_\(diagramId)")
+        }
         
         setupUIControls(background: background, normalizationContext: normalizationContext, onClose: onClose)
         createAndPositionElements(container: container, normalizationContext: normalizationContext)
@@ -386,6 +404,14 @@ class ElementViewModel: ObservableObject {
             container.addChild(entity)
             let elementIdKey = element.id != nil ? String(element.id!) : "element_\(UUID().uuidString.prefix(8))"
             entityMap[elementIdKey] = entity
+            
+            // Make individual elements collaborative for position synchronization
+            if let collaborativeManager = self.collaborativeManager {
+                let collaborativeId = "\(filename ?? "unknown")_element_\(elementIdKey)"
+                entity.makeCollaborative(with: collaborativeManager, identifier: collaborativeId)
+                print("📡 Made element collaborative: \(collaborativeId)")
+            }
+            
             validElements += 1
         }
         
@@ -420,6 +446,13 @@ class ElementViewModel: ObservableObject {
                let line = createLineBetween(String(from), and: String(to), colorComponents: edge.color ?? edge.shape?.color) {
                 container.addChild(line)
                 lineEntities.append(line)
+                
+                // Make connection lines collaborative
+                if let collaborativeManager = self.collaborativeManager {
+                    let lineId = "\(filename ?? "unknown")_line_\(from)_to_\(to)"
+                    line.makeCollaborative(with: collaborativeManager, identifier: lineId)
+                    print("📡 Made connection line collaborative: \(lineId)")
+                }
             }
         }
     }

@@ -4,6 +4,10 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsGroupActivities</key>
+	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>This app uses the camera to detect surfaces for anchoring 3D content in your environment.</string>
 	<key>NSWorldSensingUsageDescription</key>

@@ -17,6 +17,7 @@ struct ContentView: View {
     var onClose: (() -> Void)? = nil
     @StateObject private var viewModel = ElementViewModel()
     @Environment(AppModel.self) private var appModel
+    @Environment(\.collaborativeSessionManager) private var collaborativeManager
 
     var body: some View {
         RealityView { content in
@@ -24,9 +25,13 @@ struct ContentView: View {
         } update: { content in
             viewModel.updateConnections(in: content)
         }
+        .enableCollaborativeSession { isActive in
+            print("📡 Collaborative session state changed for \(filename): \(isActive)")
+        }
         .task {
             print("📋 ContentView task started for: \(filename)")
             viewModel.setAppModel(appModel)
+            viewModel.setCollaborativeManager(collaborativeManager)
             await viewModel.loadData(from: filename)
             print("📋 ContentView task completed for: \(filename)")
         }

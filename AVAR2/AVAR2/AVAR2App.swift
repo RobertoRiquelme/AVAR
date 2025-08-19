@@ -10,6 +10,7 @@ import QuartzCore
 import RealityKit
 import RealityKitContent
 import Foundation
+import GroupActivities
 
 extension Notification.Name {
     static let setImmersionLevel = Notification.Name("setImmersionLevel")
@@ -157,6 +158,7 @@ struct ImmersiveSpaceWrapper: View {
     let activeFiles: [String]
     let onClose: (String) -> Void
     @Environment(AppModel.self) private var appModel
+    @Environment(SimplifiedCollaborativeSessionManager.self) private var collaborativeManager
     @State private var immersionLevel: Double = 0.25
     @State private var showDebugInfo: Bool = false
     @State private var lastUpdateLevel: Double = -1.0 // Track last updated level
@@ -282,6 +284,12 @@ struct ImmersiveSpaceWrapper: View {
                 }
                 print("🎛️ Immersion set to \(String(format: "%.0f%%", level * 100)) from main window")
                 print("🎛️ Background opacity should be: \(level * 0.8)")
+                
+                // Send immersion level to collaborative session
+                if collaborativeManager.isInCollaborativeSession {
+                    collaborativeManager.sendImmersionLevel(level)
+                    print("📡 Sent immersion level to collaborative session: \(level)")
+                }
             } else {
                 print("❌ Failed to extract level from notification object: \(String(describing: notification.object))")
             }
@@ -388,6 +396,7 @@ struct AVAR2: App {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @State private var appModel = AppModel()
     @StateObject private var httpServer = HTTPServer()
+    @State private var collaborativeManager = SimplifiedCollaborativeSessionManager()
 
     enum InputMode: String {
         case file, json, server
@@ -407,7 +416,6 @@ struct AVAR2: App {
     @State private var isJSONValid: Bool = false
     @Environment(\.scenePhase) private var scenePhase
 
-
     init() {
         // Find all .txt resources in the main bundle
         let names = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil)?
@@ -421,316 +429,202 @@ struct AVAR2: App {
     var body: some SwiftUI.Scene {
         // 1. 2D launcher
         WindowGroup {
-            VStack(spacing: 20) {
-                Text("Launch Immersive Experience")
-                    .font(.title)
-                    .padding(.top)
+            ZStack {
+                VStack(spacing: 20) {
+                    Text("Launch Immersive Experience")
+                        .font(.title)
+                        .padding(.top)
 
-                Picker("Input Source", selection: $inputMode) {
-                    Text("From File").tag(InputMode.file)
-                    Text("From JSON").tag(InputMode.json)
-                    Text("HTTP Server").tag(InputMode.server)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
-                if inputMode == .file {
-                    Picker("Select Example", selection: $selectedFile) {
-                        ForEach(files, id: \.self) { name in
-                            Text(name).tag(name)
-                        }
+                    Picker("Input Source", selection: $inputMode) {
+                        Text("From File").tag(InputMode.file)
+                        Text("From JSON").tag(InputMode.json)
+                        Text("HTTP Server").tag(InputMode.server)
                     }
-                    .pickerStyle(.menu)
+                    .pickerStyle(.segmented)
                     .padding(.horizontal)
-                } else if inputMode == .json {
-                    VStack(alignment: .leading) {
-                        Text("Paste JSON Diagram:")
-                            .font(.headline)
-                            .padding(.horizontal)
 
-                        TextEditor(text: $jsonInput)
-                            .frame(height: UIFont.preferredFont(forTextStyle: .body).lineHeight * 10 + 32)
-                            .padding(.horizontal)
+                    if inputMode == .file {
+                        Picker("Select Example", selection: $selectedFile) {
+                            ForEach(files, id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .padding(.horizontal)
+                    } else if inputMode == .json {
+                        VStack(alignment: .leading) {
+                            Text("Paste JSON Diagram:")
+                                .font(.headline)
+                                .padding(.horizontal)
 
-                        HStack {
-                            Button("Validate JSON") {
-                                if let data = jsonInput.data(using: .utf8) {
-                                    isJSONValid = (try? JSONSerialization.jsonObject(with: data)) != nil
-                                } else {
+                            TextEditor(text: $jsonInput)
+                                .frame(height: UIFont.preferredFont(forTextStyle: .body).lineHeight * 10 + 32)
+                                .padding(.horizontal)
+
+                            HStack {
+                                Button("Validate JSON") {
+                                    if let data = jsonInput.data(using: .utf8) {
+                                        isJSONValid = (try? JSONSerialization.jsonObject(with: data)) != nil
+                                    } else {
+                                        isJSONValid = false
+                                    }
+                                }
+
+                                Spacer()
+
+                                Button("Clear") {
+                                    jsonInput = ""
                                     isJSONValid = false
                                 }
                             }
+                            .padding(.horizontal)
 
-                            Spacer()
-
-                            Button("Clear") {
-                                jsonInput = ""
-                                isJSONValid = false
+                            if !isJSONValid && !jsonInput.isEmpty {
+                                Text("Invalid JSON format")
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal)
                             }
                         }
-                        .padding(.horizontal)
-
-                        if !isJSONValid && !jsonInput.isEmpty {
-                            Text("Invalid JSON format")
-                                .foregroundColor(.red)
-                                .padding(.horizontal)
-                        }
-                    }
-                } else {
-                    // HTTP Server tab
-                    HTTPServerTabView(httpServer: httpServer)
-                }
-
-                Button("Add Diagram") {
-                    Task {
-                        if inputMode == .json && !isJSONValid {
-                            return // Prevent invalid input
-                        }
-
-                        // Ensure immersive space is open
-                        if !hasEnteredImmersive {
-                            print("🔄 Immersive space not open, opening now...")
-                            do {
-                                await openImmersiveSpace(id: "MainImmersive")
-                                hasEnteredImmersive = true
-                                print("✅ Immersive space opened for diagram")
-                            } catch {
-                                print("❌ Failed to open immersive space for diagram: \(error)")
-                                return
-                            }
-                        }
-
-                        let newFile = inputMode == .file ? selectedFile : "input_json_\(UUID().uuidString)"
-                        if inputMode == .json {
-                            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(newFile).appendingPathExtension("txt")
-                            try? jsonInput.write(to: tempURL, atomically: true, encoding: .utf8)
-                        }
-                        print("📊 Adding diagram: \(newFile)")
-                        activeFiles.append(newFile)
-                        
-                        // Ensure plane visualization starts disabled for new diagrams
-                        appModel.showPlaneVisualization = false
-                        appModel.surfaceDetector.setVisualizationVisible(false)
-                    }
-                }
-                .font(.title2)
-
-                
-                // Immersion Test Buttons
-                VStack(spacing: 12) {
-                    Text("Immersion Test Controls")
-                        .font(.headline)
-                        .foregroundColor(.blue)
-                    
-                    HStack(spacing: 10) {
-                        Button("0%") {
-                            print("🔘 0% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.0)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("25%") {
-                            print("🔘 25% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.25)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("50%") {
-                            print("🔘 50% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.5)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("75%") {
-                            print("🔘 75% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.75)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("100%") {
-                            print("🔘 100% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 1.0)
-                        }
-                        .buttonStyle(.bordered)
+                    } else {
+                        // HTTP Server tab
+                        HTTPServerTabView(httpServer: httpServer)
                     }
                     
-//                    // Immersion Controls Instructions
-//                    VStack(alignment: .leading, spacing: 4) {
-//                        Text("In Immersive Space:")
-//                            .font(.subheadline)
-//                            .fontWeight(.medium)
-//                        
-//                        Group {
-//                            Text("• Spacebar: Toggle debug info")
-//                            Text("• Up/Down arrows: Adjust immersion")
-//                            Text("• R: Reset immersion to 0")
-//                            Text("• F: Full immersion (100%)")
-//                            Text("• Vertical drag: Smooth immersion control")
-//                        }
-//                        .font(.caption)
-//                        .foregroundColor(.secondary)
-//                    }
-                }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
+                    // Enhanced Collaborative Session Controls
+                    CollaborativeSessionView(
+                        collaborativeManager: collaborativeManager,
+                        showToast: { message, icon, color in
+                            print("🍞 Toast: \(message) (\(icon))")
+                        }
+                    )
 
-                Spacer()
-                
-                // Bottom row buttons - Exit Immersive Space and Show Plane Visualization on the left, Quit App on the right
-                HStack {
-                    Button("Exit Immersive Space") {
+                    Button("Add Diagram") {
                         Task {
-                            await dismissImmersiveSpace()
-                            hasEnteredImmersive = false
-                            activeFiles.removeAll()
-                            appModel.resetDiagramPositioning()
+                            if inputMode == .json && !isJSONValid {
+                                return // Prevent invalid input
+                            }
+
+                            // Ensure immersive space is open
+                            if !hasEnteredImmersive {
+                                print("🔄 Immersive space not open, opening now...")
+                                do {
+                                    await openImmersiveSpace(id: "MainImmersive")
+                                    hasEnteredImmersive = true
+                                    print("✅ Immersive space opened for diagram")
+                                } catch {
+                                    print("❌ Failed to open immersive space for diagram: \(error)")
+                                    return
+                                }
+                            }
+
+                            let newFile = inputMode == .file ? selectedFile : "input_json_\(UUID().uuidString)"
+                            var jsonDataToSend: String = ""
+                            
+                            if inputMode == .json {
+                                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(newFile).appendingPathExtension("txt")
+                                try? jsonInput.write(to: tempURL, atomically: true, encoding: .utf8)
+                                jsonDataToSend = jsonInput
+                            } else if inputMode == .file {
+                                // Load file content for collaborative sharing
+                                if let fileURL = Bundle.main.url(forResource: selectedFile, withExtension: "txt"),
+                                   let fileContent = try? String(contentsOf: fileURL) {
+                                    jsonDataToSend = fileContent
+                                }
+                            }
+                            
+                            print("📊 Adding diagram: \(newFile)")
+                            activeFiles.append(newFile)
+                            
+                            // Send to collaborative session if active
+                            if collaborativeManager.isInCollaborativeSession && !jsonDataToSend.isEmpty {
+                                let position = appModel.getNextDiagramPosition(for: newFile)
+                                collaborativeManager.sendDiagram(newFile, jsonData: jsonDataToSend, position: position)
+                                print("📡 Sent diagram to collaborative session: \(newFile)")
+                            }
+                            
+                            // Ensure plane visualization starts disabled for new diagrams
+                            appModel.showPlaneVisualization = false
+                            appModel.surfaceDetector.setVisualizationVisible(false)
                         }
-                    }
-                    .font(.title3)
-                    
-                    Button(appModel.showPlaneVisualization ? "Hide Plane Visualization" : "Show Plane Visualization") {
-                        appModel.togglePlaneVisualization()
-                    }
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    Button("Quit App") {
-                        exit(0)
                     }
                     .font(.title2)
-                    .foregroundColor(.red)
-                }
-                
-                // Isolate FPS display to prevent picker reloads
-                FPSDisplayView()
-                    .padding(.bottom)
-            }
-            .padding()
-            .contentShape(Rectangle())
-            .onChange(of: scenePhase) { oldPhase, newPhase in
-                if newPhase == .background {
-                    exit(0)
-                }
-            }
-            .task {
-                // Auto-open immersive space on launch
-                if !hasLaunched {
-                    hasLaunched = true
-                    print("🚀 App launching - starting surface detection...")
-                    // Start surface detection BEFORE opening immersive space
-                    await appModel.startSurfaceDetectionIfNeeded()
                     
-                    print("🎯 Opening immersive space...")
-                    do {
-                        await openImmersiveSpace(id: "MainImmersive")
-                        hasEnteredImmersive = true
-                        print("✅ Immersive space opened successfully")
-                    } catch {
-                        print("❌ Failed to open immersive space: \(error)")
-                        hasEnteredImmersive = false
+                    // Immersion Test Buttons
+                    VStack(spacing: 12) {
+                        Text("Immersion Test Controls")
+                            .font(.headline)
+                            .foregroundColor(.blue)
+                        
+                        HStack(spacing: 10) {
+                            Button("0%") {
+                                print("🔘 0% button pressed - sending notification")
+                                NotificationCenter.default.post(name: .setImmersionLevel, object: 0.0)
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            Button("25%") {
+                                print("🔘 25% button pressed - sending notification")
+                                NotificationCenter.default.post(name: .setImmersionLevel, object: 0.25)
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            Button("50%") {
+                                print("🔘 50% button pressed - sending notification")
+                                NotificationCenter.default.post(name: .setImmersionLevel, object: 0.5)
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            Button("75%") {
+                                print("🔘 75% button pressed - sending notification")
+                                NotificationCenter.default.post(name: .setImmersionLevel, object: 0.75)
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            Button("100%") {
+                                print("🔘 100% button pressed - sending notification")
+                                NotificationCenter.default.post(name: .setImmersionLevel, object: 1.0)
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
-                }
-                
-                // Set up HTTP server callback for automatic diagram loading
-                httpServer.onJSONReceived = { scriptOutput in
-                    Task { @MainActor in
-                        // Ensure immersive space is open
-                        if !hasEnteredImmersive {
-                            print("🔄 Immersive space not open, opening now for HTTP diagram...")
-                            do {
-                                await openImmersiveSpace(id: "MainImmersive")
-                                hasEnteredImmersive = true
-                                print("✅ Immersive space opened for HTTP diagram")
-                            } catch {
-                                print("❌ Failed to open immersive space for HTTP diagram: \(error)")
-                                return
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+
+                    Spacer()
+                    
+                    // Bottom row buttons - Exit Immersive Space and Show Plane Visualization on the left, Quit App on the right
+                    HStack {
+                        Button("Exit Immersive Space") {
+                            Task {
+                                await dismissImmersiveSpace()
+                                hasEnteredImmersive = false
+                                activeFiles.removeAll()
+                                appModel.resetDiagramPositioning()
                             }
                         }
+                        .font(.title3)
                         
-                        // Handle diagram ID logic
-                        if let diagramId = scriptOutput.id {
-                            // Diagram has ID - check if it exists
-                            if let existingInfo = appModel.getDiagramInfo(for: diagramId) {
-                                // Diagram exists - update/redraw it
-                                print("🔄 Updating existing diagram with ID: \(diagramId)")
-                                
-                                // Find and remove the existing diagram from activeFiles
-                                activeFiles.removeAll { $0 == existingInfo.filename }
-                                
-                                // Create new filename for the update
-                                let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
-                                
-                                // Save updated JSON to temporary file
-                                let tempURL = FileManager.default.temporaryDirectory
-                                    .appendingPathComponent(newFile)
-                                    .appendingPathExtension("txt")
-                                
-                                do {
-                                    let jsonData = try JSONEncoder().encode(scriptOutput)
-                                    try jsonData.write(to: tempURL)
-                                    
-                                    print("🔄 Redrawing diagram with ID: \(diagramId)")
-                                    activeFiles.append(newFile)
-                                    
-                                    // Update AppModel tracking
-                                    appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
-                                    
-                                } catch {
-                                    print("❌ Failed to save updated HTTP diagram: \(error)")
-                                }
-                            } else {
-                                // New diagram with ID
-                                print("➕ Creating new diagram with ID: \(diagramId)")
-                                
-                                let newFile = "http_diagram_\(diagramId)"
-                                let tempURL = FileManager.default.temporaryDirectory
-                                    .appendingPathComponent(newFile)
-                                    .appendingPathExtension("txt")
-                                
-                                do {
-                                    let jsonData = try JSONEncoder().encode(scriptOutput)
-                                    try jsonData.write(to: tempURL)
-                                    
-                                    print("📊 Adding new HTTP diagram: \(newFile)")
-                                    let diagramIndex = activeFiles.count
-                                    activeFiles.append(newFile)
-                                    
-                                    // Register in AppModel
-                                    appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
-                                    
-                                } catch {
-                                    print("❌ Failed to save new HTTP diagram: \(error)")
-                                }
-                            }
-                        } else {
-                            // No ID - create new diagram
-                            print("➕ Creating new diagram without ID")
-                            
-                            let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
-                            let tempURL = FileManager.default.temporaryDirectory
-                                .appendingPathComponent(newFile)
-                                .appendingPathExtension("txt")
-                            
-                            do {
-                                let jsonData = try JSONEncoder().encode(scriptOutput)
-                                try jsonData.write(to: tempURL)
-                                
-                                print("📊 Adding HTTP diagram: \(newFile)")
-                                activeFiles.append(newFile)
-                                
-                            } catch {
-                                print("❌ Failed to save HTTP diagram: \(error)")
-                            }
+                        Button(appModel.showPlaneVisualization ? "Hide Plane Visualization" : "Show Plane Visualization") {
+                            appModel.togglePlaneVisualization()
                         }
+                        .font(.title3)
+                        .foregroundColor(.secondary)
                         
-                        // Ensure plane visualization starts disabled for new diagrams
-                        appModel.showPlaneVisualization = false
-                        appModel.surfaceDetector.setVisualizationVisible(false)
+                        Spacer()
+                        
+                        Button("Quit App") {
+                            exit(0)
+                        }
+                        .font(.title2)
+                        .foregroundColor(.red)
                     }
+                    
+                    // Isolate FPS display to prevent picker reloads
+                    FPSDisplayView()
+                        .padding(.bottom)
                 }
+                .padding()
             }
         }
         .defaultSize(width: 1000, height: 1000)
@@ -743,6 +637,7 @@ struct AVAR2: App {
                 appModel.freeDiagramPosition(filename: file)
             }
             .environment(appModel)
+            .environment(collaborativeManager)
         }
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }

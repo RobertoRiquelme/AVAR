@@ -35,6 +35,10 @@ class AppModel {
     private var activeDiagrams: [Int: Int] = [:] // id -> diagram index
     private var diagramFiles: [Int: String] = [:] // id -> filename
     
+    // Collaborative session integration
+    var isInCollaborativeSession: Bool = false
+    var collaborativeSessionParticipants: Int = 0
+    
     func startSurfaceDetectionIfNeeded() async {
         guard !surfaceDetectionStarted else { 
             print("🚫 Surface detection already started - skipping")
@@ -127,5 +131,12 @@ class AppModel {
         showPlaneVisualization.toggle()
         surfaceDetector.setVisualizationVisible(showPlaneVisualization)
         print("🎨 Plane visualization: \(showPlaneVisualization ? "ON" : "OFF")")
+    }
+    
+    /// Update collaborative session state
+    func updateCollaborativeSessionState(isActive: Bool, participantCount: Int = 0) {
+        isInCollaborativeSession = isActive
+        collaborativeSessionParticipants = participantCount
+        print("📡 Collaborative session state: \(isActive ? "ACTIVE" : "INACTIVE") (\(participantCount) participants)")
     }
 }
