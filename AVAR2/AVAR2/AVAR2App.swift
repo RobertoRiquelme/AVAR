@@ -542,9 +542,7 @@ struct AVAR2: App {
                                 print("📡 Sent diagram to collaborative session: \(newFile)")
                             }
                             
-                            // Ensure plane visualization starts disabled for new diagrams
-                            appModel.showPlaneVisualization = false
-                            appModel.surfaceDetector.setVisualizationVisible(false)
+                            // Note: Plane visualization state is controlled by user toggle, not affected by adding diagrams
                         }
                     }
                     .font(.title2)
@@ -625,6 +623,126 @@ struct AVAR2: App {
                         .padding(.bottom)
                 }
                 .padding()
+                .contentShape(Rectangle())
+                .environment(collaborativeManager)
+                .onChange(of: scenePhase) { oldPhase, newPhase in
+                    if newPhase == .background {
+                        exit(0)
+                    }
+                }
+                .task {
+                    // Auto-open immersive space and start surface detection on launch
+                    if !hasLaunched {
+                        hasLaunched = true
+                        print("🚀 App launching - starting surface detection...")
+                        // Start surface detection BEFORE opening immersive space
+                        await appModel.startSurfaceDetectionIfNeeded()
+                        
+                        print("🎯 Opening immersive space...")
+                        do {
+                            await openImmersiveSpace(id: "MainImmersive")
+                            hasEnteredImmersive = true
+                            print("✅ Immersive space opened successfully")
+                        } catch {
+                            print("❌ Failed to open immersive space: \(error)")
+                            hasEnteredImmersive = false
+                        }
+                    }
+                    
+                    // Set up HTTP server callback for automatic diagram loading
+                    httpServer.onJSONReceived = { scriptOutput in
+                        Task { @MainActor in
+                            // Ensure immersive space is open
+                            if !hasEnteredImmersive {
+                                print("🔄 Immersive space not open, opening now for HTTP diagram...")
+                                do {
+                                    await openImmersiveSpace(id: "MainImmersive")
+                                    hasEnteredImmersive = true
+                                    print("✅ Immersive space opened for HTTP diagram")
+                                } catch {
+                                    print("❌ Failed to open immersive space for HTTP diagram: \(error)")
+                                    return
+                                }
+                            }
+                            
+                            // Handle diagram ID logic
+                            if let diagramId = scriptOutput.id {
+                                // Diagram has ID - check if it exists
+                                if let existingInfo = appModel.getDiagramInfo(for: diagramId) {
+                                    // Diagram exists - update/redraw it
+                                    print("🔄 Updating existing diagram with ID: \(diagramId)")
+                                    
+                                    // Find and remove the existing diagram from activeFiles
+                                    activeFiles.removeAll { $0 == existingInfo.filename }
+                                    
+                                    // Create new filename for the update
+                                    let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
+                                    
+                                    // Save updated JSON to temporary file
+                                    let tempURL = FileManager.default.temporaryDirectory
+                                        .appendingPathComponent(newFile)
+                                        .appendingPathExtension("txt")
+                                    
+                                    do {
+                                        let jsonData = try JSONEncoder().encode(scriptOutput)
+                                        try jsonData.write(to: tempURL)
+                                        
+                                        print("🔄 Redrawing diagram with ID: \(diagramId)")
+                                        activeFiles.append(newFile)
+                                        
+                                        // Update AppModel tracking
+                                        appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
+                                        
+                                    } catch {
+                                        print("❌ Failed to save updated HTTP diagram: \(error)")
+                                    }
+                                } else {
+                                    // New diagram with ID
+                                    print("➕ Creating new diagram with ID: \(diagramId)")
+                                    
+                                    let newFile = "http_diagram_\(diagramId)"
+                                    let tempURL = FileManager.default.temporaryDirectory
+                                        .appendingPathComponent(newFile)
+                                        .appendingPathExtension("txt")
+                                    
+                                    do {
+                                        let jsonData = try JSONEncoder().encode(scriptOutput)
+                                        try jsonData.write(to: tempURL)
+                                        
+                                        print("📊 Adding new HTTP diagram: \(newFile)")
+                                        let diagramIndex = activeFiles.count
+                                        activeFiles.append(newFile)
+                                        
+                                        // Register in AppModel
+                                        appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
+                                        
+                                    } catch {
+                                        print("❌ Failed to save new HTTP diagram: \(error)")
+                                    }
+                                }
+                            } else {
+                                // No ID - create new diagram
+                                print("➕ Creating new diagram without ID")
+                                
+                                let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
+                                let tempURL = FileManager.default.temporaryDirectory
+                                    .appendingPathComponent(newFile)
+                                    .appendingPathExtension("txt")
+                                
+                                do {
+                                    let jsonData = try JSONEncoder().encode(scriptOutput)
+                                    try jsonData.write(to: tempURL)
+                                    
+                                    print("📊 Adding HTTP diagram: \(newFile)")
+                                    activeFiles.append(newFile)
+                                    
+                                } catch {
+                                    print("❌ Failed to save HTTP diagram: \(error)")
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         .defaultSize(width: 1000, height: 1000)

@@ -60,6 +60,11 @@ class SimplifiedCollaborativeSessionManager {
     init() {
         setupActivityObserver()
         setupDiagramCallbacks()
+        
+        #if DEBUG
+        // Add debug menu simulation - uncomment to test UI states
+        // simulateCollaborativeStates()
+        #endif
     }
     
     /// Setup callbacks to track diagram activity
@@ -225,6 +230,38 @@ class SimplifiedCollaborativeSessionManager {
         entity.name = ""
         logger.log("Removed entity from collaboration")
     }
+    
+    #if DEBUG
+    /// Simulate collaborative states for testing UI without real devices
+    private func simulateCollaborativeStates() {
+        // Simulate different states with delays
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.sessionState = "Simulated: Starting..."
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            self.sessionState = "Simulated: Waiting for participants..."
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
+            self.isInCollaborativeSession = true
+            self.sessionParticipantCount = 2
+            self.sessionState = "Simulated: Connected (2 participants)"
+            self.lastActivityTime = Date()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) {
+            self.diagramsReceived = 3
+            self.diagramsSent = 1
+        }
+    }
+    
+    /// Enable debug mode - call this from UI for testing
+    func enableDebugMode() {
+        logger.log("🐛 Debug mode enabled - simulating collaborative states")
+        simulateCollaborativeStates()
+    }
+    #endif
 }
 
 /// Group Activity for diagram collaboration

@@ -261,6 +261,24 @@ struct CollaborativeSessionView: View {
                 .buttonStyle(.bordered)
                 .foregroundColor(.blue)
                 
+                #if DEBUG
+                Button(action: {
+                    collaborativeManager.enableDebugMode()
+                    showToast(
+                        "Debug mode enabled - simulating states",
+                        "bug.circle.fill",
+                        .purple
+                    )
+                }) {
+                    HStack {
+                        Image(systemName: "bug.circle.fill")
+                        Text("Debug")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .foregroundColor(.purple)
+                #endif
+                
             } else {
                 Button(action: {
                     // Show immediate toast feedback
@@ -283,6 +301,24 @@ struct CollaborativeSessionView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                
+                #if DEBUG
+                Button(action: {
+                    collaborativeManager.enableDebugMode()
+                    showToast(
+                        "Debug mode enabled - simulating states",
+                        "bug.circle.fill",
+                        .purple
+                    )
+                }) {
+                    HStack {
+                        Image(systemName: "bug.circle.fill")
+                        Text("Simulate")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .foregroundColor(.purple)
+                #endif
             }
         }
     }
