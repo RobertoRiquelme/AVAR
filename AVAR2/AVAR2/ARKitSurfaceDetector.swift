@@ -1,3 +1,4 @@
+#if os(visionOS)
 import RealityKit
 import ARKit
 import UIKit
@@ -140,3 +141,4 @@ final class ARKitSurfaceDetector: ObservableObject {
         }
     }
 }
+#endif

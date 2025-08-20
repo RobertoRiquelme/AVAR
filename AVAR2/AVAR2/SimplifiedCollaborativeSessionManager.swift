@@ -6,11 +6,14 @@
 //
 
 import Foundation
-import RealityKit
 import GroupActivities
 import Combine
 import SwiftUI
 import OSLog
+
+#if os(visionOS)
+import RealityKit
+#endif
 
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "SimplifiedCollaborativeSessionManager")
 
@@ -219,17 +222,40 @@ class SimplifiedCollaborativeSessionManager {
         logger.log("🎛️ Sent immersion level update: \(String(format: "%.0f%%", level * 100))")
     }
     
+    #if os(visionOS) || os(iOS)
     /// Simplified entity collaborative marking (just sets name for identification)
-    func makeEntityCollaborative(_ entity: Entity, identifier: String) {
-        entity.name = identifier
+    func makeEntityCollaborative(_ entity: Any, identifier: String) {
+        #if os(visionOS)
+        if let realityEntity = entity as? Entity {
+            realityEntity.name = identifier
+        }
+        #endif
+        
+        #if os(iOS)
+        // On iOS, we might use different entity types or skip this functionality
+        // For now, just log the identifier since iOS uses different ARKit patterns
+        print("iOS: Entity marked as collaborative with identifier: \(identifier)")
+        #endif
+        
         logger.log("Made entity collaborative with identifier: \(identifier)")
     }
     
     /// Remove collaborative behavior from an entity
-    func removeEntityFromCollaboration(_ entity: Entity) {
-        entity.name = ""
+    func removeEntityFromCollaboration(_ entity: Any) {
+        #if os(visionOS)
+        if let realityEntity = entity as? Entity {
+            realityEntity.name = ""
+        }
+        #endif
+        
+        #if os(iOS)
+        // On iOS, just log the removal
+        print("iOS: Entity removed from collaboration")
+        #endif
+        
         logger.log("Removed entity from collaboration")
     }
+    #endif
     
     #if DEBUG
     /// Simulate collaborative states for testing UI without real devices

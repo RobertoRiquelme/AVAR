@@ -5,6 +5,7 @@
 //  Created by Roberto Riquelme on 04-07-25.
 //
 
+#if os(visionOS)
 import ARKit
 import SwiftUI
 
@@ -37,3 +38,4 @@ extension PlaneAnchor.Classification {
         }
     }
 }
+#endif

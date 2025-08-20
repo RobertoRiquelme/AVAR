@@ -142,6 +142,7 @@ struct ServerLogsView: View {
     }
 }
 
+#if os(visionOS)
 /// Static surface detection view that never changes
 struct StaticSurfaceView: View {
     @Environment(AppModel.self) private var appModel
@@ -152,7 +153,9 @@ struct StaticSurfaceView: View {
         }
     }
 }
+#endif
 
+#if os(visionOS)
 /// Wrapper for the entire immersive space with proper background positioning
 struct ImmersiveSpaceWrapper: View {
     let activeFiles: [String]
@@ -302,7 +305,9 @@ struct ImmersiveSpaceWrapper: View {
         }
     }
 }
+#endif
 
+#if os(visionOS)
 /// Immersive content view with digital crown support (now without background overlay)
 struct ImmersiveContentView: View {
     let activeFiles: [String]
@@ -347,6 +352,7 @@ struct ImmersiveContentView: View {
         )
     }
 }
+#endif
 
 final class FPSMonitor: ObservableObject {
     @Published private(set) var fps: Int = 0
@@ -390,6 +396,7 @@ struct FPSDisplayView: View {
     }
 }
 
+#if os(visionOS)
 @main
 struct AVAR2: App {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
@@ -760,3 +767,4 @@ struct AVAR2: App {
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }
+#endif

@@ -5,6 +5,7 @@
 //  Created by Roberto Riquelme on 30-04-25.
 //
 
+#if os(visionOS)
 import Foundation
 import RealityKit
 import RealityKitContent
@@ -1678,3 +1679,4 @@ extension simd_float4x4 {
         SIMD3<Float>(columns.3.x, columns.3.y, columns.3.z)
     }
 }
+#endif

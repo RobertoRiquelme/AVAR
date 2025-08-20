@@ -5,6 +5,7 @@
 //  Created by Roberto Riquelme on 30-04-25.
 //
 
+#if os(visionOS)
 import SwiftUI
 import RealityKit
 import RealityKitContent
@@ -110,4 +111,5 @@ struct ContentView_Previews: PreviewProvider {
             //.environment(AppModel())
     }
 }
+#endif
 #endif

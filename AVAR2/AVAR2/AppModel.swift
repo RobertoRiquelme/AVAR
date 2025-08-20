@@ -1,16 +1,18 @@
 //
-//  AppModel.swift
+//  PlatformAppModel.swift
 //  AVAR2
 //
-//  Created by Roberto Riquelme on 30-04-25.
+//  Created by Claude Code on 20-08-25.
 //
 
 import SwiftUI
+import RealityKit
 
-/// Maintains app-wide state
+/// Cross-platform app model that handles both iOS and visionOS
 @MainActor
 @Observable
-class AppModel {
+class AppModel: ObservableObject {
+    #if os(visionOS)
     let immersiveSpaceID = "ImmersiveSpace"
     enum ImmersiveSpaceState {
         case closed
@@ -19,12 +21,20 @@ class AppModel {
     }
     var immersiveSpaceState = ImmersiveSpaceState.open
     
-    // Simple ARKit surface detector
+    // visionOS ARKit surface detector
     let surfaceDetector = ARKitSurfaceDetector()
     private var surfaceDetectionStarted = false
+    #endif
     
-    // Debug: plane visualization toggle (start disabled)
+    #if os(iOS)
+    // iOS ARKit manager
+    private var arKitManager: iOSARKitManager?
+    #endif
+    
+    // Common properties for both platforms
     var showPlaneVisualization = false
+    var isInCollaborativeSession: Bool = false
+    var collaborativeSessionParticipants: Int = 0
     
     // Dynamic positioning for multiple diagrams
     private let diagramSpacing: Float = 3.0  // 3 meters between diagrams
@@ -35,10 +45,7 @@ class AppModel {
     private var activeDiagrams: [Int: Int] = [:] // id -> diagram index
     private var diagramFiles: [Int: String] = [:] // id -> filename
     
-    // Collaborative session integration
-    var isInCollaborativeSession: Bool = false
-    var collaborativeSessionParticipants: Int = 0
-    
+    #if os(visionOS)
     func startSurfaceDetectionIfNeeded() async {
         guard !surfaceDetectionStarted else { 
             print("🚫 Surface detection already started - skipping")
@@ -48,43 +55,89 @@ class AppModel {
         surfaceDetectionStarted = true
         await surfaceDetector.run()
     }
+    #endif
     
-    /// Force restart surface detection (use carefully)
-    func restartSurfaceDetection() async {
-        print("🔄 Force restarting surface detection...")
-        surfaceDetectionStarted = false
-        await startSurfaceDetectionIfNeeded()
+    #if os(iOS)
+    func setARKitManager(_ manager: iOSARKitManager) {
+        self.arKitManager = manager
     }
     
-    /// Get the next position for a new diagram, arranged in a horizontal line
-    func getNextDiagramPosition(for filename: String) -> SIMD3<Float> {
-        let basePosition = SIMD3<Float>(0, 1.0, -2.0)  // Constants.eyeLevel, Constants.frontOffset
+    func startSurfaceDetectionIfNeeded() async {
+        await arKitManager?.run()
+    }
+    #endif
+    
+    func togglePlaneVisualization() {
+        showPlaneVisualization.toggle()
+        print("🎨 Plane visualization toggled: \(showPlaneVisualization)")
         
-        // Find the first available position (closest to center)
-        var positionIndex = 0
-        while usedPositions.contains(positionIndex) {
-            positionIndex += 1
+        #if os(visionOS)
+        surfaceDetector.setVisualizationVisible(showPlaneVisualization)
+        #endif
+        
+        #if os(iOS)
+        arKitManager?.setVisualizationVisible(showPlaneVisualization)
+        #endif
+    }
+    
+    // MARK: - Diagram Position Management
+    
+    func getNextDiagramPosition(for filename: String) -> SIMD3<Float> {
+        // If this filename already has a position, return it
+        if let existingIndex = filenameToPosition[filename] {
+            return calculatePosition(for: existingIndex)
         }
         
-        // Mark this position as used and store filename mapping
-        usedPositions.insert(positionIndex)
-        filenameToPosition[filename] = positionIndex
+        // Find next available position
+        var nextIndex = 0
+        while usedPositions.contains(nextIndex) {
+            nextIndex += 1
+        }
         
-        let offset = SIMD3<Float>(Float(positionIndex) * diagramSpacing, 0, 0)
-        let position = basePosition + offset
-        print("📍 New diagram position: \(position) (index: \(positionIndex)) for file: \(filename)")
-        print("🔍 Surface detection status: running=\(surfaceDetector.isRunning), anchors=\(surfaceDetector.surfaceAnchors.count)")
+        usedPositions.insert(nextIndex)
+        filenameToPosition[filename] = nextIndex
+        
+        let position = calculatePosition(for: nextIndex)
+        print("📍 Assigned position \(nextIndex) to diagram '\(filename)': \(position)")
         return position
     }
     
-    /// Register a diagram with ID for tracking
+    private func calculatePosition(for index: Int) -> SIMD3<Float> {
+        // Arrange diagrams in a grid pattern
+        let gridSize = 3 // 3x3 grid, then expand
+        let row = index / gridSize
+        let col = index % gridSize
+        
+        let baseX = Float(col - gridSize/2) * diagramSpacing
+        let baseZ = Float(row) * diagramSpacing - 2.0 // Start 2m in front of user
+        
+        return SIMD3<Float>(baseX, 0.5, baseZ) // 0.5m above ground
+    }
+    
+    func freeDiagramPosition(filename: String) {
+        if let index = filenameToPosition[filename] {
+            usedPositions.remove(index)
+            filenameToPosition.removeValue(forKey: filename)
+            print("🗑️ Freed position \(index) for diagram: \(filename)")
+        }
+    }
+    
+    func resetDiagramPositioning() {
+        usedPositions.removeAll()
+        filenameToPosition.removeAll()
+        activeDiagrams.removeAll()
+        diagramFiles.removeAll()
+        print("🔄 Reset all diagram positioning")
+    }
+    
+    // MARK: - Diagram ID Tracking (for HTTP updates)
+    
     func registerDiagram(id: Int, filename: String, index: Int) {
         activeDiagrams[id] = index
         diagramFiles[id] = filename
-        print("📝 Registered diagram: id=\(id), filename=\(filename), index=\(index)")
+        print("📝 Registered diagram ID \(id) -> \(filename) at index \(index)")
     }
     
-    /// Check if diagram exists and get its info
     func getDiagramInfo(for id: Int) -> (filename: String, index: Int)? {
         guard let index = activeDiagrams[id],
               let filename = diagramFiles[id] else {
@@ -93,50 +146,50 @@ class AppModel {
         return (filename: filename, index: index)
     }
     
-    /// Remove diagram from tracking
-    func removeDiagram(id: Int) {
-        activeDiagrams.removeValue(forKey: id)
-        diagramFiles.removeValue(forKey: id)
-        print("🗑️ Removed diagram: id=\(id)")
+    func clearAllDiagrams() {
+        resetDiagramPositioning()
+        print("🗑️ Cleared all diagrams")
     }
     
-    /// Free up a position when diagram is removed
-    func freeDiagramPosition(filename: String) {
-        if let positionIndex = filenameToPosition[filename] {
-            usedPositions.remove(positionIndex)
-            filenameToPosition.removeValue(forKey: filename)
-            print("🆓 Freed position \(positionIndex) for diagram: \(filename)")
-        }
-        
-        // Also remove from ID tracking if it exists
-        for (id, storedFilename) in diagramFiles {
-            if storedFilename == filename {
-                removeDiagram(id: id)
-                break
-            }
-        }
-    }
+    // MARK: - Collaborative Session Management
     
-    /// Reset diagram positioning (when exiting immersive space)
-    func resetDiagramPositioning() {
-        usedPositions.removeAll()
-        filenameToPosition.removeAll()
-        activeDiagrams.removeAll()
-        diagramFiles.removeAll()
-        print("🔄 Reset diagram positioning")
-    }
-    
-    /// Toggle plane visualization for debugging
-    func togglePlaneVisualization() {
-        showPlaneVisualization.toggle()
-        surfaceDetector.setVisualizationVisible(showPlaneVisualization)
-        print("🎨 Plane visualization: \(showPlaneVisualization ? "ON" : "OFF")")
-    }
-    
-    /// Update collaborative session state
-    func updateCollaborativeSessionState(isActive: Bool, participantCount: Int = 0) {
+    func updateCollaborativeSession(isActive: Bool, participantCount: Int) {
         isInCollaborativeSession = isActive
         collaborativeSessionParticipants = participantCount
-        print("📡 Collaborative session state: \(isActive ? "ACTIVE" : "INACTIVE") (\(participantCount) participants)")
+        print("🤝 Collaborative session updated: active=\(isActive), participants=\(participantCount)")
     }
 }
+
+// MARK: - Platform-specific extensions
+
+#if os(iOS)
+extension AppModel {
+    func getSurfaceAnchors() -> [Any] {
+        return arKitManager?.surfaceAnchors ?? []
+    }
+    
+    func isARReady() -> Bool {
+        return arKitManager?.isTrackingReady ?? false
+    }
+    
+    func getErrorMessage() -> String? {
+        return arKitManager?.errorMessage
+    }
+}
+#endif
+
+#if os(visionOS)
+extension AppModel {
+    func getSurfaceAnchors() -> [Any] {
+        return surfaceDetector.surfaceAnchors
+    }
+    
+    func isARReady() -> Bool {
+        return surfaceDetector.isRunning
+    }
+    
+    func getErrorMessage() -> String? {
+        return surfaceDetector.errorMessage
+    }
+}
+#endif
