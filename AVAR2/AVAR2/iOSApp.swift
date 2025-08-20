@@ -433,13 +433,54 @@ struct iOSMainView: View {
             
             print("📊 iOS creating diagram with \(scriptOutput.elements.count) elements for: \(filename)")
             
-            // Create elements
-            for (index, elementData) in scriptOutput.elements.enumerated() {
-                let elementEntity = await createElementEntity(from: elementData, index: index)
-                rootEntity.addChild(elementEntity)
+            // Create normalization context like visionOS
+            let normalizationContext = NormalizationContext(elements: scriptOutput.elements, is2D: scriptOutput.is2D)
+            var entityMap: [String: Entity] = [:]
+            
+            // Create individual elements (excluding line/connection elements)
+            for element in scriptOutput.elements {
+                // Skip elements without positions like visionOS does
+                guard let coords = element.position else {
+                    print("🚫 Skipping element \(element.id?.description ?? "unknown") - no position")
+                    continue
+                }
+                
+                // Skip line elements - they will be created as connections
+                if element.shape?.shapeDescription?.lowercased().contains("line") == true {
+                    print("🔗 Skipping line element \(element.id?.description ?? "unknown") - will create as connection")
+                    continue
+                }
+                
+                let entity = createElementEntity(for: element, normalization: normalizationContext)
+                let localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
+                
+                entity.position = localPos
+                entity.generateCollisionShapes(recursive: true)
+                entity.components.set(InputTargetComponent())
+                rootEntity.addChild(entity)
+                
+                // Store in entity map for connection creation
+                let elementIdKey = element.id != nil ? String(element.id!) : "element_\(UUID().uuidString.prefix(8))"
+                entityMap[elementIdKey] = entity
+                
+                print("📍 iOS Element \(element.id?.description ?? "unknown") positioned at \(localPos)")
             }
             
-            // Apply scaling for iOS viewing
+            // Create connections between elements (like visionOS does)
+            print("🔍 Looking for connections in \(scriptOutput.elements.count) elements")
+            var connectionsCreated = 0
+            for edge in scriptOutput.elements {
+                print("🔍 Element \(edge.id?.description ?? "unknown"): fromId=\(edge.fromId?.description ?? "nil"), toId=\(edge.toId?.description ?? "nil")")
+                if let from = edge.fromId, let to = edge.toId,
+                   let line = createLineBetween(String(from), String(to), entityMap: entityMap, colorComponents: edge.color ?? edge.shape?.color) {
+                    rootEntity.addChild(line)
+                    connectionsCreated += 1
+                    print("🔗 iOS connection created: \(from) -> \(to)")
+                }
+            }
+            print("✅ Created \(connectionsCreated) connections total")
+            
+            // Apply scaling for iOS viewing (like visionOS container scaling)
             let scaleFactor: Float = 0.3 // Much smaller for phone screens
             rootEntity.transform.scale = SIMD3<Float>(scaleFactor, scaleFactor, scaleFactor)
             
@@ -457,124 +498,77 @@ struct iOSMainView: View {
         return rootEntity
     }
     
-    private func createElementEntity(from elementData: ElementDTO, index: Int) async -> Entity {
-        let entity = Entity()
-        entity.name = "element_\(index)_\(elementData.type)"
-        
-        // Position
-        if let position = elementData.position, position.count >= 3 {
-            entity.transform.translation = SIMD3<Float>(
-                Float(position[0]),
-                Float(position[1]),
-                Float(position[2])
-            )
+    private func createElementEntity(for element: ElementDTO, normalization: NormalizationContext) -> Entity {
+        // Handle RTlabel elements like visionOS
+        let desc = element.shape?.shapeDescription?.lowercased() ?? ""
+        if desc.contains("rtlabel") {
+            // Create text-only entity for labels (simplified for iOS)
+            let entity = Entity()
+            entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
+            
+            if let text = element.shape?.text, !text.isEmpty, text.lowercased() != "nil" {
+                if let textEntity = createTextEntity(text) {
+                    entity.addChild(textEntity)
+                }
+            }
+            
+            return entity
         }
         
-        // Default rotation and scale
-        entity.transform.rotation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
-        entity.transform.scale = SIMD3<Float>(1, 1, 1)
+        // Use ShapeFactory approach like visionOS
+        let (mesh, material) = element.meshAndMaterial(normalization: normalization)
+        let entity = ModelEntity(mesh: mesh, materials: [material])
         
-        // Create visual representation
-        if let shapeEntity = await createShapeEntity(for: elementData) {
-            entity.addChild(shapeEntity)
+        // Handle orientation for certain shapes like visionOS
+        if desc.contains("rtellipse") {
+            entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
         }
         
-        // Add text label using type as identifier
-        if let textEntity = await createTextEntity(elementData.type) {
-            textEntity.position.y += 0.1 // Offset above the shape
-            entity.addChild(textEntity)
+        entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
+        
+        // Add label if meaningful (following visionOS logic)
+        let rawText = element.shape?.text
+        let labelText: String? = {
+            if let t = rawText, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               t.lowercased() != "nil" {
+                return t
+            }
+            return element.id == nil ? nil : ""
+        }()
+        
+        if let text = labelText {
+            if let labelEntity = createTextEntity(text) {
+                labelEntity.position.y += 0.1
+                entity.addChild(labelEntity)
+            }
         }
         
         return entity
     }
     
-    private func createShapeEntity(for element: ElementDTO) async -> Entity? {
-        let type = element.type
-        let shapeEntity = Entity()
-        var mesh: MeshResource?
+    private func calculateElementPosition(coords: [Double], normalizationContext: NormalizationContext) -> SIMD3<Float> {
+        let dims = normalizationContext.is2D ? 2 : 3
+        var normalizedCoords = [Float]()
         
-        // Create appropriate mesh based on type or shape
-        if let shape = element.shape, let shapeDesc = shape.shapeDescription {
-            // Use shape description if available
-            switch shapeDesc.lowercased() {
-            case "box", "cube":
-                mesh = MeshResource.generateBox(size: 0.1)
-            case "sphere", "ball", "uvsphere":
-                mesh = MeshResource.generateSphere(radius: 0.05)
-            case "cylinder":
-                mesh = MeshResource.generateCylinder(height: 0.1, radius: 0.05)
-            case "line":
-                // Create thin cylinder for lines
-                if let extent = shape.extent, extent.count >= 3 {
-                    let length = max(Float(extent[1]), 0.05) // Use Y component for length
-                    mesh = MeshResource.generateCylinder(height: length, radius: 0.005) // Very thin
-                } else {
-                    mesh = MeshResource.generateCylinder(height: 0.1, radius: 0.005)
-                }
-            case "plane", "rectangle":
-                mesh = MeshResource.generatePlane(width: 0.1, height: 0.1)
-            default:
-                print("⚠️ Unknown shape description: '\(shapeDesc)'")
-                mesh = MeshResource.generateBox(size: 0.05)
-            }
-        } else {
-            // Fallback based on type (for elements without shape info)
-            switch type.lowercased() {
-            case "box", "cube":
-                mesh = MeshResource.generateBox(size: 0.1)
-            case "sphere", "ball", "uvsphere":
-                mesh = MeshResource.generateSphere(radius: 0.05)
-            case "cylinder":
-                mesh = MeshResource.generateCylinder(height: 0.1, radius: 0.05)
-            case "plane", "rectangle":
-                mesh = MeshResource.generatePlane(width: 0.1, height: 0.1)
-            case "camera":
-                // Camera represented as a small box
-                mesh = MeshResource.generateBox(size: 0.06)
-            case "line":
-                // Default line
-                mesh = MeshResource.generateCylinder(height: 0.1, radius: 0.005)
-            default:
-                print("⚠️ Unknown element type: '\(type)'")
-                mesh = MeshResource.generateBox(size: 0.05)
-            }
-        }
-        
-        // Create material
-        if let mesh = mesh {
-            let material: RealityKit.Material
-            
-            if let colorArray = element.color, colorArray.count >= 3 {
-                let color = UIColor(
-                    red: CGFloat(colorArray[0]),
-                    green: CGFloat(colorArray[1]),
-                    blue: CGFloat(colorArray[2]),
-                    alpha: colorArray.count >= 4 ? CGFloat(colorArray[3]) : 1.0
-                )
-                material = SimpleMaterial(color: color, isMetallic: false)
+        for i in 0..<3 {
+            if i < dims && i < coords.count {
+                let coord = coords[i]
+                let center = normalizationContext.positionCenters[i]
+                let range = normalizationContext.positionRanges[i]
+                let globalRange = normalizationContext.globalRange
+                
+                // Normalize: center around 0, scale by global range to preserve aspect ratio
+                let normalized = Float((coord - center) / globalRange)
+                normalizedCoords.append(normalized)
             } else {
-                // Default color based on element type
-                let defaultColor = getDefaultColorForElement(type: type)
-                material = SimpleMaterial(color: defaultColor, isMetallic: false)
-            }
-            
-            let modelEntity = ModelEntity(mesh: mesh, materials: [material])
-            shapeEntity.addChild(modelEntity)
-            
-            // Add interaction components for iOS
-            modelEntity.components.set(InputTargetComponent())
-            do {
-                let collisionShape = try await ShapeResource.generateConvex(from: mesh)
-                modelEntity.components.set(CollisionComponent(shapes: [collisionShape]))
-            } catch {
-                print("❌ Failed to generate collision shape: \(error)")
+                normalizedCoords.append(0)
             }
         }
         
-        return shapeEntity
+        return SIMD3<Float>(normalizedCoords[0], normalizedCoords[1], normalizedCoords[2])
     }
     
-    private func createTextEntity(_ text: String) async -> Entity? {
+    private func createTextEntity(_ text: String) -> Entity? {
         let textMesh = MeshResource.generateText(
             text,
             extrusionDepth: 0.001,
@@ -590,23 +584,44 @@ struct iOSMainView: View {
         return textEntity
     }
     
-    private func getDefaultColorForElement(type: String) -> UIColor {
-        switch type.lowercased() {
-        case "box", "cube":
-            return .systemBlue
-        case "sphere", "ball", "uvsphere":
-            return .systemGreen
-        case "cylinder":
-            return .systemOrange
-        case "plane", "rectangle":
-            return .systemPurple
-        case "line":
-            return .systemBrown
-        case "camera":
-            return .systemYellow
-        default:
-            return .systemGray
+    private func createLineBetween(_ id1: String, _ id2: String, entityMap: [String: Entity], colorComponents: [Double]?) -> ModelEntity? {
+        guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { 
+            print("⚠️ Cannot create line: missing entities for \(id1) -> \(id2)")
+            return nil
         }
+        
+        let pos1 = entity1.position
+        let pos2 = entity2.position
+        let lineVector = pos2 - pos1
+        let length = simd_length(lineVector)
+        
+        // Create thin box as line (make thicker for iOS visibility)
+        let lineThickness: Float = 0.01 // Much thicker than visionOS for mobile visibility
+        let mesh = MeshResource.generateBox(size: SIMD3(length, lineThickness, lineThickness))
+        let materialColor: UIColor = {
+            if let rgba = colorComponents {
+                return UIColor(
+                    red: CGFloat(rgba[0]),
+                    green: CGFloat(rgba[1]),
+                    blue: CGFloat(rgba[2]),
+                    alpha: rgba.count > 3 ? CGFloat(rgba[3]) : 1.0
+                )
+            }
+            return .systemRed // Bright red for high visibility on iOS
+        }()
+        let material = SimpleMaterial(color: materialColor, isMetallic: false)
+        
+        let lineEntity = ModelEntity(mesh: mesh, materials: [material])
+        lineEntity.position = pos1 + (lineVector / 2)
+        
+        // Orient the line along the vector
+        if length > 0 {
+            let direction = lineVector / length
+            let quat = simd_quatf(from: SIMD3<Float>(1, 0, 0), to: direction)
+            lineEntity.orientation = quat
+        }
+        
+        return lineEntity
     }
     
     private func handleDiagramPositionChange(entity: Entity, position: SIMD3<Float>) {
