@@ -478,10 +478,16 @@ class ElementViewModel: ObservableObject {
             // Get 3D gesture translation (Vector3D) and convert to SIMD3<Float>
             let t3 = value.gestureValue.translation3D
             let delta = SIMD3<Float>(Float(t3.x), -Float(t3.y), Float(t3.z))
+            
+            // Transform gesture by inverse of container rotation for coherent movement
+            let containerOrientation = rootEntity?.orientation(relativeTo: nil) ?? simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+            let inverseRotation = containerOrientation.inverse
+            let rotatedDelta = inverseRotation.act(delta)
+            
             // Apply scale and account for current diagram scale to maintain consistent gesture feel
             let currentScale = rootEntity?.scale.x ?? 1.0
             let adjustedScale = Constants.dragTranslationScale / currentScale
-            let offset = delta * adjustedScale
+            let offset = rotatedDelta * adjustedScale
             value.entity.position = start + offset
             selectedEntity = value.entity
             // Update connection lines immediately
