@@ -7,11 +7,16 @@
 
 import Foundation
 import RealityKit
-import RealityKitContent
 import SwiftUI
 import simd
 import OSLog
+
+#if os(visionOS)
+import RealityKitContent
+
+#if canImport(ARKit)
 import ARKit
+#endif
 
 // Logger for ViewModel
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel")
@@ -29,7 +34,11 @@ class ElementViewModel: ObservableObject {
     private var entityMap: [String: Entity] = [:]
     private var lineEntities: [Entity] = []
     /// Holds the current RealityViewContent so we can update connections on the fly
+    #if os(visionOS)
     private var sceneContent: RealityViewContent?
+    #else
+    private var sceneContent: Any? // iOS fallback
+    #endif
     /// Root container for all graph entities (so we can scale/transform as a group)
     private var rootEntity: Entity?
     /// Background entity to capture pan/zoom gestures
@@ -1669,3 +1678,81 @@ extension simd_float4x4 {
         SIMD3<Float>(columns.3.x, columns.3.y, columns.3.z)
     }
 }
+
+#else
+// iOS ElementViewModel stub for compatibility
+@MainActor
+class ElementViewModel: ObservableObject {
+    @Published private(set) var elements: [ElementDTO] = []
+    @Published var errorMessage: String?
+    @Published var loadErrorMessage: String?
+    @Published var isVisible = true
+    @Published var containerPosition: SIMD3<Float> = SIMD3<Float>(0, 0, -1.5)
+    @Published var containerScale: Float = 1.0
+    @Published var isViewMode: Bool = false
+    @Published var isGraph2D: Bool = false
+    @Published var selectedAnchor: Any? = nil
+    
+    private var appModel: AppModel?
+    
+    func setAppModel(_ appModel: AppModel) {
+        self.appModel = appModel
+        print("📱 iOS: AppModel set")
+    }
+    
+    func loadData(from filename: String) async {
+        do {
+            // iOS stub - basic data loading without 3D rendering
+            let scriptOutput = try ElementService.loadScriptOutput(from: filename)
+            self.elements = scriptOutput.elements
+            self.loadErrorMessage = nil
+            print("📱 iOS: Loaded \(elements.count) elements from \(filename)")
+            
+            // Determine if it's a 2D graph based on elements
+            self.isGraph2D = elements.allSatisfy { element in
+                guard let position = element.position, position.count >= 3 else { return true }
+                return position[2] == 0 // z-coordinate is at index 2
+            }
+        } catch {
+            self.loadErrorMessage = "Failed to load \(filename): \(error.localizedDescription)"
+            print("📱 iOS: Failed to load \(filename): \(error)")
+        }
+    }
+    
+    // Stub methods for iOS compatibility
+    func loadElements(in content: Any, onClose: (() -> Void)? = nil) {
+        print("📱 iOS: 3D element rendering not available")
+    }
+    
+    func updateConnections(in content: Any) {
+        print("📱 iOS: 3D connection updates not available")
+    }
+    
+    func snapToSurface(_ anchor: Any) {
+        print("📱 iOS: Surface snapping not available")
+    }
+    
+    func resetToFrontPosition() {
+        containerPosition = SIMD3<Float>(0, 0, -1.5)
+        containerScale = 1.0
+        print("📱 iOS: Reset to default position")
+    }
+    
+    // Drag handling methods for iOS compatibility
+    func handleDragChanged(_ value: Any) {
+        print("📱 iOS: Drag changed - 3D manipulation not available")
+    }
+    
+    func handleDragEnded(_ value: Any) {
+        print("📱 iOS: Drag ended - 3D manipulation not available")
+    }
+    
+    func handlePanChanged(_ value: Any) {
+        print("📱 iOS: Pan changed - 3D manipulation not available")
+    }
+    
+    func handlePanEnded(_ value: Any) {
+        print("📱 iOS: Pan ended - 3D manipulation not available")
+    }
+}
+#endif

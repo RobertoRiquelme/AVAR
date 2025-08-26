@@ -5,11 +5,17 @@ import SwiftUI
 
 @MainActor
 final class ARKitSurfaceDetector: ObservableObject {
+    #if os(visionOS)
     private let session = ARKitSession()
     private let provider = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
+    #endif
     let rootEntity = Entity()
 
+    #if os(visionOS)
     @Published var surfaceAnchors: [PlaneAnchor] = []
+    #else
+    @Published var surfaceAnchors: [Any] = [] // Placeholder for iOS
+    #endif
     @Published var isRunning = false
     @Published var errorMessage: String?
     @Published var entityMap: [UUID: Entity] = [:]
@@ -18,6 +24,7 @@ final class ARKitSurfaceDetector: ObservableObject {
     private var visualizationVisible = true
 
     func run() async {
+        #if os(visionOS)
         guard PlaneDetectionProvider.isSupported else {
             await MainActor.run {
                 errorMessage = "PlaneDetectionProvider is NOT supported."
@@ -56,8 +63,17 @@ final class ARKitSurfaceDetector: ObservableObject {
             }
             print("ARKit session error: \(error)")
         }
+        #else
+        // iOS fallback - no surface detection
+        print("⚠️ Surface detection not available on iOS")
+        await MainActor.run {
+            isRunning = false
+            errorMessage = "Surface detection only available on visionOS"
+        }
+        #endif
     }
     
+    #if os(visionOS)
     private func updateSurface(_ anchor: PlaneAnchor) {
         Task { @MainActor in
             // Update or add surface anchor
@@ -127,10 +143,12 @@ final class ARKitSurfaceDetector: ObservableObject {
         entityMap[anchor.id]?.removeFromParent()
         entityMap.removeValue(forKey: anchor.id)
     }
+    #endif
     
     /// Toggle plane visualization visibility for debugging
     @MainActor
     func setVisualizationVisible(_ visible: Bool) {
+        #if os(visionOS)
         visualizationVisible = visible
         print("🎨 Setting plane visualization visibility: \(visible)")
         
@@ -138,5 +156,8 @@ final class ARKitSurfaceDetector: ObservableObject {
         for entity in entityMap.values {
             entity.isEnabled = visible
         }
+        #else
+        print("⚠️ Plane visualization not available on iOS")
+        #endif
     }
 }

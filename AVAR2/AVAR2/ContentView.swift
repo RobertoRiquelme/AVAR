@@ -7,8 +7,13 @@
 
 import SwiftUI
 import RealityKit
+
+#if os(visionOS)
 import RealityKitContent
+
+#if canImport(ARKit)
 import ARKit
+#endif
 
 /// Displays an immersive graph based on a selected example file.
 struct ContentView: View {
@@ -96,6 +101,49 @@ struct ContentView: View {
         }
     }
 }
+
+#else
+/// iOS ContentView stub - 3D rendering not available
+struct ContentView: View {
+    var filename: String = "2D Tree Layout"
+    var onClose: (() -> Void)? = nil
+    @StateObject private var viewModel = ElementViewModel()
+    @Environment(AppModel.self) private var appModel
+    
+    var body: some View {
+        VStack {
+            Text("📱 iOS View")
+                .font(.title)
+                .padding()
+            
+            Text("Loading: \(filename)")
+                .font(.headline)
+            
+            Text("3D rendering available on visionOS")
+                .foregroundColor(.secondary)
+                .padding()
+            
+            if let errorMessage = viewModel.loadErrorMessage {
+                Text("Error: \(errorMessage)")
+                    .foregroundColor(.red)
+                    .padding()
+            }
+            
+            Button("Close") {
+                onClose?()
+            }
+            .buttonStyle(.bordered)
+            .padding()
+            
+            Spacer()
+        }
+        .task {
+            viewModel.setAppModel(appModel)
+            await viewModel.loadData(from: filename)
+        }
+    }
+}
+#endif
 
 // MARK: - Previews
 #if DEBUG

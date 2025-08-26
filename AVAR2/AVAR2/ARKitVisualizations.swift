@@ -8,6 +8,7 @@
 import ARKit
 import SwiftUI
 
+#if os(visionOS)
 // Surface visualization colors based on classification
 extension PlaneAnchor.Classification {
     var color: UIColor {
@@ -37,3 +38,4 @@ extension PlaneAnchor.Classification {
         }
     }
 }
+#endif

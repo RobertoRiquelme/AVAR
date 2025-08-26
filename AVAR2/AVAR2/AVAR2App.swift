@@ -382,12 +382,13 @@ struct FPSDisplayView: View {
     }
 }
 
-@main
-struct AVAR2: App {
+#if os(visionOS)
+struct AVAR2_Legacy: App {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @State private var appModel = AppModel()
     @StateObject private var httpServer = HTTPServer()
+    @StateObject private var collaborativeSession = CollaborativeSessionManager()
 
     enum InputMode: String {
         case file, json, server
@@ -405,6 +406,7 @@ struct AVAR2: App {
     @State private var inputMode: InputMode = .file
     @State private var jsonInput: String = ""
     @State private var isJSONValid: Bool = false
+    @State private var showingCollaborativeSession = false
     @Environment(\.scenePhase) private var scenePhase
 
 
@@ -481,6 +483,20 @@ struct AVAR2: App {
                     HTTPServerTabView(httpServer: httpServer)
                 }
 
+                // Collaborative Session Button
+                HStack {
+                    Button("Collaborative Session") {
+                        showingCollaborativeSession = true
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    if collaborativeSession.isSessionActive {
+                        Text("●")
+                            .foregroundColor(.green)
+                            .font(.system(size: 12))
+                    }
+                }
+
                 Button("Add Diagram") {
                     Task {
                         if inputMode == .json && !isJSONValid {
@@ -488,6 +504,7 @@ struct AVAR2: App {
                         }
 
                         // Ensure immersive space is open
+                        #if os(visionOS)
                         if !hasEnteredImmersive {
                             print("🔄 Immersive space not open, opening now...")
                             do {
@@ -499,6 +516,9 @@ struct AVAR2: App {
                                 return
                             }
                         }
+                        #else
+                        print("⚠️ Immersive spaces not available on iOS")
+                        #endif
 
                         let newFile = inputMode == .file ? selectedFile : "input_json_\(UUID().uuidString)"
                         if inputMode == .json {
@@ -507,6 +527,18 @@ struct AVAR2: App {
                         }
                         print("📊 Adding diagram: \(newFile)")
                         activeFiles.append(newFile)
+                        
+                        // Share with collaborative session if active
+                        if collaborativeSession.isSessionActive {
+                            Task {
+                                do {
+                                    let elements = try ElementService.loadScriptOutput(from: newFile).elements
+                                    collaborativeSession.shareDiagram(filename: newFile, elements: elements)
+                                } catch {
+                                    print("❌ Failed to share diagram: \(error)")
+                                }
+                            }
+                        }
                         
                         // Ensure plane visualization starts disabled for new diagrams
                         appModel.showPlaneVisualization = false
@@ -610,6 +642,10 @@ struct AVAR2: App {
             }
             .padding()
             .contentShape(Rectangle())
+            .environment(appModel)
+            .sheet(isPresented: $showingCollaborativeSession) {
+                CollaborativeSessionView(sessionManager: collaborativeSession)
+            }
             .onChange(of: scenePhase) { oldPhase, newPhase in
                 if newPhase == .background {
                     exit(0)
@@ -747,3 +783,4 @@ struct AVAR2: App {
         .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }
+#endif
