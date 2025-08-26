@@ -95,8 +95,13 @@ extension ElementDTO {
     
     private func createNormalizationFunction(extent: [Double], normalization: NormalizationContext) -> (Int, Double) -> Float {
         return { index, defaultValue in
-            guard index < extent.count else { return Float(defaultValue) }
-            return Float(extent[index] / normalization.globalRange * 2)
+            guard index < extent.count else { 
+                print("🔢 Normalization: index \(index) >= extent.count \(extent.count), using default \(defaultValue)")
+                return Float(defaultValue) 
+            }
+            let normalized = Float(extent[index] / normalization.globalRange * 2)
+            print("🔢 Normalization: extent[\(index)]=\(extent[index]), globalRange=\(normalization.globalRange), result=\(normalized)")
+            return normalized
         }
     }
     
@@ -158,9 +163,16 @@ extension ElementDTO {
     }
     
     private func createCylinder(normalized: (Int, Double) -> Float) -> MeshResource {
-        let r = max(0.01, normalized(0, 0.05))  // Ensure minimum size
-        let h = max(0.01, normalized(1, Double(r * 2)))  // Ensure minimum size
-        print("🗼 Cylinder dimensions: r=\(r), h=\(h)")
+        let rawR = normalized(0, 0.05)
+        let rawH = normalized(1, Double(rawR * 2))
+        let r = max(0.01, rawR)  // Ensure minimum size
+        let h = max(0.01, rawH)  // Ensure minimum size
+        
+        print("🗼 Cylinder creation debug:")
+        print("   Raw extent values: r=\(rawR), h=\(rawH)")
+        print("   Final dimensions: radius=\(r), height=\(h)")
+        print("   Height/Radius ratio: \(h/r)")
+        
         return MeshResource.generateCylinder(height: h, radius: r)
     }
     
