@@ -52,15 +52,21 @@ struct iOS_ContentView: View {
                 // Bottom controls
                 VStack(spacing: 12) {
                     if !collaborativeSession.sharedDiagrams.isEmpty {
-                        Text("Shared Diagrams: \(collaborativeSession.sharedDiagrams.count)")
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.regularMaterial, in: .capsule)
+                        VStack(spacing: 4) {
+                            Text("📊 AR Diagrams: \(collaborativeSession.sharedDiagrams.count)")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text("Look around to see 3D content")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: .capsule)
                     }
                     
                     HStack(spacing: 16) {
-                        Button("Place Anchor") {
+                        Button("Debug Sphere") {
                             arViewModel.placeAnchor()
                         }
                         .buttonStyle(.borderedProminent)
@@ -82,6 +88,10 @@ struct iOS_ContentView: View {
         }
         .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
             // Update AR view when new diagrams are received
+            print("📱 iOS received \(diagrams.count) shared diagrams")
+            for (index, diagram) in diagrams.enumerated() {
+                print("📱 Diagram \(index): '\(diagram.filename)' with \(diagram.elements.count) elements")
+            }
             arViewModel.updateSharedDiagrams(diagrams)
         }
     }
@@ -198,32 +208,100 @@ class ARViewModel: NSObject, ObservableObject {
     }
     
     private func createDiagramAnchor(diagram: SharedDiagram, index: Int, totalCount: Int) -> AnchorEntity {
-        // Position diagrams side by side, 2 meters forward
-        let xOffset = Float(index) * 1.5 - Float(totalCount - 1) * 0.75
+        // Position diagrams in front of user, staggered vertically if multiple
+        let yOffset = Float(index) * 0.5 - Float(totalCount - 1) * 0.25
         let transform = simd_float4x4(
             SIMD4<Float>(1, 0, 0, 0),
             SIMD4<Float>(0, 1, 0, 0),
             SIMD4<Float>(0, 0, 1, 0),
-            SIMD4<Float>(xOffset, 0, -2, 1)
+            SIMD4<Float>(0, yOffset, -1.5, 1)  // 1.5m forward, vertically staggered
         )
         
         let anchor = AnchorEntity(world: transform)
         anchor.name = "shared_diagram_\(diagram.filename)"
         
-        // Create simplified diagram representation
+        print("📱 Creating AR diagram '\(diagram.filename)' with \(diagram.elements.count) elements")
+        
+        // Create full-scale diagram representation
+        var elementCount = 0
         for (elementIndex, element) in diagram.elements.enumerated() {
-            if let elementEntity = createSimplifiedElement(element: element, index: elementIndex) {
+            if let elementEntity = createFullScaleElement(element: element, index: elementIndex) {
                 anchor.addChild(elementEntity)
+                elementCount += 1
             }
         }
         
-        // Add title label
+        print("📱 Added \(elementCount) visible elements to AR diagram")
+        
+        // Add title label positioned above the diagram
         if let titleEntity = createTitleEntity(text: diagram.filename) {
-            titleEntity.position = SIMD3<Float>(0, 1, 0)
+            titleEntity.position = SIMD3<Float>(0, 0.8, 0)  // Above the diagram
             anchor.addChild(titleEntity)
         }
         
         return anchor
+    }
+    
+    private func createFullScaleElement(element: ElementDTO, index: Int) -> ModelEntity? {
+        guard let position = element.position, position.count >= 3 else { 
+            print("📱 ⚠️ Element \(index) missing position data")
+            return nil
+        }
+        
+        // Skip camera and edge elements for cleaner visualization
+        if element.type.lowercased() == "camera" || element.type.lowercased() == "edge" {
+            return nil
+        }
+        
+        print("📱 Creating element \(index): type=\(element.type), shape=\(element.shape?.shapeDescription ?? "unknown")")
+        
+        // Create geometry based on shape with proper sizing
+        let mesh: MeshResource
+        let baseSize: Float = 0.02  // 2cm base size - visible but not overwhelming
+        
+        if let shapeDesc = element.shape?.shapeDescription?.lowercased() {
+            switch shapeDesc {
+            case let desc where desc.contains("sphere"):
+                mesh = MeshResource.generateSphere(radius: baseSize)
+            case let desc where desc.contains("cylinder"):
+                mesh = MeshResource.generateCylinder(height: baseSize * 2, radius: baseSize)
+            case let desc where desc.contains("box"), let desc where desc.contains("cube"):
+                mesh = MeshResource.generateBox(size: SIMD3<Float>(baseSize, baseSize, baseSize))
+            case let desc where desc.contains("line"):
+                // For lines, create a thin cylinder
+                mesh = MeshResource.generateCylinder(height: baseSize * 3, radius: baseSize * 0.3)
+            default:
+                mesh = MeshResource.generateSphere(radius: baseSize) // Default sphere
+            }
+        } else {
+            mesh = MeshResource.generateSphere(radius: baseSize) // Default sphere
+        }
+        
+        // Use element color or default to blue
+        let color = UIColor(
+            red: CGFloat(element.color?[safe: 0] ?? 0.3),
+            green: CGFloat(element.color?[safe: 1] ?? 0.6),
+            blue: CGFloat(element.color?[safe: 2] ?? 1.0),
+            alpha: CGFloat(element.color?[safe: 3] ?? 1.0)
+        )
+        
+        let material = SimpleMaterial(color: color, isMetallic: false)
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        
+        // Position element using original coordinates with reasonable scaling
+        let scale: Float = 0.001  // Convert to meters - 1 unit = 1mm
+        entity.position = SIMD3<Float>(
+            Float(position[0]) * scale,
+            Float(position[1]) * scale,
+            Float(position[2]) * scale
+        )
+        
+        // Set name for debugging
+        entity.name = "element_\(index)_\(element.type)"
+        
+        print("📱 ✅ Created element at position (\(entity.position.x), \(entity.position.y), \(entity.position.z))")
+        
+        return entity
     }
     
     private func createSimplifiedElement(element: ElementDTO, index: Int) -> ModelEntity? {
@@ -272,18 +350,24 @@ class ARViewModel: NSObject, ObservableObject {
     }
     
     private func createTitleEntity(text: String) -> ModelEntity? {
-        // Create simple text representation (simplified for iOS)
+        // Create visible text representation for iOS
         let textMesh = MeshResource.generateText(
             text,
-            extrusionDepth: 0.01,
-            font: .systemFont(ofSize: 0.1),
-            containerFrame: CGRect(x: -1, y: -0.1, width: 2, height: 0.2),
+            extrusionDepth: 0.005,  // Thinner extrusion
+            font: .systemFont(ofSize: 0.05),  // Smaller but readable size
+            containerFrame: CGRect(x: -0.5, y: -0.05, width: 1.0, height: 0.1),
             alignment: .center,
             lineBreakMode: .byTruncatingTail
         )
         
-        let textMaterial = SimpleMaterial(color: .white, isMetallic: false)
+        // Use bright color for visibility
+        let textMaterial = SimpleMaterial(color: .systemYellow, isMetallic: false)
         let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
+        
+        // Add slight glow effect by making it emissive
+        var glowMaterial = UnlitMaterial(color: .systemYellow)
+        glowMaterial.color = .init(tint: .systemYellow)
+        textEntity.model?.materials = [glowMaterial]
         
         return textEntity
     }
