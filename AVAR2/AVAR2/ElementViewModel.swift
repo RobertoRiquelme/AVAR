@@ -366,26 +366,33 @@ class ElementViewModel: ObservableObject {
         var validElements = 0
         
         for element in elements {
+            // Skip edge/line elements - they don't need visual representation, only connection info
+            if element.type.lowercased() == "edge" || element.shape?.shapeDescription?.lowercased() == "line" {
+                print("🔗 Skipping edge/line element \(element.id ?? "unknown") - used for connections only")
+                continue
+            }
+            
             guard let coords = element.position else { 
-                print("⚠️ Element \(element.id?.description ?? "unknown") has no position - skipping")
+                print("⚠️ Element \(element.id ?? "unknown") has no position - skipping")
                 continue 
             }
             
             // Skip camera elements - they don't need visual representation
             if element.type.lowercased() == "camera" {
-                print("📷 Skipping camera element \(element.id?.description ?? "unknown")")
+                print("📷 Skipping camera element \(element.id ?? "unknown")")
                 continue
             }
             
             let entity = createEntity(for: element)
             let localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
-            print("📍 Element \(element.id?.description ?? "unknown") positioned at \(localPos)")
+            print("📍 Element \(element.id ?? "unknown") positioned at \(localPos)")
             
             entity.position = localPos
             entity.components.set(hoverEffectComponent)
             container.addChild(entity)
-            let elementIdKey = element.id != nil ? String(element.id!) : "element_\(UUID().uuidString.prefix(8))"
+            let elementIdKey = element.id ?? "element_\(UUID().uuidString.prefix(8))"
             entityMap[elementIdKey] = entity
+            print("🗝️ Stored entity with key: '\(elementIdKey)' for element ID: \(element.id ?? "nil")")
             validElements += 1
         }
         
@@ -416,10 +423,14 @@ class ElementViewModel: ObservableObject {
         lineEntities.removeAll()
         // For each element that defines an edge, connect fromId -> toId
         for edge in elements {
-            if let from = edge.fromId, let to = edge.toId,
-               let line = createLineBetween(String(from), and: String(to), colorComponents: edge.color ?? edge.shape?.color) {
-                container.addChild(line)
-                lineEntities.append(line)
+            if let from = edge.fromId, let to = edge.toId {
+                if let line = createLineBetween(from, and: to, colorComponents: edge.color ?? edge.shape?.color) {
+                    container.addChild(line)
+                    lineEntities.append(line)
+                    print("📍 Created line between elements \(from) and \(to)")
+                } else {
+                    print("⚠️ Failed to create line between \(from) and \(to) - entities not found in entityMap")
+                }
             }
         }
     }
@@ -964,7 +975,7 @@ class ElementViewModel: ObservableObject {
                t.lowercased() != "nil" {
                 return t
             }
-            return element.id == nil ? nil : ""
+            return nil  // Don't show element IDs as labels
         }()
         if let text = labelText {
             let labelEntity = createLabelEntity(text: text)
@@ -978,7 +989,12 @@ class ElementViewModel: ObservableObject {
     }
 
     private func createLineBetween(_ id1: String, and id2: String, colorComponents: [Double]?) -> ModelEntity? {
-        guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { return nil }
+        print("🔍 Looking for entities with keys: '\(id1)' and '\(id2)'")
+        print("🗂️ Available entity keys: \(Array(entityMap.keys).sorted())")
+        guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { 
+            print("❌ Could not find entities for keys '\(id1)' and/or '\(id2)'")
+            return nil 
+        }
 
         let pos1 = entity1.position
         let pos2 = entity2.position

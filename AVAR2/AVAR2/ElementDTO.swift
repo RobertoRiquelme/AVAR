@@ -73,10 +73,10 @@ struct ElementDTO: Codable {
     let shape: ShapeDTO?        // e.g. Box, Line, Sphere, etc.
     let position: [Double]?     // 2D or 3D coordinates
     let color: [Double]?        // RGBA, etc.
-    let id: Int?                // optional numeric ID
+    let id: String?             // optional ID (can be string or numeric)
     let type: String            // e.g. "camera", "RTelement", etc.
-    let fromId: Int?            // for edges: source element ID
-    let toId: Int?              // for edges: destination element ID
+    let fromId: String?         // for edges: source element ID
+    let toId: String?           // for edges: destination element ID
     let interactions: [String]? // defines interactions for elements
     let extent: [Double]?       // element-level extent/size
     let model: String?          // alternative to type field
@@ -116,13 +116,13 @@ struct ElementDTO: Codable {
         self.extent = try c.decodeIfPresent([Double].self, forKey: .extent)
         self.model = try c.decodeIfPresent(String.self, forKey: .model)
 
-        // Decode id as Int (primary) or convert from String/Double, or leave nil
-        if let intID = try? c.decode(Int.self, forKey: .id) {
-            self.id = intID
+        // Decode id as String (primary) or convert from Int/Double to String
+        if let strID = try? c.decode(String.self, forKey: .id) {
+            self.id = strID
+        } else if let intID = try? c.decode(Int.self, forKey: .id) {
+            self.id = String(intID)
         } else if let doubleID = try? c.decode(Double.self, forKey: .id) {
-            self.id = Int(doubleID)
-        } else if let strID = try? c.decode(String.self, forKey: .id), let intFromString = Int(strID) {
-            self.id = intFromString
+            self.id = String(Int(doubleID))
         } else {
             // No ID provided - leave as nil for new format compatibility
             self.id = nil
@@ -136,20 +136,20 @@ struct ElementDTO: Codable {
         } else {
             self.type = "element" // default type
         }
-        // Decode from_id as Int (primary) or convert from String
-        if let fromInt = try? c.decode(Int.self, forKey: .fromId) {
-            self.fromId = fromInt
-        } else if let fromString = try? c.decode(String.self, forKey: .fromId), let intFromString = Int(fromString) {
-            self.fromId = intFromString
+        // Decode from_id as String (primary) or convert from Int
+        if let fromString = try? c.decode(String.self, forKey: .fromId) {
+            self.fromId = fromString
+        } else if let fromInt = try? c.decode(Int.self, forKey: .fromId) {
+            self.fromId = String(fromInt)
         } else {
             self.fromId = nil
         }
         
-        // Decode to_id as Int (primary) or convert from String
-        if let toInt = try? c.decode(Int.self, forKey: .toId) {
-            self.toId = toInt
-        } else if let toString = try? c.decode(String.self, forKey: .toId), let intFromString = Int(toString) {
-            self.toId = intFromString
+        // Decode to_id as String (primary) or convert from Int
+        if let toString = try? c.decode(String.self, forKey: .toId) {
+            self.toId = toString
+        } else if let toInt = try? c.decode(Int.self, forKey: .toId) {
+            self.toId = String(toInt)
         } else {
             self.toId = nil
         }
@@ -162,7 +162,7 @@ struct ShapeDTO: Codable {
     let extent: [Double]?   // e.g. [width, height, depth]
     let text: String?       // any label
     let color: [Double]?    // sometimes color appears here
-    let id: Int?            // some shapes carry their own id
+    let id: String?         // some shapes carry their own id
 
     private enum CodingKeys: String, CodingKey {
         case shapeDescription, extent, text, color, id
@@ -191,11 +191,11 @@ struct ShapeDTO: Codable {
         self.text = try container.decodeIfPresent(String.self, forKey: .text)
         self.color = try container.decodeIfPresent([Double].self, forKey: .color)
         
-        // Decode id as Int (primary) or convert from String, or leave nil (same logic as ElementDTO)
-        if let intID = try? container.decode(Int.self, forKey: .id) {
-            self.id = intID
-        } else if let strID = try? container.decode(String.self, forKey: .id), let intFromString = Int(strID) {
-            self.id = intFromString
+        // Decode id as String (primary) or convert from Int, or leave nil (same logic as ElementDTO)
+        if let strID = try? container.decode(String.self, forKey: .id) {
+            self.id = strID
+        } else if let intID = try? container.decode(Int.self, forKey: .id) {
+            self.id = String(intID)
         } else {
             self.id = nil
         }

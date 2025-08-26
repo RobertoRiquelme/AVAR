@@ -73,7 +73,7 @@ extension ElementDTO {
     
     private func createMesh(normalization: NormalizationContext) -> MeshResource {
         // Debug: Print detailed shape information
-        print("🔍 createMesh called for element ID: \(self.id ?? 0)")
+        print("🔍 createMesh called for element ID: \(self.id ?? "nil")")
         print("   - shape object exists: \(shape != nil)")
         print("   - shapeDescription raw: '\(shape?.shapeDescription ?? "nil")'")
         print("   - extent: \(shape?.extent ?? [])")
