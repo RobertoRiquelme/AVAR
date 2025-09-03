@@ -13,6 +13,7 @@ import Foundation
 
 extension Notification.Name {
     static let setImmersionLevel = Notification.Name("setImmersionLevel")
+    static let immersionLevelDidChange = Notification.Name("immersionLevelDidChange")
 }
 
 /// Separate view for HTTP Server tab to reduce complexity
@@ -287,13 +288,20 @@ struct ImmersiveSpaceWrapper: View {
             }
         }
         .onChange(of: immersionLevel) { oldValue, newValue in
-            print("📊 Immersion level changed from \(String(format: "%.2f", oldValue)) to \(String(format: "%.2f", newValue))")
-            if abs(newValue - oldValue) > 0.5 {
+            let treshold: Double = 0.5
+            let delta = newValue - oldValue
+            
+            print("📊 Immersion level changed from \(String(format: "%.2f", Double(oldValue))) to \(String(format: "%.2f", Double(newValue)))")
+            
+            if abs(delta) > treshold {
                 print("⚠️ Large immersion jump detected! This might indicate an issue.")
             }
+            
+            NotificationCenter.default.post(name: .immersionLevelDidChange, object: newValue)
         }
     }
 }
+
 
 /// Immersive content view with digital crown support (now without background overlay)
 struct ImmersiveContentView: View {
@@ -345,16 +353,16 @@ final class FPSMonitor: ObservableObject {
     private var displayLink: CADisplayLink?
     private var lastTimestamp: CFTimeInterval = 0
     private var frameCount: Int = 0
-
+    
     init() {
         displayLink = CADisplayLink(target: self, selector: #selector(tick))
         displayLink?.add(to: .main, forMode: .common)
     }
-
+    
     deinit {
         displayLink?.invalidate()
     }
-
+    
     @objc private func tick() {
         guard let link = displayLink else { return }
         if lastTimestamp == 0 {
@@ -393,7 +401,7 @@ struct AVAR2_Legacy: App {
     enum InputMode: String {
         case file, json, server
     }
-
+    
     // Gather all example files in the bundle (without extension)
     let files: [String]
     @State private var selectedFile: String
@@ -402,14 +410,15 @@ struct AVAR2_Legacy: App {
     @State private var activeFiles: [String] = []
     /// Track if app has launched to start immersive space automatically
     @State private var hasLaunched: Bool = false
-
     @State private var inputMode: InputMode = .file
     @State private var jsonInput: String = ""
     @State private var isJSONValid: Bool = false
     @State private var showingCollaborativeSession = false
     @Environment(\.scenePhase) private var scenePhase
-
-
+    
+    @State private var currentImmersionLevel: Double = 0.0
+    
+    
     init() {
         // Find all .txt resources in the main bundle
         let names = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil)?
@@ -419,7 +428,7 @@ struct AVAR2_Legacy: App {
         // Default to first file if available
         _selectedFile = State(initialValue: names.first ?? "")
     }
-
+    
     var body: some SwiftUI.Scene {
         // 1. 2D launcher
         WindowGroup {
@@ -427,7 +436,7 @@ struct AVAR2_Legacy: App {
                 Text("Launch Immersive Experience")
                     .font(.title)
                     .padding(.top)
-
+                
                 Picker("Input Source", selection: $inputMode) {
                     Text("From File").tag(InputMode.file)
                     Text("From JSON").tag(InputMode.json)
@@ -435,7 +444,7 @@ struct AVAR2_Legacy: App {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
-
+                
                 if inputMode == .file {
                     Picker("Select Example", selection: $selectedFile) {
                         ForEach(files, id: \.self) { name in
@@ -449,11 +458,11 @@ struct AVAR2_Legacy: App {
                         Text("Paste JSON Diagram:")
                             .font(.headline)
                             .padding(.horizontal)
-
+                        
                         TextEditor(text: $jsonInput)
                             .frame(height: UIFont.preferredFont(forTextStyle: .body).lineHeight * 10 + 32)
                             .padding(.horizontal)
-
+                        
                         HStack {
                             Button("Validate JSON") {
                                 if let data = jsonInput.data(using: .utf8) {
@@ -462,16 +471,16 @@ struct AVAR2_Legacy: App {
                                     isJSONValid = false
                                 }
                             }
-
+                            
                             Spacer()
-
+                            
                             Button("Clear") {
                                 jsonInput = ""
                                 isJSONValid = false
                             }
                         }
                         .padding(.horizontal)
-
+                        
                         if !isJSONValid && !jsonInput.isEmpty {
                             Text("Invalid JSON format")
                                 .foregroundColor(.red)
@@ -502,7 +511,7 @@ struct AVAR2_Legacy: App {
                         if inputMode == .json && !isJSONValid {
                             return // Prevent invalid input
                         }
-
+                        
                         // Ensure immersive space is open
                         #if os(visionOS)
                         if !hasEnteredImmersive {
@@ -546,13 +555,24 @@ struct AVAR2_Legacy: App {
                     }
                 }
                 .font(.title2)
-
+                
                 
                 // Immersion Test Buttons
                 VStack(spacing: 12) {
                     Text("Immersion Test Controls")
                         .font(.headline)
                         .foregroundColor(.blue)
+                    
+                    Slider(value: $currentImmersionLevel, in: 0.0...1.0, step: 0.05) {
+                        Text("Nivel de Inmersión")
+                    } minimumValueLabel: {
+                        Text("0%").font(.caption2)
+                    } maximumValueLabel: {
+                        Text("100%").font(.caption2)
+                    }
+                    .onChange(of: currentImmersionLevel) { newValue in
+                        NotificationCenter.default.post(name: .setImmersionLevel, object: newValue)
+                    }
                     
                     HStack(spacing: 10) {
                         Button("0%") {
@@ -585,28 +605,19 @@ struct AVAR2_Legacy: App {
                         }
                         .buttonStyle(.bordered)
                     }
+                    .onReceive(NotificationCenter.default.publisher(for: .immersionLevelDidChange)) { note in
+                        if let level = note.object as? Double {
+                            currentImmersionLevel = level
+                        }
+                    }
                     
-//                    // Immersion Controls Instructions
-//                    VStack(alignment: .leading, spacing: 4) {
-//                        Text("In Immersive Space:")
-//                            .font(.subheadline)
-//                            .fontWeight(.medium)
-//                        
-//                        Group {
-//                            Text("• Spacebar: Toggle debug info")
-//                            Text("• Up/Down arrows: Adjust immersion")
-//                            Text("• R: Reset immersion to 0")
-//                            Text("• F: Full immersion (100%)")
-//                            Text("• Vertical drag: Smooth immersion control")
-//                        }
-//                        .font(.caption)
-//                        .foregroundColor(.secondary)
-//                    }
+                    Text("Immersion level: \(currentImmersionLevel * 100, specifier: "%.2f")")
+                        .font(.caption)
                 }
                 .padding()
                 .background(Color.blue.opacity(0.1))
                 .cornerRadius(8)
-
+                
                 Spacer()
                 
                 // Bottom row buttons - Exit Immersive Space and Show Plane Visualization on the left, Quit App on the right
@@ -771,7 +782,7 @@ struct AVAR2_Legacy: App {
         }
         .defaultSize(width: 1000, height: 1000)
         .windowResizability(.contentMinSize)
-
+        
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
             ImmersiveSpaceWrapper(activeFiles: activeFiles) { file in
