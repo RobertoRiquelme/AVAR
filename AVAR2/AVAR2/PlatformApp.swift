@@ -18,6 +18,7 @@ struct PlatformApp: App {
     @StateObject private var collaborativeSession = CollaborativeSessionManager()
     #if os(visionOS)
     @StateObject private var visionOSState = VisionOSAppState()
+    @State private var immersionStyleVisionOS: ImmersionStyle = .mixed
     #endif
     
     var body: some SwiftUI.Scene {
@@ -45,9 +46,9 @@ struct PlatformApp: App {
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
-            VisionOSImmersiveView(sharedState: visionOSState)
+            VisionOSImmersiveView(sharedState: visionOSState, collaborativeSession: collaborativeSession, immersionStyle: immersionStyleVisionOS)
         }
-        .immersionStyle(selection: .constant(.mixed), in: .mixed)
+        .immersionStyle(selection: $immersionStyleVisionOS, in: .mixed, .full)
     }
     #endif
     
@@ -90,6 +91,9 @@ struct VisionOSMainView: View {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @StateObject private var httpServer = HTTPServer()
+    #if os(visionOS)
+    @StateObject private var imageTracker = VisionOSImageTrackingService()
+    #endif
 
     enum InputMode: String {
         case file, json, server
@@ -128,6 +132,27 @@ struct VisionOSMainView: View {
                 Text("Launch Immersive Experience")
                     .font(.title)
                     .padding(.top)
+
+                #if os(visionOS)
+                // Marker HUD (lightweight)
+                HStack(spacing: 10) {
+                    Label("Marker Tracking", systemImage: imageTracker.isRunning ? "camera.viewfinder" : "camera")
+                        .foregroundColor(imageTracker.isRunning ? .green : .secondary)
+                    if let id = imageTracker.lastMarkerId {
+                        Text(id).font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.12), in: .capsule)
+                    } else {
+                        Text("No marker").font(.caption).foregroundColor(.secondary)
+                    }
+                    if let t = imageTracker.lastUpdateDate {
+                        Text(t, style: .time).font(.caption2).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
+                #endif
 
                 Picker("Input Source", selection: $inputMode) {
                     Text("From File").tag(InputMode.file)
@@ -547,6 +572,14 @@ struct VisionOSMainView: View {
                     }
                 }
             }
+            #if os(visionOS)
+            .task {
+                await imageTracker.start()
+                imageTracker.onMarkerPose = { id, pos, rot in
+                    collaborativeSession.sendMarkerPose(markerId: id, worldPosition: pos, worldOrientation: rot)
+                }
+            }
+            #endif
         }
     
     private func validateJSON(_ text: String) {
@@ -567,13 +600,40 @@ struct VisionOSMainView: View {
 
 struct VisionOSImmersiveView: View {
     @ObservedObject var sharedState: VisionOSAppState
+    let collaborativeSession: CollaborativeSessionManager
+    let immersionStyle: ImmersionStyle
+    @State private var showBackgroundOverlay = false
+    @State private var savedPlaneViz: Bool? = nil
     
     var body: some View {
-        ImmersiveSpaceWrapper(activeFiles: sharedState.activeFiles) { file in
+        ImmersiveSpaceWrapper(activeFiles: sharedState.activeFiles, onClose: { file in
             sharedState.activeFiles.removeAll { $0 == file }
             sharedState.appModel.freeDiagramPosition(filename: file)
-        }
+        }, collaborativeSession: collaborativeSession, showBackgroundOverlay: showBackgroundOverlay)
         .environment(sharedState.appModel)
+        .onChange(of: String(describing: immersionStyle)) { _, newKey in
+            if newKey.localizedCaseInsensitiveContains("Full") {
+                if savedPlaneViz == nil { savedPlaneViz = sharedState.appModel.showPlaneVisualization }
+                sharedState.appModel.showPlaneVisualization = false
+                sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+            } else if newKey.localizedCaseInsensitiveContains("Mixed") {
+                if let restore = savedPlaneViz {
+                    sharedState.appModel.showPlaneVisualization = restore
+                    sharedState.appModel.surfaceDetector.setVisualizationVisible(restore)
+                    savedPlaneViz = nil
+                }
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            // Simple toggle to dim or not dim the system Environment
+            Toggle(isOn: $showBackgroundOverlay) {
+                Text("Dim Background")
+            }
+            .toggleStyle(.switch)
+            .padding(12)
+            .background(.regularMaterial, in: .capsule)
+            .padding(20)
+        }
     }
 }
 

@@ -141,6 +141,7 @@ struct ServerLogsView: View {
     }
 }
 
+#if os(visionOS)
 /// Static surface detection view that never changes
 struct StaticSurfaceView: View {
     @Environment(AppModel.self) private var appModel
@@ -157,65 +158,45 @@ struct ImmersiveSpaceWrapper: View {
     let activeFiles: [String]
     let onClose: (String) -> Void
     @Environment(AppModel.self) private var appModel
+    var collaborativeSession: CollaborativeSessionManager? = nil
     @State private var immersionLevel: Double = 0.25
     @State private var showDebugInfo: Bool = false
     @State private var lastUpdateLevel: Double = -1.0 // Track last updated level
+    var showBackgroundOverlay: Bool = false
     
     var body: some View {
         ZStack {
-            // Full immersive space background - positioned correctly in world space
-            RealityView { content in
-                // Create a very large inside-out sphere that surrounds the user completely
-                let backgroundEntity = Entity()
-                let mesh = MeshResource.generateSphere(radius: 1000) // Extremely large radius
-                
-                // Use PhysicallyBasedMaterial for better transparency support
-                var material = PhysicallyBasedMaterial()
-                let alphaValue = Float(max(0.0, immersionLevel * 1.5))
-                material.baseColor = .init(tint: .black.withAlphaComponent(CGFloat(alphaValue)), texture: nil)
-                material.blending = .transparent(opacity: PhysicallyBasedMaterial.Opacity(floatLiteral: alphaValue))
-                
-                backgroundEntity.components.set(ModelComponent(mesh: mesh, materials: [material]))
-                
-                // Position at user's location (0,0,0 in immersive space)
-                backgroundEntity.position = [0, 0, 0]
-                // Scale negative to make it inside-out (we see the inner surface)
-                backgroundEntity.scale = SIMD3<Float>(-1, 1, 1)
-                backgroundEntity.name = "immersiveBackgroundSphere"
-                
-                content.add(backgroundEntity)
-                print("🌐 Immersive background sphere created:")
-                print("   - Immersion level: \(immersionLevel)")
-                print("   - Alpha value: \(alphaValue)")
-                print("   - Expected opacity: \(immersionLevel * 0.8 * 100)%")
-            } update: { content in
-                // Only update if immersion level has actually changed
-                guard abs(immersionLevel - lastUpdateLevel) > 0.001 else { return }
-                
-                // Update background opacity
-                if let bg = content.entities.first(where: { $0.name == "immersiveBackgroundSphere" }),
-                   var modelComponent = bg.components[ModelComponent.self] {
-                    
-                    // Use PhysicallyBasedMaterial for better transparency support
+            // Optional app-owned background overlay; leave disabled to let system Environments show
+            if showBackgroundOverlay {
+                RealityView { content in
+                    let backgroundEntity = Entity()
+                    let mesh = MeshResource.generateSphere(radius: 1000)
                     var material = PhysicallyBasedMaterial()
-                    let alphaValue = Float(max(0.0, immersionLevel * 1.2))
+                    let alphaValue = Float(max(0.0, immersionLevel * 1.5))
                     material.baseColor = .init(tint: .black.withAlphaComponent(CGFloat(alphaValue)), texture: nil)
                     material.blending = .transparent(opacity: PhysicallyBasedMaterial.Opacity(floatLiteral: alphaValue))
-                    
-                    modelComponent.materials = [material]
-                    bg.components.set(modelComponent)
-                    
-                    // Update the last update level and log only when actually changing
-                    lastUpdateLevel = immersionLevel
-                    print("🔄 Immersive background updated:")
-                    print("   - Immersion level: \(immersionLevel)")
-                    print("   - Alpha value: \(alphaValue)")
-                    print("   - Expected opacity: \(immersionLevel * 0.8 * 100)%")
+                    backgroundEntity.components.set(ModelComponent(mesh: mesh, materials: [material]))
+                    backgroundEntity.position = [0, 0, 0]
+                    backgroundEntity.scale = SIMD3<Float>(-1, 1, 1)
+                    backgroundEntity.name = "immersiveBackgroundSphere"
+                    content.add(backgroundEntity)
+                } update: { content in
+                    guard abs(immersionLevel - lastUpdateLevel) > 0.001 else { return }
+                    if let bg = content.entities.first(where: { $0.name == "immersiveBackgroundSphere" }),
+                       var modelComponent = bg.components[ModelComponent.self] {
+                        var material = PhysicallyBasedMaterial()
+                        let alphaValue = Float(max(0.0, immersionLevel * 1.2))
+                        material.baseColor = .init(tint: .black.withAlphaComponent(CGFloat(alphaValue)), texture: nil)
+                        material.blending = .transparent(opacity: PhysicallyBasedMaterial.Opacity(floatLiteral: alphaValue))
+                        modelComponent.materials = [material]
+                        bg.components.set(modelComponent)
+                        lastUpdateLevel = immersionLevel
+                    }
                 }
             }
             
             // The actual content (diagrams, surface detection)
-            ImmersiveContentView(activeFiles: activeFiles, onClose: onClose, immersionLevel: $immersionLevel, showDebugInfo: $showDebugInfo)
+            ImmersiveContentView(activeFiles: activeFiles, onClose: onClose, immersionLevel: $immersionLevel, showDebugInfo: $showDebugInfo, collaborativeSession: collaborativeSession)
                 .environment(appModel)
             
             // Immersion level indicator - positioned in 3D world space
@@ -302,6 +283,7 @@ struct ImmersiveContentView: View {
     @Binding var immersionLevel: Double
     @Binding var showDebugInfo: Bool
     @Environment(AppModel.self) private var appModel
+    var collaborativeSession: CollaborativeSessionManager? = nil
     
     var body: some View {
         ZStack {
@@ -314,9 +296,9 @@ struct ImmersiveContentView: View {
             // Dynamic diagrams layer - updates when activeFiles changes
             Group {
                 ForEach(activeFiles, id: \.self) { file in
-                    ContentView(filename: file) {
+                    ContentView(filename: file, onClose: {
                         onClose(file)
-                    }
+                    }, collaborativeSession: collaborativeSession)
                 }
             }
             .environment(appModel)
@@ -381,6 +363,7 @@ struct FPSDisplayView: View {
             .font(.title)
     }
 }
+#endif
 
 #if os(visionOS)
 struct AVAR2_Legacy: App {
@@ -389,6 +372,8 @@ struct AVAR2_Legacy: App {
     @State private var appModel = AppModel()
     @StateObject private var httpServer = HTTPServer()
     @StateObject private var collaborativeSession = CollaborativeSessionManager()
+    @State private var immersionStyle: ImmersionStyle = .mixed
+    @State private var savedPlaneViz: Bool? = nil
 
     enum InputMode: String {
         case file, json, server
@@ -533,7 +518,15 @@ struct AVAR2_Legacy: App {
                             Task {
                                 do {
                                     let elements = try ElementService.loadScriptOutput(from: newFile).elements
-                                    collaborativeSession.shareDiagram(filename: newFile, elements: elements)
+                                    // Get the position for this diagram
+                                    let position = appModel.getNextDiagramPosition(for: newFile)
+                                    collaborativeSession.shareDiagram(
+                                        filename: newFile, 
+                                        elements: elements,
+                                        worldPosition: position,
+                                        worldOrientation: simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)),
+                                        worldScale: 1.0
+                                    )
                                 } catch {
                                     print("❌ Failed to share diagram: \(error)")
                                 }
@@ -774,13 +767,26 @@ struct AVAR2_Legacy: App {
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
-            ImmersiveSpaceWrapper(activeFiles: activeFiles) { file in
+            ImmersiveSpaceWrapper(activeFiles: activeFiles, onClose: { file in
                 activeFiles.removeAll { $0 == file }
                 appModel.freeDiagramPosition(filename: file)
-            }
+            }, collaborativeSession: collaborativeSession)
             .environment(appModel)
+            .onChange(of: String(describing: immersionStyle)) { _, newKey in
+                if newKey.localizedCaseInsensitiveContains("Full") {
+                    if savedPlaneViz == nil { savedPlaneViz = appModel.showPlaneVisualization }
+                    appModel.showPlaneVisualization = false
+                    appModel.surfaceDetector.setVisualizationVisible(false)
+                } else if newKey.localizedCaseInsensitiveContains("Mixed") {
+                    if let restore = savedPlaneViz {
+                        appModel.showPlaneVisualization = restore
+                        appModel.surfaceDetector.setVisualizationVisible(restore)
+                        savedPlaneViz = nil
+                    }
+                }
+            }
         }
-        .immersionStyle(selection: .constant(.mixed), in: .mixed)
+        .immersionStyle(selection: $immersionStyle, in: .mixed, .full)
     }
 }
 #endif
