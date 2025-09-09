@@ -22,6 +22,7 @@ struct ContentView: View {
     var onClose: (() -> Void)? = nil
     @StateObject private var viewModel = ElementViewModel()
     @Environment(AppModel.self) private var appModel
+    var collaborativeSession: CollaborativeSessionManager? = nil
 
     var body: some View {
         RealityView { content in
@@ -33,6 +34,36 @@ struct ContentView: View {
             print("📋 ContentView task started for: \(filename)")
             viewModel.setAppModel(appModel)
             await viewModel.loadData(from: filename)
+            
+            // Set up transform change callback for collaborative sync
+            viewModel.onTransformChanged = { position, orientation, scale in
+                // Update collaborative session with new transform
+                collaborativeSession?.updateDiagramTransform(
+                    filename: filename,
+                    worldPosition: position,
+                    worldOrientation: orientation,
+                    worldScale: scale
+                )
+            }
+            
+            // Share initial position with collaborative session
+            if let transform = viewModel.getWorldTransform(),
+               collaborativeSession?.isSessionActive == true,
+               !collaborativeSession!.sharedDiagrams.contains(where: { $0.filename == filename }) {
+                do {
+                    let elements = try ElementService.loadScriptOutput(from: filename).elements
+                    collaborativeSession?.shareDiagram(
+                        filename: filename,
+                        elements: elements,
+                        worldPosition: transform.position,
+                        worldOrientation: transform.orientation,
+                        worldScale: transform.scale
+                    )
+                } catch {
+                    print("❌ Failed to share diagram on initial load: \(error)")
+                }
+            }
+            
             print("📋 ContentView task completed for: \(filename)")
         }
         .gesture(

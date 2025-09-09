@@ -41,10 +41,22 @@ class ElementViewModel: ObservableObject {
     #endif
     /// Root container for all graph entities (so we can scale/transform as a group)
     private var rootEntity: Entity?
+    
+    /// Get the current world transform of the diagram
+    func getWorldTransform() -> (position: SIMD3<Float>, orientation: simd_quatf, scale: Float)? {
+        guard let root = rootEntity else { return nil }
+        let worldPos = root.position(relativeTo: nil)
+        let worldOrient = root.orientation(relativeTo: nil)
+        let worldScale = root.scale.x // Uniform scale
+        return (worldPos, worldOrient, worldScale)
+    }
     /// Background entity to capture pan/zoom gestures
     private var backgroundEntity: Entity?
     /// Starting uniform scale for the container when zoom begins
     private var zoomStartScale: Float?
+    
+    /// Callback for when diagram transform changes (for syncing)
+    var onTransformChanged: ((SIMD3<Float>, simd_quatf, Float) -> Void)?
     /// Pivot point in world space at zoom start
     private var zoomPivotWorld: SIMD3<Float>?
     /// Pivot point in container-local space (normalized, unscaled) at zoom start
@@ -515,6 +527,10 @@ class ElementViewModel: ObservableObject {
         if let content = sceneContent {
             updateConnections(in: content)
         }
+        // Notify transform change
+        if let transform = getWorldTransform() {
+            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+        }
     }
 
     /// Handle pinch gesture to uniformly scale the entire graph container, pivoting around the touched entity
@@ -555,6 +571,10 @@ class ElementViewModel: ObservableObject {
         zoomStartScale = nil
         zoomPivotWorld = nil
         zoomPivotLocal = nil
+        // Notify transform change
+        if let transform = getWorldTransform() {
+            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+        }
     }
 
     /// Handle pan gesture with native visionOS WindowGroup-like behavior
@@ -624,6 +644,11 @@ class ElementViewModel: ObservableObject {
         handleSurfaceSnappingOnPanEnd(container: container, position: smoothedPosition)
         resetPanState()
         updateConnectionsAfterPan()
+        
+        // Notify transform change
+        if let transform = getWorldTransform() {
+            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+        }
     }
     
     private func calculateFinalPanPosition(_ finalPosition: SIMD3<Float>) -> SIMD3<Float> {
@@ -707,6 +732,11 @@ class ElementViewModel: ObservableObject {
         if let content = sceneContent {
             updateConnections(in: content)
         }
+        
+        // Notify transform change
+        if let transform = getWorldTransform() {
+            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+        }
     }
     
     /// Handle rotation button drag to rotate 3D diagrams on Y-axis
@@ -764,6 +794,11 @@ class ElementViewModel: ObservableObject {
         }
         
         print("🔄 Rotation gesture ended")
+        
+        // Notify transform change
+        if let transform = getWorldTransform() {
+            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+        }
     }
     
     /// Extract Y-axis rotation angle from a quaternion

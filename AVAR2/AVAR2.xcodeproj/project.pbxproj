@@ -7,10 +7,24 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1B6FD9432E7084F70098A030 /* AVAR2_Marker_A.svg in Resources */ = {isa = PBXBuildFile; fileRef = 1B6FD93C2E7084F70098A030 /* AVAR2_Marker_A.svg */; };
+		1B6FD9442E7084F70098A030 /* ARCHITECTURE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1B6FD9402E7084F70098A030 /* ARCHITECTURE.md */; };
+		1B6FD9452E7084F70098A030 /* AVAR2_Marker_B.svg in Resources */ = {isa = PBXBuildFile; fileRef = 1B6FD93D2E7084F70098A030 /* AVAR2_Marker_B.svg */; };
+		1B6FD9462E7084F70098A030 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 1B6FD93E2E7084F70098A030 /* README.md */; };
+		1B6FD9472E7084F70098A030 /* ARCHITECTURE_DIAGRAMS.md in Resources */ = {isa = PBXBuildFile; fileRef = 1B6FD9412E7084F70098A030 /* ARCHITECTURE_DIAGRAMS.md */; };
+		1B6FD94A2E70873B0098A030 /* AVAR2_Marker_A.png in Resources */ = {isa = PBXBuildFile; fileRef = 1B6FD9482E70873B0098A030 /* AVAR2_Marker_A.png */; };
+		1B6FD94B2E70873B0098A030 /* AVAR2_Marker_B.png in Resources */ = {isa = PBXBuildFile; fileRef = 1B6FD9492E70873B0098A030 /* AVAR2_Marker_B.png */; };
 		1BC77E522DC293F7004B1B5D /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 1BC77E512DC293F7004B1B5D /* RealityKitContent */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1B6FD93C2E7084F70098A030 /* AVAR2_Marker_A.svg */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = AVAR2_Marker_A.svg; sourceTree = "<group>"; };
+		1B6FD93D2E7084F70098A030 /* AVAR2_Marker_B.svg */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = AVAR2_Marker_B.svg; sourceTree = "<group>"; };
+		1B6FD93E2E7084F70098A030 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		1B6FD9402E7084F70098A030 /* ARCHITECTURE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ARCHITECTURE.md; sourceTree = "<group>"; };
+		1B6FD9412E7084F70098A030 /* ARCHITECTURE_DIAGRAMS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ARCHITECTURE_DIAGRAMS.md; sourceTree = "<group>"; };
+		1B6FD9482E70873B0098A030 /* AVAR2_Marker_A.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AVAR2_Marker_A.png; sourceTree = "<group>"; };
+		1B6FD9492E70873B0098A030 /* AVAR2_Marker_B.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AVAR2_Marker_B.png; sourceTree = "<group>"; };
 		1BC77E4C2DC293F7004B1B5D /* AVAR2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AVAR2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1BC77E502DC293F7004B1B5D /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -48,9 +62,32 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1B6FD93F2E7084F70098A030 /* Markers */ = {
+			isa = PBXGroup;
+			children = (
+				1B6FD9482E70873B0098A030 /* AVAR2_Marker_A.png */,
+				1B6FD9492E70873B0098A030 /* AVAR2_Marker_B.png */,
+				1B6FD93C2E7084F70098A030 /* AVAR2_Marker_A.svg */,
+				1B6FD93D2E7084F70098A030 /* AVAR2_Marker_B.svg */,
+				1B6FD93E2E7084F70098A030 /* README.md */,
+			);
+			path = Markers;
+			sourceTree = "<group>";
+		};
+		1B6FD9422E7084F70098A030 /* Documentation */ = {
+			isa = PBXGroup;
+			children = (
+				1B6FD93F2E7084F70098A030 /* Markers */,
+				1B6FD9402E7084F70098A030 /* ARCHITECTURE.md */,
+				1B6FD9412E7084F70098A030 /* ARCHITECTURE_DIAGRAMS.md */,
+			);
+			path = Documentation;
+			sourceTree = "<group>";
+		};
 		1BC77E432DC293F7004B1B5D = {
 			isa = PBXGroup;
 			children = (
+				1B6FD9422E7084F70098A030 /* Documentation */,
 				1BC77E4E2DC293F7004B1B5D /* AVAR2 */,
 				1BC77E4F2DC293F7004B1B5D /* Packages */,
 				1BC77E4D2DC293F7004B1B5D /* Products */,
@@ -138,6 +175,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1B6FD9432E7084F70098A030 /* AVAR2_Marker_A.svg in Resources */,
+				1B6FD9442E7084F70098A030 /* ARCHITECTURE.md in Resources */,
+				1B6FD9452E7084F70098A030 /* AVAR2_Marker_B.svg in Resources */,
+				1B6FD9462E7084F70098A030 /* README.md in Resources */,
+				1B6FD9472E7084F70098A030 /* ARCHITECTURE_DIAGRAMS.md in Resources */,
+				1B6FD94A2E70873B0098A030 /* AVAR2_Marker_A.png in Resources */,
+				1B6FD94B2E70873B0098A030 /* AVAR2_Marker_B.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -162,7 +206,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = PE96DV38QA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -192,7 +236,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = PE96DV38QA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
