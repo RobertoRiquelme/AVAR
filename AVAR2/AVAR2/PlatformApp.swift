@@ -10,6 +10,14 @@ import RealityKitContent
 class VisionOSAppState: ObservableObject {
     @Published var activeFiles: [String] = []
     @Published var appModel = AppModel()
+
+    @Published var immersionStyle: ImmersionStyle = {
+        if #available(visionOS 2.0, *) {
+            return .progressive(0.0...1.0, initialAmount: 0.0)
+        } else {
+            return .mixed
+        }
+    }()
 }
 
 /// Platform-aware app entry point that adapts UI for visionOS and iOS
@@ -33,6 +41,7 @@ struct PlatformApp: App {
         #endif
     }
     
+    // MARK: - visionOS
     #if os(visionOS)
     @SceneBuilder
     private var visionOSApp: some SwiftUI.Scene {
@@ -47,12 +56,13 @@ struct PlatformApp: App {
         ImmersiveSpace(id: "MainImmersive") {
             VisionOSImmersiveView(sharedState: visionOSState)
         }
-        .immersionStyle(selection: .constant(.mixed), in: .mixed)
+        .immersionStyle(selection: $visionOSState.immersionStyle, in: .mixed, .progressive)
     }
     #endif
     
+    // MARK: - iOS
     #if os(iOS)
-    @SceneBuilder 
+    @SceneBuilder
     private var iOSApp: some SwiftUI.Scene {
         WindowGroup {
             iOS_ContentView(collaborativeSession: collaborativeSession)
@@ -60,6 +70,7 @@ struct PlatformApp: App {
     }
     #endif
     
+    // MARK: - macOS fallback
     #if os(macOS)
     @SceneBuilder
     private var fallbackApp: some SwiftUI.Scene {
@@ -335,55 +346,51 @@ struct VisionOSMainView: View {
                                 }
                             }
                         }
-                        
-                        // Ensure plane visualization starts disabled for new diagrams
-                        sharedState.appModel.showPlaneVisualization = false
-                        sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
                     }
                 }
                 .font(.title2)
 
                 // Immersion Test Buttons
-                VStack(spacing: 12) {
-                    Text("Immersion Test Controls")
-                        .font(.headline)
-                        .foregroundColor(.blue)
-                    
-                    HStack(spacing: 10) {
-                        Button("0%") {
-                            print("🔘 0% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.0)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("25%") {
-                            print("🔘 25% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.25)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("50%") {
-                            print("🔘 50% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.5)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("75%") {
-                            print("🔘 75% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.75)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("100%") {
-                            print("🔘 100% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 1.0)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
+    //                VStack(spacing: 12) {
+    //                    Text("Immersion Test Controls")
+    //                        .font(.headline)
+    //                        .foregroundColor(.blue)
+    //
+    //                    HStack(spacing: 10) {
+    //                        Button("0%") {
+    //                            print("🔘 0% button pressed - sending notification")
+    //                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.0)
+    //                        }
+    //                        .buttonStyle(.bordered)
+    //
+    //                        Button("25%") {
+    //                            print("🔘 25% button pressed - sending notification")
+    //                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.25)
+    //                        }
+    //                        .buttonStyle(.bordered)
+    //
+    //                        Button("50%") {
+    //                            print("🔘 50% button pressed - sending notification")
+    //                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.5)
+    //                        }
+    //                        .buttonStyle(.bordered)
+    //
+    //                        Button("75%") {
+    //                            print("🔘 75% button pressed - sending notification")
+    //                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.75)
+    //                        }
+    //                        .buttonStyle(.bordered)
+    //
+    //                        Button("100%") {
+    //                            print("🔘 100% button pressed - sending notification")
+    //                            NotificationCenter.default.post(name: .setImmersionLevel, object: 1.0)
+    //                        }
+    //                        .buttonStyle(.bordered)
+    //                    }
+    //                }
+    //                .padding()
+    //                .background(Color.blue.opacity(0.1))
+    //                .cornerRadius(8)
 
                 Spacer()
                 
@@ -540,10 +547,6 @@ struct VisionOSMainView: View {
                                 print("❌ Failed to save HTTP diagram: \(error)")
                             }
                         }
-                        
-                        // Ensure plane visualization starts disabled for new diagrams
-                        sharedState.appModel.showPlaneVisualization = false
-                        sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
                     }
                 }
             }
@@ -569,11 +572,16 @@ struct VisionOSImmersiveView: View {
     @ObservedObject var sharedState: VisionOSAppState
     
     var body: some View {
-        ImmersiveSpaceWrapper(activeFiles: sharedState.activeFiles) { file in
+        ImmersiveSpaceWrapper(
+            activeFiles: sharedState.activeFiles
+        ) { file in
             sharedState.activeFiles.removeAll { $0 == file }
             sharedState.appModel.freeDiagramPosition(filename: file)
-        }
-        .environment(sharedState.appModel)
+        } onAppearAction: {
+            // sharedState.startProgressiveWithVisibleEnvironment()
+//            sharedState.appModel.showPlaneVisualization = false
+//            sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+        } .environment(sharedState.appModel)
     }
 }
 
