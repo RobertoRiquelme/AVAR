@@ -61,7 +61,7 @@ class HTTPServer: ObservableObject {
     @Published var serverLogs: [String] = []
     
     private var listener: NWListener?
-    private let port: UInt16 = 8080
+    private let port: UInt16 = 8081
     private let queue = DispatchQueue(label: "HTTPServer")
     private let maxLogs = 50 // Limit log entries to prevent memory issues
     
@@ -86,8 +86,11 @@ class HTTPServer: ObservableObject {
         guard !isRunning else { return }
         
         do {
-            let parameters = NWParameters.tcp
+            let tcpOptions = NWProtocolTCP.Options()
+            let parameters = NWParameters(tls: nil, tcp: tcpOptions)
             parameters.allowLocalEndpointReuse = true
+            parameters.acceptLocalOnly = false // accept connections from other devices on the LAN
+            parameters.includePeerToPeer = true // allow direct peer-to-peer transports if available
             
             listener = try NWListener(using: parameters, on: NWEndpoint.Port(integerLiteral: port))
             
@@ -101,9 +104,9 @@ class HTTPServer: ObservableObject {
                     case .ready:
                         self?.isRunning = true
                         let deviceIP = self?.getLocalIPAddress() ?? "localhost"
-                        self?.serverURL = "http://\(deviceIP):\(self?.port ?? 8080)/avar"
-                        self?.serverStatus = "Running on \(deviceIP):\(self?.port ?? 8080)"
-                        self?.log("🌐 HTTP Server started on \(deviceIP):\(self?.port ?? 8080)")
+                        self?.serverURL = "http://\(deviceIP):\(self?.port ?? 8081)/avar"
+                        self?.serverStatus = "Running on \(deviceIP):\(self?.port ?? 8081)"
+                        self?.log("🌐 HTTP Server started on \(deviceIP):\(self?.port ?? 8081)")
                     case .failed(let error):
                         self?.isRunning = false
                         self?.serverStatus = "Failed: \(error.localizedDescription)"
@@ -152,35 +155,86 @@ class HTTPServer: ObservableObject {
         connection.start(queue: queue)
     }
     
-    private func receiveRequest(_ connection: NWConnection) {
+    private func receiveRequest(_ connection: NWConnection, accumulatedData: Data = Data()) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, context, isComplete, error in
+            guard let self = self else { return }
             if let error = error {
-                self?.log("❌ Receive error: \(error.localizedDescription)")
+                self.log("❌ Receive error: \(error.localizedDescription)")
                 connection.cancel()
                 return
             }
-            
-            guard let data = data, !data.isEmpty else {
-                connection.cancel()
+
+            var buffer = accumulatedData
+            if let chunk = data, !chunk.isEmpty {
+                buffer.append(chunk)
+            }
+
+            let maxRequestSize = 5 * 1024 * 1024
+            if buffer.count > maxRequestSize {
+                self.log("⚠️ Request exceeded maximum allowed size (\(maxRequestSize) bytes)")
+                self.sendResponse(connection: connection, statusCode: 400, body: "Request too large")
                 return
             }
-            
-            let requestString = String(data: data, encoding: .utf8) ?? ""
-            self?.log("📥 Received request: \(requestString.prefix(200))...")
-            
-            self?.processHTTPRequest(requestString, connection: connection)
+
+            let headerDelimiter = Data("\r\n\r\n".utf8)
+            if let headerRange = buffer.range(of: headerDelimiter) {
+                let headerData = buffer[..<headerRange.lowerBound]
+                let bodyStartIndex = headerRange.upperBound
+
+                let headerString = String(decoding: headerData, as: UTF8.self)
+
+                self.log("🧾 Request headers:\n\(headerString)")
+                let contentLength = self.parseContentLength(from: headerString)
+                self.log("📏 Expecting body of \(contentLength) bytes")
+                let totalNeeded = bodyStartIndex + contentLength
+
+                if buffer.count < totalNeeded {
+                    if isComplete {
+                        self.log("❌ Connection closed before full body received")
+                        self.sendResponse(connection: connection, statusCode: 400, body: "Incomplete request body")
+                    } else {
+                        self.receiveRequest(connection, accumulatedData: buffer)
+                    }
+                    return
+                }
+
+                let requestData = buffer.prefix(totalNeeded)
+                let requestString = String(decoding: requestData, as: UTF8.self)
+                self.log("📥 Received request: \(requestString.prefix(200))...")
+                self.processHTTPRequest(requestString, connection: connection)
+            } else {
+                if isComplete {
+                    self.log("❌ Connection closed before headers received")
+                    self.sendResponse(connection: connection, statusCode: 400, body: "Invalid request format")
+                } else {
+                    self.receiveRequest(connection, accumulatedData: buffer)
+                }
+            }
         }
+    }
+
+    private func parseContentLength(from headers: String) -> Int {
+        for line in headers.components(separatedBy: "\r\n") {
+            if line.lowercased().hasPrefix("content-length:") {
+                let value = line.split(separator: ":", maxSplits: 1).last?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "0"
+                return Int(value) ?? 0
+            }
+        }
+        return 0
     }
     
     private func processHTTPRequest(_ request: String, connection: NWConnection) {
         let lines = request.components(separatedBy: "\r\n")
         guard let firstLine = lines.first else {
+            log("❌ Empty request received")
             sendResponse(connection: connection, statusCode: 400, body: "Bad Request")
             return
         }
-        
+
         let components = firstLine.components(separatedBy: " ")
         guard components.count >= 3 else {
+            log("❌ Malformed request line: \(firstLine)")
             sendResponse(connection: connection, statusCode: 400, body: "Bad Request")
             return
         }
@@ -251,7 +305,7 @@ class HTTPServer: ObservableObject {
             <p>Expected format: {"elements": [...]} or {"RTelements": [...]}</p>
             <h2>Example:</h2>
             <pre>
-            curl -X POST http://\(getLocalIPAddress()):8080/avar \\
+            curl -X POST http://\(getLocalIPAddress()):8081/avar \\
                 -H "Content-Type: application/json" \\
                 -d '{"id": "diagram1", "elements": [{"id": "1", "type": "node", "shape": "Box", "position": [0,0,0]}]}'
             </pre>
@@ -329,7 +383,7 @@ class HTTPServer: ObservableObject {
                 self.onJSONReceived?(scriptOutput)
             }
             
-            sendResponse(connection: connection, statusCode: 200, body: "done", contentType: "application/json")
+            sendResponse(connection: connection, statusCode: 200, body: "\"done\"", contentType: "application/json")
             log("✅ Successfully parsed and processed diagram with \(scriptOutput.elements.count) elements")
             
         } catch let decodingError as DecodingError {

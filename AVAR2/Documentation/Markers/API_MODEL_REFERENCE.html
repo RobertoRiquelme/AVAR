@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AVAR2 API Model Reference</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            max-width: 800px; 
+            margin: 40px auto; 
+            padding: 20px; 
+            line-height: 1.6; 
+            color: #333;
+        }
+        h1, h2, h3 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        h1 { font-size: 2.5em; }
+        h2 { font-size: 2em; margin-top: 2em; }
+        h3 { font-size: 1.5em; margin-top: 1.5em; }
+        pre { 
+            background: #2d3748; 
+            color: #e2e8f0; 
+            padding: 16px; 
+            border-radius: 8px; 
+            overflow-x: auto; 
+            font-family: 'SF Mono', Consolas, 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+        code { 
+            background: #f8f9fa; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 0.9em;
+        }
+        pre code { background: transparent; padding: 0; }
+        ul, ol { padding-left: 25px; }
+        li { margin: 8px 0; }
+        p { margin: 12px 0; }
+        strong { color: #2c3e50; }
+        .bash { background: #1a202c; }
+        .json { background: #2d3748; }
+    </style>
+</head>
+<body>
+<h1>AVAR2 Data Model for Service Integration - Complete Reference</h1>
+<h2>HTTP API Endpoint</h2>
+<p><strong>URL</strong>: <code>http://[device-ip]:8081/avar</code>  </p>
+<p><strong>Method</strong>: POST  </p>
+<p><strong>Content-Type</strong>: application/json</p>
+<h2>Root Schema Formats</h2>
+<p>The API accepts three different root formats:</p>
+<h3>1. Object Format with Diagram ID</h3>
+<pre class="json"><code>{
+  "id": 123,                    // Optional: Integer diagram ID for updates
+  "elements": [...],            // Array of 3D visualization elements
+}
+</code></pre>
+<h3>2. 2D/RT Layout Format  </h3>
+<pre class="json"><code>{
+  "id": 456,                    // Optional: diagram ID
+  "RTelements": [...],          // Array of 2D layout elements
+}
+</code></pre>
+<h3>3. Direct Array Format</h3>
+<pre class="json"><code>[...]  // Direct array of ElementDTO objects (no wrapper)
+</code></pre>
+<h2>Core Element Schema: `ElementDTO`</h2>
+<h3>Standard 3D Elements (`"elements"` key)</h3>
+<pre class="json"><code>{
+  "id": "node1",                // String/Number: Element identifier
+  "type": "element",            // String: Element type (element, edge, camera)
+  "model": "Box",               // String: Alternative to type field
+  
+  "position": [0, 0, 0],        // Array[Double]: 3D coordinates (X, Y, Z)
+  "color": [1.0, 0.5, 0.2, 1.0], // Array[Double]: RGBA color (0.0-1.0)
+  "extent": [1.0, 1.0, 1.0],    // Array[Double]: Element size dimensions
+  
+  "shape": {                    // Object OR String: Shape definition
+    "shapeDescription": "uvSphere", // String: 3D shape type
+    "extent": [1.0, 1.0, 1.0],  // Array[Double]: Shape dimensions  
+    "text": "Label",             // String: Text label
+    "color": [1.0, 0.0, 0.0, 1.0], // Array[Double]: Shape color
+    "id": "shape1"               // String: Shape identifier
+  },
+  
+  "from_id": "node1",           // String/Number: Edge source
+  "to_id": "node2",             // String/Number: Edge destination
+  "from_position": [0, 0, 0],   // Array[Double]: Edge start position
+  "to_position": [2, 0, 0],     // Array[Double]: Edge end position
+  "interactions": ["tap", "drag"] // Array[String]: Supported interactions
+}
+</code></pre>
+<h3>2D Layout Elements (`"RTelements"` key)</h3>
+<pre class="json"><code>{
+  "id": 0,                      // Number: Element identifier
+  "type": "RTelement",          // String: Always "RTelement" for 2D layouts
+  "position": [71.5, 32.5],     // Array[Double]: 2D coordinates (X, Y)
+  "color": [0.74, 0.74, 0.74, 1.0], // Array[Double]: RGBA color
+  
+  "shape": {
+    "shapeDescription": "RTBox", // String: 2D shape type
+    "extent": [5.0, 5.0],        // Array[Double]: Width, Height
+    "text": "nil"                 // String: Text content (can be "nil")
+  }
+}
+</code></pre>
+<h2>Supported Shape Types</h2>
+<h3>3D Shapes (for `"elements"`)</h3>
+<ul>
+<li><code>"uvSphere"</code> - UV-mapped sphere</li>
+<li><code>"cube"</code> - 3D cube/box</li>
+<li><code>"Box"</code> - Alternative cube notation</li>
+<li><code>"Cylinder"</code> - 3D cylinder</li>
+<li><code>"line"</code> - Line connector for edges</li>
+<li>Custom shape strings supported</li>
+</ul>
+<h3>2D Shapes (for `"RTelements"`)</h3>
+<ul>
+<li><code>"RTBox"</code> - 2D rectangle/box for layouts</li>
+<li>Custom 2D shape strings supported</li>
+</ul>
+<h2>Special Element Types</h2>
+<h3>Camera Element</h3>
+<pre class="json"><code>{
+  "id": "&amp;lt;genid:0&amp;gt;",
+  "type": "camera",
+  "position": [0.0, 0.0, 5.0]
+}
+</code></pre>
+<h3>Edge/Connection Element</h3>
+<pre class="json"><code>{
+  "id": "edge1",
+  "type": "edge", 
+  "from_id": "nodeA",
+  "to_id": "nodeB",
+  "from_position": [0, 0, 0],
+  "to_position": [2, 0, 0],
+  "shape": {
+    "shapeDescription": "line",
+    "extent": [2.0, 0.0, 0.0],
+    "color": [1.0, 1.0, 0.0, 1.0]
+  }
+}
+</code></pre>
+<h2>Example Use Cases</h2>
+<h3>Bar Chart (3D)</h3>
+<pre class="json"><code>{
+  "elements": [
+    {
+      "id": "bar1",
+      "type": "element",
+      "shape": {
+        "shapeDescription": "cube",
+        "extent": [1.0, 6.1, 1.0]
+      },
+      "position": [6.0, 3.05, 10.0],
+      "color": [1.0, 1.0, 1.0, 1.0]
+    }
+  ]
+}
+</code></pre>
+<h3>Network Graph with Edges</h3>
+<pre class="json"><code>{
+  "elements": [
+    {
+      "id": "A", "type": "element", "shape": "uvSphere",
+      "position": [0, 0, 0], "color": [0.0, 0.0, 1.0, 1.0]
+    },
+    {
+      "id": "B", "type": "element", "shape": "uvSphere", 
+      "position": [2, 0, 0], "color": [0.0, 0.0, 1.0, 1.0]
+    },
+    {
+      "type": "edge", "from_id": "A", "to_id": "B",
+      "shape": {"shapeDescription": "line", "extent": [2.0, 0.0, 0.0]},
+      "color": [1.0, 1.0, 0.0, 1.0]
+    }
+  ]
+}
+</code></pre>
+<h3>2D Layout/TreeMap</h3>
+<pre class="json"><code>{
+  "RTelements": [
+    {
+      "id": 0, "type": "RTelement",
+      "position": [71.5, 32.5],
+      "color": [0.74, 0.74, 0.74, 1.0],
+      "shape": {
+        "shapeDescription": "RTBox",
+        "extent": [50.0, 30.0],
+        "text": "Category A"
+      }
+    }
+  ]
+}
+</code></pre>
+<h2>Key Features</h2>
+<ul>
+<li><strong>Multi-format support</strong>: 3D elements, 2D layouts, or direct arrays</li>
+<li><strong>Flexible IDs</strong>: String or numeric identifiers with auto-conversion</li>
+<li><strong>Coordinate systems</strong>: 3D (X,Y,Z) for elements, 2D (X,Y) for RT layouts</li>
+<li><strong>Color specification</strong>: RGBA normalized doubles (0.0-1.0)</li>
+<li><strong>Shape flexibility</strong>: String shortcuts or detailed shape objects</li>
+<li><strong>Graph connections</strong>: Connect elements via <code>from_id</code>/<code>to_id</code> with positions</li>
+<li><strong>Diagram updates</strong>: Include root-level <code>id</code> to update existing visualizations</li>
+<li><strong>Interactive elements</strong>: Define supported interactions per element</li>
+<li><strong>Cross-platform rendering</strong>: iOS, visionOS, macOS with AR/3D support</li>
+<li><strong>Real-time collaboration</strong>: Multi-device session sharing capabilities</li>
+</ul>
+<p>The app processes all formats and renders them as interactive 3D/AR visualizations with support for collaborative multi-device sessions via MultipeerConnectivity.</p>
+<h2>cURL Example</h2>
+<pre class="bash"><code>curl -X POST http://192.168.1.100:8081/avar \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "demo1",
+    "elements": [
+      {
+        "id": "sphere1",
+        "type": "element",
+        "shape": "uvSphere",
+        "position": [0, 0, 0],
+        "color": [1.0, 0.0, 0.0, 1.0]
+      }
+    ]
+  }'
+</code></pre>
+</body></html>

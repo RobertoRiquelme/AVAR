@@ -199,26 +199,6 @@ struct ImmersiveSpaceWrapper: View {
             ImmersiveContentView(activeFiles: activeFiles, onClose: onClose, immersionLevel: $immersionLevel, showDebugInfo: $showDebugInfo, collaborativeSession: collaborativeSession)
                 .environment(appModel)
             
-            // Immersion level indicator - positioned in 3D world space
-            RealityView { content in
-                // This creates a persistent anchor for the UI text
-            } update: { content in
-                // Remove existing indicator
-                content.entities.removeAll { $0.name == "immersionIndicator" }
-                
-                // Create new indicator positioned in world space
-                let indicatorEntity = Entity()
-                indicatorEntity.name = "immersionIndicator"
-                indicatorEntity.position = [-1.5, 1.2, -2] // Top-left of user's field of view
-                
-                // For now, just use a simple sphere as placeholder (in real app, you'd use text)
-                let mesh = MeshResource.generateSphere(radius: 0.05)
-                var material = UnlitMaterial(color: .white)
-                material.color = .init(tint: .white.withAlphaComponent(0.8))
-                indicatorEntity.components.set(ModelComponent(mesh: mesh, materials: [material]))
-                
-                content.add(indicatorEntity)
-            }
         }
         .focusable(true)
         .onKeyPress(.space) {
