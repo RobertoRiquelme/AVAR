@@ -1,0 +1,16 @@
+{
+  "images" : [
+    {
+      "filename" : "AVAR2_Marker_A.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "unit" : "centimeters",
+    "width" : 15
+  }
+}

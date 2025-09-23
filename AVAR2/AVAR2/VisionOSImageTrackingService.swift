@@ -5,11 +5,14 @@ import SwiftUI
 import ARKit
 import RealityKit
 import CoreGraphics
+import ImageIO
 
 @MainActor
 final class VisionOSImageTrackingService: ObservableObject {
     private let session = ARKitSession()
     private var provider: ImageTrackingProvider?
+    private let markerAssetName = "marker"
+    private let markerPhysicalSize: CGFloat = 0.15
 
     // Client callback
     var onMarkerPose: ((String, SIMD3<Float>, simd_quatf) -> Void)?
@@ -25,15 +28,18 @@ final class VisionOSImageTrackingService: ObservableObject {
             return
         }
 
-        // Build a checkerboard marker CGImage at runtime (no external asset required)
-        var images: [ARKit.ReferenceImage] = []
-        if let cg = Self.generateCheckerboard(size: 1024, grid: 9) {
-            // physicalSize in meters (15 cm)
-            let ref = ARKit.ReferenceImage(cgimage: cg, physicalSize: CGSize(width: 0.15, height: 0.15))
-            images.append(ref)
+        guard let cg = Self.loadMarkerCGImage(named: markerAssetName) else {
+            errorMessage = "Missing marker image asset '\(markerAssetName).png' in bundle."
+            return
         }
 
-        provider = ImageTrackingProvider(referenceImages: images)
+        var markerReference = ARKit.ReferenceImage(
+            cgimage: cg,
+            physicalSize: CGSize(width: markerPhysicalSize, height: markerPhysicalSize)
+        )
+        markerReference.name = markerAssetName
+
+        provider = ImageTrackingProvider(referenceImages: [markerReference])
         guard provider != nil else {
             errorMessage = "Failed to create ImageTrackingProvider (no reference images)."
             return
@@ -81,46 +87,10 @@ final class VisionOSImageTrackingService: ObservableObject {
         return "marker"
     }
 
-    private static func generateCheckerboard(size: Int, grid: Int) -> CGImage? {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(
-            data: nil,
-            width: size,
-            height: size,
-            bitsPerComponent: 8,
-            bytesPerRow: size * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-
-        // Background white
-        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
-
-        // Black border
-        ctx.setStrokeColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-        ctx.setLineWidth(CGFloat(size) * 0.01) // 1% border
-        ctx.stroke(CGRect(x: 0.5, y: 0.5, width: CGFloat(size)-1, height: CGFloat(size)-1))
-
-        // Draw checkerboard pattern inside
-        let cell = CGFloat(size) / CGFloat(grid)
-        // Fill entire inside with black first
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
-        // Overlay white cells in alternating pattern
-        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        for i in 0..<grid {
-            for j in 0..<grid {
-                // Classic checker: (i + j) % 2 == 1 is white
-                if ((i + j) % 2) == 1 {
-                    let x = CGFloat(j) * cell
-                    let y = CGFloat(i) * cell
-                    ctx.fill(CGRect(x: x, y: y, width: cell, height: cell))
-                }
-            }
-        }
-
-        return ctx.makeImage()
+    private static func loadMarkerCGImage(named name: String) -> CGImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "png") else { return nil }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 }
 #endif
