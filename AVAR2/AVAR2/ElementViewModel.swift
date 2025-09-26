@@ -41,6 +41,10 @@ class ElementViewModel: ObservableObject {
     #endif
     /// Root container for all graph entities (so we can scale/transform as a group)
     private var rootEntity: Entity?
+    /// Default scale applied when spawning a diagram (30% smaller)
+    private var spawnScale: Float {
+        appModel?.defaultDiagramScale ?? PlatformConfiguration.diagramScale * 0.7
+    }
     
     /// Get the current world transform of the diagram
     func getWorldTransform() -> (position: SIMD3<Float>, orientation: simd_quatf, scale: Float)? {
@@ -200,10 +204,11 @@ class ElementViewModel: ObservableObject {
         
         let container = createRootContainer(content: content, normalizationContext: normalizationContext)
         let background = createBackgroundEntity(container: container, normalizationContext: normalizationContext)
-        
+        updateBackgroundEntityCollisionShapes(scale: container.scale.x)
+
         setupUIControls(background: background, normalizationContext: normalizationContext, onClose: onClose)
         createAndPositionElements(container: container, normalizationContext: normalizationContext)
-        
+
         updateConnections(in: content)
         addOriginMarker()
     }
@@ -227,9 +232,12 @@ class ElementViewModel: ObservableObject {
         let container = Entity()
         container.name = "graphRoot"
         container.position = pivot
+        let initialScale = spawnScale
+        container.scale = SIMD3<Float>(repeating: initialScale)
+        print("📏 Applied spawn scale \(initialScale) to diagram container")
         content.add(container)
         self.rootEntity = container
-        
+
         return container
     }
     

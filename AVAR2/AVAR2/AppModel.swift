@@ -18,19 +18,31 @@ class AppModel {
         case open
     }
     var immersiveSpaceState = ImmersiveSpaceState.open
-    
+
     // Simple ARKit surface detector
     let surfaceDetector = ARKitSurfaceDetector()
     private var surfaceDetectionStarted = false
-    
+
     // Debug: plane visualization toggle (start disabled)
     var showPlaneVisualization = false
-    
-    // Dynamic positioning for multiple diagrams
-    private let diagramSpacing: Float = 3.0  // 3 meters between diagrams
-    private var usedPositions: Set<Int> = []  // Track which positions are occupied
-    private var filenameToPosition: [String: Int] = [:] // Track filename to position mapping
-    
+
+    // Dynamic positioning for multiple diagrams (keep content near the user)
+    private struct GridSlot: Hashable {
+        let x: Int
+        let z: Int
+
+        func offset(spacing: Float) -> SIMD3<Float> {
+            SIMD3<Float>(Float(x) * spacing, 0, Float(z) * spacing)
+        }
+    }
+
+    private let gridSpacing: Float = 0.9  // 90 cm steps keep diagrams within reach
+    private var occupiedSlots: Set<GridSlot> = []
+    private var filenameToSlot: [String: GridSlot] = [:]
+
+    // Default scale used when spawning diagrams (30% smaller than previous default)
+    let defaultDiagramScale: Float = PlatformConfiguration.diagramScale * 0.7
+
     // Track active diagrams by ID for updates/redraw
     private var activeDiagrams: [Int: Int] = [:] // id -> diagram index
     private var diagramFiles: [Int: String] = [:] // id -> filename
@@ -52,23 +64,28 @@ class AppModel {
         await startSurfaceDetectionIfNeeded()
     }
     
-    /// Get the next position for a new diagram, arranged in a horizontal line
+    /// Get the next position for a diagram, filling nearby grid slots before moving far away
     func getNextDiagramPosition(for filename: String) -> SIMD3<Float> {
         let basePosition = SIMD3<Float>(0, 1.0, -2.0)  // Constants.eyeLevel, Constants.frontOffset
-        
-        // Find the first available position (closest to center)
-        var positionIndex = 0
-        while usedPositions.contains(positionIndex) {
-            positionIndex += 1
+
+        if let existingSlot = filenameToSlot[filename] {
+            occupiedSlots.insert(existingSlot)
+            let position = basePosition + existingSlot.offset(spacing: gridSpacing)
+            print("📍 Reusing diagram position: \(position) (slot: \(existingSlot)) for file: \(filename)")
+            print("🔢 Occupied slots: \(occupiedSlots.count) | Stored diagrams: \(filenameToSlot.count)")
+            print("🔍 Surface detection status: running=\(surfaceDetector.isRunning), anchors=\(surfaceDetector.surfaceAnchors.count)")
+            return position
         }
-        
-        // Mark this position as used and store filename mapping
-        usedPositions.insert(positionIndex)
-        filenameToPosition[filename] = positionIndex
-        
-        let offset = SIMD3<Float>(Float(positionIndex) * diagramSpacing, 0, 0)
+
+        // Find the first available slot (closest to center)
+        let nextSlot = findNextAvailableSlot()
+        occupiedSlots.insert(nextSlot)
+        filenameToSlot[filename] = nextSlot
+
+        let offset = nextSlot.offset(spacing: gridSpacing)
         let position = basePosition + offset
-        print("📍 New diagram position: \(position) (index: \(positionIndex)) for file: \(filename)")
+        print("📍 New diagram position: \(position) (slot: \(nextSlot)) for file: \(filename)")
+        print("🔢 Occupied slots: \(occupiedSlots.count) | Stored diagrams: \(filenameToSlot.count)")
         print("🔍 Surface detection status: running=\(surfaceDetector.isRunning), anchors=\(surfaceDetector.surfaceAnchors.count)")
         return position
     }
@@ -98,12 +115,12 @@ class AppModel {
     
     /// Free up a position when diagram is removed
     func freeDiagramPosition(filename: String) {
-        if let positionIndex = filenameToPosition[filename] {
-            usedPositions.remove(positionIndex)
-            filenameToPosition.removeValue(forKey: filename)
-            print("🆓 Freed position \(positionIndex) for diagram: \(filename)")
+        if let slot = filenameToSlot[filename] {
+            occupiedSlots.remove(slot)
+            filenameToSlot.removeValue(forKey: filename)
+            print("🆓 Freed slot \(slot) for diagram: \(filename)")
         }
-        
+
         // Also remove from ID tracking if it exists
         for (id, storedFilename) in diagramFiles {
             if storedFilename == filename {
@@ -115,13 +132,70 @@ class AppModel {
     
     /// Reset diagram positioning (when exiting immersive space)
     func resetDiagramPositioning() {
-        usedPositions.removeAll()
-        filenameToPosition.removeAll()
+        occupiedSlots.removeAll()
+        filenameToSlot.removeAll()
         activeDiagrams.removeAll()
         diagramFiles.removeAll()
         print("🔄 Reset diagram positioning")
     }
-    
+
+    private func findNextAvailableSlot() -> GridSlot {
+        var index = 0
+        while true {
+            let candidate = gridSlot(for: index)
+            if candidate.z > 0 {
+                index += 1
+                continue // Skip slots that would place content behind the user
+            }
+
+            if !occupiedSlots.contains(candidate) {
+                return candidate
+            }
+            index += 1
+        }
+    }
+
+    private func gridSlot(for index: Int) -> GridSlot {
+        if index == 0 {
+            return GridSlot(x: 0, z: 0)
+        }
+
+        var currentIndex = 0
+        var stepSize = 1
+        var x = 0
+        var z = 0
+
+        while true {
+            for _ in 0..<stepSize {
+                x += 1
+                currentIndex += 1
+                if currentIndex == index { return GridSlot(x: x, z: z) }
+            }
+
+            for _ in 0..<stepSize {
+                z += 1
+                currentIndex += 1
+                if currentIndex == index { return GridSlot(x: x, z: z) }
+            }
+
+            stepSize += 1
+
+            for _ in 0..<stepSize {
+                x -= 1
+                currentIndex += 1
+                if currentIndex == index { return GridSlot(x: x, z: z) }
+            }
+
+            for _ in 0..<stepSize {
+                z -= 1
+                currentIndex += 1
+                if currentIndex == index { return GridSlot(x: x, z: z) }
+            }
+
+            stepSize += 1
+        }
+    }
+
     /// Toggle plane visualization for debugging
     func togglePlaneVisualization() {
         showPlaneVisualization.toggle()

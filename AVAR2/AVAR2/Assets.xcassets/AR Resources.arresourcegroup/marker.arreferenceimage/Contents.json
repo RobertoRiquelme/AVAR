@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "AVAR2_Marker_A.png",
+      "filename" : "marker.png",
       "idiom" : "universal"
     }
   ],
@@ -11,6 +11,6 @@
   },
   "properties" : {
     "unit" : "centimeters",
-    "width" : 15
+    "width" : 1500
   }
 }

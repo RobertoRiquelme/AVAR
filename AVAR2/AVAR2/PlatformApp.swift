@@ -624,16 +624,6 @@ struct VisionOSImmersiveView: View {
                 }
             }
         }
-        .overlay(alignment: .topTrailing) {
-            // Simple toggle to dim or not dim the system Environment
-            Toggle(isOn: $showBackgroundOverlay) {
-                Text("Dim Background")
-            }
-            .toggleStyle(.switch)
-            .padding(12)
-            .background(.regularMaterial, in: .capsule)
-            .padding(20)
-        }
     }
 }
 

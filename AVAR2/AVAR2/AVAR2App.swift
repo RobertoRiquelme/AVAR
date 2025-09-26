@@ -505,7 +505,7 @@ struct AVAR2_Legacy: App {
                                         elements: elements,
                                         worldPosition: position,
                                         worldOrientation: simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)),
-                                        worldScale: 1.0
+                                        worldScale: appModel.defaultDiagramScale
                                     )
                                 } catch {
                                     print("❌ Failed to share diagram: \(error)")
