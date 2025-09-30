@@ -66,6 +66,14 @@ struct CollaborativeSessionView: View {
                     .background(Color.blue.opacity(0.2))
                     .cornerRadius(8)
             }
+
+#if canImport(GroupActivities)
+            if sessionManager.isSharePlayActive {
+                Label("SharePlay active", systemImage: "person.3.sequence")
+                    .font(.caption)
+                    .foregroundColor(.purple)
+            }
+#endif
         }
         .padding()
         .background(Color.gray.opacity(0.1))
@@ -140,6 +148,26 @@ struct CollaborativeSessionView: View {
                 .foregroundColor(.red)
                 .frame(maxWidth: .infinity)
             }
+
+            #if canImport(GroupActivities)
+            if sessionManager.isSharePlayActive {
+                Button("Stop SharePlay") {
+                    sessionManager.stopSharePlay()
+                }
+                .buttonStyle(.bordered)
+                .foregroundColor(.orange)
+                .frame(maxWidth: .infinity)
+            } else {
+                Button("Start SharePlay") {
+                    Task {
+                        await sessionManager.startSharePlay()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
+                .frame(maxWidth: .infinity)
+            }
+            #endif
         }
     }
     

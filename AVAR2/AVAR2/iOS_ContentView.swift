@@ -24,27 +24,18 @@ struct iOS_ContentView: View {
 
                 Section(header: Text("Alignment")) {
                     Button {
-                        arViewModel.alignmentMode = .marker
+                        arViewModel.alignmentMode = .sharedSpace
                         arViewModel.onAlignmentModeChanged()
-                    } label: { Label("Marker", systemImage: arViewModel.alignmentMode == .marker ? "checkmark" : "scope") }
+                    } label: { Label("Shared Space", systemImage: arViewModel.alignmentMode == .sharedSpace ? "checkmark" : "person.3.sequence") }
 
                     Button {
-                        arViewModel.alignmentMode = .oneShot
+                        arViewModel.alignmentMode = .localPreview
                         arViewModel.onAlignmentModeChanged()
-                    } label: { Label("One‑shot", systemImage: arViewModel.alignmentMode == .oneShot ? "checkmark" : "dot.scope") }
+                    } label: { Label("Local Preview", systemImage: arViewModel.alignmentMode == .localPreview ? "checkmark" : "rectangle.portrait.and.arrow.right") }
 
-                    if arViewModel.availableMarkerIds.count > 1 {
-                        Menu("Choose Marker") {
-                            ForEach(arViewModel.availableMarkerIds, id: \.self) { id in
-                                Button {
-                                    arViewModel.selectedMarkerId = id
-                                    arViewModel.selectedMarkerDidChange()
-                                } label: {
-                                    Label(id, systemImage: arViewModel.selectedMarkerId == id ? "checkmark" : "qrcode.viewfinder")
-                                }
-                            }
-                        }
-                    }
+                    Button {
+                        arViewModel.broadcastSharedAnchor()
+                    } label: { Label("Broadcast Anchor", systemImage: "antenna.radiowaves.left.and.right") }
                 }
 
                 Section(header: Text("Layout")) {
@@ -74,19 +65,11 @@ struct iOS_ContentView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
-                    if !arViewModel.selectedMarkerId.isEmpty {
-                        Label { HStack(spacing: 4) {
-                            Text("\(arViewModel.selectedMarkerId)")
-                            if let d = arViewModel.markerDistance { Text(String(format: "· %.2fm", d)) }
-                        }} icon: {
-                            Image(systemName: arViewModel.markerFound ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                                .foregroundColor(arViewModel.markerFound ? .green : .orange)
-                        }
+                    Label(arViewModel.sharedAnchorStatus, systemImage: arViewModel.isSharedAnchorLocked ? "checkmark.seal.fill" : "wifi.exclamationmark")
                         .font(.caption)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(.thinMaterial, in: .capsule)
-                    }
 
                     if !collaborativeSession.sharedDiagrams.isEmpty {
                         Label("AR Diagrams: \(collaborativeSession.sharedDiagrams.count)", systemImage: "chart.bar")
@@ -114,12 +97,12 @@ struct iOS_ContentView: View {
                         Text("Start/join a multi‑device session.").font(.caption).foregroundColor(.secondary)
                     }
                     Group {
-                        Label("Align: Marker / One‑shot", systemImage: "scope").font(.subheadline)
-                        Text("Marker aligns to a printed image seen by both devices. One‑shot places content in front of you once.").font(.caption).foregroundColor(.secondary)
+                        Label("Alignment", systemImage: "person.3.sequence").font(.subheadline)
+                        Text("Shared Space keeps diagrams synchronized across devices. Local Preview keeps content anchored in front of you for solo visualization.").font(.caption).foregroundColor(.secondary)
                     }
                     Group {
-                        Label("Marker menu", systemImage: "qrcode.viewfinder").font(.subheadline)
-                        Text("Choose which printed marker ID to use.").font(.caption).foregroundColor(.secondary)
+                        Label("Controls", systemImage: "slider.horizontal.3").font(.subheadline)
+                        Text("See session status, reset layout, and broadcast anchors.").font(.caption).foregroundColor(.secondary)
                     }
                     Group {
                         Label("Recenter Layout", systemImage: "viewfinder").font(.subheadline)
@@ -147,8 +130,8 @@ struct iOS_ContentView: View {
             }
             arViewModel.updateSharedDiagrams(diagrams)
         }
-        .onChange(of: arViewModel.selectedMarkerId) { _, _ in
-            arViewModel.selectedMarkerDidChange()
+        .onReceive(collaborativeSession.$sharedAnchor) { anchor in
+            arViewModel.handleSharedAnchorUpdate(anchor)
         }
     }
 }
@@ -173,25 +156,14 @@ class ARViewModel: NSObject, ObservableObject {
     private var arSession: ARSession?
     private var sharedDiagrams: [SharedDiagram] = []
     private weak var collaborativeSession: CollaborativeSessionManager?
-    // Marker-based alignment
-    private var currentHostMarker: simd_float4x4?
-    private var currentLocalMarker: simd_float4x4?
-    @Published var availableMarkerIds: [String] = []
-    @Published var selectedMarkerId: String = ""
-    @Published var markerFound: Bool = false
-    @Published var markerDistance: Float? = nil
-    // Track multiple markers
-    private var localMarkers: [String: simd_float4x4] = [:]
-    private var hostMarkers: [String: simd_float4x4] = [:]
-    // Alignment mode
-    enum AlignmentMode: Hashable { case marker, oneShot }
-    @Published var alignmentMode: AlignmentMode = .marker
-    // Separate mappings so they don't override each other
-    private var markerHostToLocalTransform: simd_float4x4?
-    private var oneShotHostToLocalTransform: simd_float4x4?
-    // Mapping from host (visionOS) world space to local (iOS) AR world space
-    // Computed once from the first diagram that contains a world transform
-    
+    // Shared anchor alignment
+    private var sharedAnchorTransform: simd_float4x4?
+    private var sharedAnchorId: String?
+    @Published var sharedAnchorStatus: String = "Awaiting shared anchor"
+    @Published var isSharedAnchorLocked: Bool = false
+    enum AlignmentMode: Hashable { case sharedSpace, localPreview }
+    @Published var alignmentMode: AlignmentMode = .sharedSpace
+
     func setupARView(_ arView: ARView) {
         self.arView = arView
         self.arSession = arView.session
@@ -202,20 +174,9 @@ class ARViewModel: NSObject, ObservableObject {
         configuration.planeDetection = [.horizontal, .vertical]
         configuration.isCollaborationEnabled = true
         configuration.environmentTexturing = .automatic
-        // Load reference images from asset catalog group "AR Resources"
-        if let refImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
-            configuration.detectionImages = refImages
-            configuration.maximumNumberOfTrackedImages = 1
-            print("🖼️ Enabled image detection (\(refImages.count) image(s))")
-            availableMarkerIds = refImages.compactMap({ $0.name }).sorted()
-            if selectedMarkerId.isEmpty { selectedMarkerId = availableMarkerIds.first ?? "" }
-        } else {
-            print("⚠️ No AR Reference Images found in group 'AR Resources'")
-        }
-        
         // Add session delegate to monitor state changes
         arView.session.delegate = self
-        
+
         arView.session.run(configuration)
         
         // Enable coaching overlay
@@ -239,18 +200,17 @@ class ARViewModel: NSObject, ObservableObject {
                 print("❌ Failed to decode ARCollaborationData: \(error)")
             }
         }
-        // Receive host marker pose
-        session.onMarkerPoseReceived = { [weak self] msg in
+        session.onSharedAnchorReceived = { [weak self] message in
             guard let self = self else { return }
-            let host = Self.buildMatrix(position: msg.worldPosition, orientation: msg.worldOrientation)
-            self.hostMarkers[msg.markerId] = host
-            if msg.markerId == self.selectedMarkerId {
-                self.currentHostMarker = host
-                print("📡 Host marker '\(msg.markerId)' received. Recomputing mapping…")
-                self.recomputeMappingIfPossible()
-            }
+            let anchor = SharedWorldAnchor(id: message.anchorId,
+                                           transform: message.matrix,
+                                           confidence: message.confidence,
+                                           timestamp: message.timestamp,
+                                           worldMapData: message.worldMapData)
+            self.handleSharedAnchorUpdate(anchor)
         }
         #endif
+        handleSharedAnchorUpdate(session.sharedAnchor)
     }
     
     func resetSession() {
@@ -299,26 +259,56 @@ class ARViewModel: NSObject, ObservableObject {
         arView.scene.anchors.removeAll()
         print("🗑️ Cleared all anchors")
     }
+
+    func broadcastSharedAnchor() {
+        guard let collaborativeSession else {
+            print("⚠️ No collaborative session; cannot broadcast anchor")
+            return
+        }
+        guard let frame = arSession?.currentFrame else {
+            sharedAnchorStatus = "No camera frame available"
+            return
+        }
+
+        let confidence = ARViewModel.confidenceValue(for: frame.worldMappingStatus)
+        var message = SharedAnchorMessage(confidence: confidence, transform: frame.camera.transform)
+
+        #if os(iOS)
+        arSession?.getCurrentWorldMap { [weak self] map, error in
+            guard let self else { return }
+            Task { @MainActor in
+                if let error {
+                    print("⚠️ Failed to capture ARWorldMap: \(error)")
+                }
+                if let map,
+                   let data = try? NSKeyedArchiver.archivedData(withRootObject: map, requiringSecureCoding: true) {
+                    message.worldMapData = data
+                }
+                self.finalizeAnchorBroadcast(message, session: collaborativeSession)
+            }
+        }
+        #else
+        finalizeAnchorBroadcast(message, session: collaborativeSession)
+        #endif
+    }
+
+    private func finalizeAnchorBroadcast(_ message: SharedAnchorMessage, session: CollaborativeSessionManager) {
+        session.sendSharedAnchor(message)
+        let anchor = SharedWorldAnchor(id: message.anchorId,
+                                       transform: message.matrix,
+                                       confidence: message.confidence,
+                                       timestamp: message.timestamp,
+                                       worldMapData: message.worldMapData)
+        handleSharedAnchorUpdate(anchor)
+    }
     
     func updateSharedDiagrams(_ diagrams: [SharedDiagram]) {
         guard let arView = arView else { return }
 
         self.sharedDiagrams = diagrams
 
-        // Establish a stable mapping from host world space to our local AR world space
-        // Use the first diagram that provides a world transform as the reference.
-        if alignmentMode == .oneShot,
-           oneShotHostToLocalTransform == nil,
-           let reference = diagrams.first(where: { $0.worldPosition != nil }) {
-            let hostRef = Self.makeHostTransform(from: reference)
-            let desiredLocal = simd_float4x4(
-                SIMD4<Float>(1, 0, 0, 0),
-                SIMD4<Float>(0, 1, 0, 0),
-                SIMD4<Float>(0, 0, 1, 0),
-                SIMD4<Float>(0, 0, -1.5, 1)
-            )
-            oneShotHostToLocalTransform = desiredLocal * hostRef.inverse
-            print("📐 Established one‑shot mapping from reference diagram '\(reference.filename)'")
+        if alignmentMode == .sharedSpace, diagrams.isEmpty {
+            sharedAnchorStatus = isSharedAnchorLocked ? sharedAnchorStatus : "Awaiting shared anchor"
         }
         
         // Clear existing diagram entities
@@ -342,33 +332,21 @@ class ARViewModel: NSObject, ObservableObject {
         let transform: simd_float4x4
 
         // Choose mapping based on mode
-        let activeMapping: simd_float4x4? = {
-            switch alignmentMode {
-            case .marker: return markerHostToLocalTransform
-            case .oneShot: return oneShotHostToLocalTransform
+        let hostMatrix = Self.makeHostTransform(from: diagram)
+        if alignmentMode == .sharedSpace {
+            if diagram.worldPosition != nil {
+                transform = hostMatrix
+                print("📍 Placing '\(diagram.filename)' using shared world transform")
+            } else if let sharedAnchorTransform {
+                transform = sharedAnchorTransform
+                print("📍 Using shared anchor transform for '\(diagram.filename)'")
+            } else {
+                transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
+                print("📍 Awaiting shared transform; using fallback for '\(diagram.filename)'")
             }
-        }()
-
-        if let hostToLocal = activeMapping, diagram.worldPosition != nil {
-            // Map host world transform into our local AR world
-            let hostMatrix = Self.makeHostTransform(from: diagram)
-            transform = hostToLocal * hostMatrix
-            print("📍 Placing '\(diagram.filename)' via host→local mapping")
-        } else if alignmentMode == .oneShot, diagram.worldPosition != nil {
-            // If we have a host transform but no mapping yet, place using host transform directly
-            // (will be remapped on next update once mapping exists)
-            transform = Self.makeHostTransform(from: diagram)
-            print("📍 Temporarily using raw host transform for '\(diagram.filename)'")
         } else {
-            // Fall back to default positioning if no world position provided
-            let yOffset = Float(index) * 0.5 - Float(totalCount - 1) * 0.25
-            transform = simd_float4x4(
-                SIMD4<Float>(1, 0, 0, 0),
-                SIMD4<Float>(0, 1, 0, 0),
-                SIMD4<Float>(0, 0, 1, 0),
-                SIMD4<Float>(0, yOffset, -1.5, 1)
-            )
-            print("📍 Using default position for '\(diagram.filename)' (no world position provided)")
+            transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
+            print("📍 Local preview positioning for '\(diagram.filename)'")
         }
         
         let anchor = AnchorEntity(world: transform)
@@ -430,8 +408,11 @@ class ARViewModel: NSObject, ObservableObject {
     private static func makeHostTransform(from diagram: SharedDiagram) -> simd_float4x4 {
         var matrix = matrix_identity_float4x4
         if let worldOrient = diagram.worldOrientation {
-            let rotationMatrix = simd_matrix4x4(worldOrient)
-            matrix = matrix * rotationMatrix
+            matrix = matrix * simd_matrix4x4(worldOrient)
+        }
+        if let worldScale = diagram.worldScale {
+            let scaleMatrix = float4x4(diagonal: SIMD4<Float>(repeating: worldScale))
+            matrix = matrix * scaleMatrix
         }
         if let worldPos = diagram.worldPosition {
             matrix.columns.3 = SIMD4<Float>(worldPos.x, worldPos.y, worldPos.z, 1.0)
@@ -441,11 +422,76 @@ class ARViewModel: NSObject, ObservableObject {
 
     // Public helper to reset the mapping (e.g., user taps Recenter)
     func resetMapping() {
-        markerHostToLocalTransform = nil
-        oneShotHostToLocalTransform = nil
-        print("🧭 Host→local mapping reset; will re-establish on next update")
+        sharedAnchorTransform = nil
+        sharedAnchorId = nil
+        isSharedAnchorLocked = false
+        sharedAnchorStatus = "Awaiting shared anchor"
+        print("🧭 Shared anchor cleared; awaiting new broadcast")
         updateSharedDiagrams(sharedDiagrams)
     }
+
+    private static func defaultFallbackTransform(index: Int, totalCount: Int) -> simd_float4x4 {
+        let yOffset = Float(index) * 0.5 - Float(totalCount - 1) * 0.25
+        return simd_float4x4(
+            SIMD4<Float>(1, 0, 0, 0),
+            SIMD4<Float>(0, 1, 0, 0),
+            SIMD4<Float>(0, 0, 1, 0),
+            SIMD4<Float>(0, yOffset, -1.5, 1)
+        )
+    }
+
+    func handleSharedAnchorUpdate(_ anchor: SharedWorldAnchor?) {
+        guard let anchor else {
+            isSharedAnchorLocked = false
+            sharedAnchorTransform = nil
+            sharedAnchorId = nil
+            sharedAnchorStatus = "Awaiting shared anchor"
+            return
+        }
+
+        sharedAnchorTransform = anchor.transform
+        sharedAnchorId = anchor.id
+        isSharedAnchorLocked = true
+        sharedAnchorStatus = "Anchor \(anchor.id.prefix(6)) · conf \(String(format: "%.2f", anchor.confidence))"
+        if let data = anchor.worldMapData {
+            applyWorldMapData(data)
+        }
+        updateSharedDiagrams(sharedDiagrams)
+    }
+
+    #if os(iOS)
+    private func applyWorldMapData(_ data: Data) {
+        do {
+            if let worldMap = try NSKeyedUnarchiver.unarchivedObject(ofClass: ARWorldMap.self, from: data) {
+                let configuration = ARWorldTrackingConfiguration()
+                configuration.planeDetection = [.horizontal, .vertical]
+                configuration.environmentTexturing = .automatic
+                configuration.isCollaborationEnabled = true
+                configuration.initialWorldMap = worldMap
+                arSession?.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+                print("🌍 Applied shared ARWorldMap with \(worldMap.anchors.count) anchors")
+            }
+        } catch {
+            print("⚠️ Failed to apply ARWorldMap: \(error)")
+        }
+    }
+    #else
+    private func applyWorldMapData(_ data: Data) { }
+    #endif
+
+    #if os(iOS)
+    private static func confidenceValue(for status: ARFrame.WorldMappingStatus) -> Float {
+        switch status {
+        case .notAvailable: return 0.0
+        case .limited: return 0.33
+        case .extending: return 0.66
+        case .mapped: return 1.0
+        @unknown default: return 0.5
+        }
+    }
+    #else
+    private static func confidenceValue(for status: Any) -> Float { 1.0 }
+    #endif
     
     private func createNormalizedElement(element: ElementDTO, index: Int, normalization: NormalizationContext) -> ModelEntity? {
         guard let position = element.position else { 
@@ -623,22 +669,6 @@ class ARViewModel: NSObject, ObservableObject {
         print("📱 ✅ AR session restarted with collaboration enabled")
     }
 
-    // MARK: - Marker Mapping
-    private func recomputeMappingIfPossible() {
-        guard !selectedMarkerId.isEmpty,
-              let local = localMarkers[selectedMarkerId],
-              let host = hostMarkers[selectedMarkerId] else {
-            return
-        }
-        currentLocalMarker = local
-        currentHostMarker = host
-        // host→local mapping M = local * inverse(host)
-        markerHostToLocalTransform = local * host.inverse
-        print("🧭 Host→local mapping updated from markers")
-        // Re-place existing diagrams using the new mapping
-        updateSharedDiagrams(sharedDiagrams)
-    }
-
     private static func buildMatrix(position: SIMD3<Float>, orientation: simd_quatf) -> simd_float4x4 {
         var m = matrix_identity_float4x4
         m = m * simd_matrix4x4(orientation)
@@ -646,33 +676,13 @@ class ARViewModel: NSObject, ObservableObject {
         return m
     }
 
-    func selectedMarkerDidChange() {
-        if let local = localMarkers[selectedMarkerId] {
-            markerFound = true
-            updateMarkerDistance(local)
-        } else {
-            markerFound = false
-            markerDistance = nil
-        }
-        recomputeMappingIfPossible()
-    }
-
-    private func updateMarkerDistance(_ markerTransform: simd_float4x4) {
-        guard let frame = arSession?.currentFrame else { markerDistance = nil; return }
-        let cam = frame.camera.transform
-        let camPos = SIMD3<Float>(cam.columns.3.x, cam.columns.3.y, cam.columns.3.z)
-        let markerPos = SIMD3<Float>(markerTransform.columns.3.x, markerTransform.columns.3.y, markerTransform.columns.3.z)
-        markerDistance = simd_length(markerPos - camPos)
-    }
-
     func onAlignmentModeChanged() {
         switch alignmentMode {
-        case .marker:
-            // Clear one‑shot mapping; rely on marker mapping
-            oneShotHostToLocalTransform = nil
-        case .oneShot:
-            // Clear marker mapping; recompute one‑shot on next update
-            markerHostToLocalTransform = nil
+        case .sharedSpace:
+            sharedAnchorStatus = isSharedAnchorLocked ? sharedAnchorStatus : "Awaiting shared anchor"
+        case .localPreview:
+            sharedAnchorStatus = "Local preview"
+            isSharedAnchorLocked = false
         }
         updateSharedDiagrams(sharedDiagrams)
     }
@@ -722,46 +732,6 @@ extension ARViewModel: ARSessionDelegate {
     }
 
     #if os(iOS)
-    nonisolated func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
-        for anchor in anchors {
-            if let imageAnchor = anchor as? ARImageAnchor {
-                let name = imageAnchor.referenceImage.name ?? "marker"
-                let transform = imageAnchor.transform
-                Task { @MainActor in
-                    self.localMarkers[name] = transform
-                    self.markerFound = (name == self.selectedMarkerId)
-                    self.updateMarkerDistance(transform)
-                    if name == self.selectedMarkerId {
-                        print("🖼️ Local marker added: \(name)")
-                        self.recomputeMappingIfPossible()
-                    }
-                    // Optionally share local marker pose to help peers
-                    let pos = SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
-                    let rot = simd_quatf(transform)
-                    self.collaborativeSession?.sendMarkerPose(markerId: name, worldPosition: pos, worldOrientation: rot)
-                }
-            }
-        }
-    }
-
-    nonisolated func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
-        for anchor in anchors {
-            if let imageAnchor = anchor as? ARImageAnchor {
-                let name = imageAnchor.referenceImage.name ?? "marker"
-                let transform = imageAnchor.transform
-                Task { @MainActor in
-                    self.localMarkers[name] = transform
-                    if name == self.selectedMarkerId {
-                        self.markerFound = true
-                        self.updateMarkerDistance(transform)
-                        print("🖼️ Local marker updated: \(name)")
-                        self.recomputeMappingIfPossible()
-                    }
-                }
-            }
-        }
-    }
-
     nonisolated func session(_ session: ARSession, didOutputCollaborationData data: ARSession.CollaborationData) {
         // Archive and send to peers
         do {

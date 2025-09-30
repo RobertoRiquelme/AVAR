@@ -2,6 +2,10 @@ import Foundation
 import RealityKit
 import MultipeerConnectivity
 import Combine
+import simd
+#if canImport(GroupActivities)
+import GroupActivities
+#endif
 
 #if canImport(ARKit)
 import ARKit
@@ -20,6 +24,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published var sessionState: String = "Not Connected"
     @Published var isHost = false
     @Published var lastError: String? = nil
+    @Published var isSharePlayActive = false
     
     private var multipeerSession: MultipeerConnectivityService?
     #if os(iOS)
@@ -29,17 +34,70 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     
     // Current active diagrams that should be shared
     @Published var sharedDiagrams: [SharedDiagram] = []
+    @Published var sharedAnchor: SharedWorldAnchor? = nil
+    private let anchorStorageURL: URL = {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return dir.appendingPathComponent("shared_anchor.json")
+    }()
+
+#if os(visionOS)
+    @available(visionOS 26.0, *)
+    private var sharedSpaceCoordinator: VisionOSSharedSpaceCoordinator?
+    private var sharedSpaceTask: Task<Void, Never>?
+#endif
 
     // iOS-only: callback to deliver ARCollaborationData blobs to the local ARSession
     #if os(iOS)
     var onCollaborationDataReceived: ((Data) -> Void)?
     #endif
-    // Marker pose callback for clients (both platforms may use it)
-    var onMarkerPoseReceived: ((MarkerPoseMessage) -> Void)?
-    
+    // Shared world anchor callback
+    var onSharedAnchorReceived: ((SharedAnchorMessage) -> Void)?
+
+    #if canImport(GroupActivities)
+    private var sharePlayCoordinator: SharePlayCoordinator?
+    #endif
+
     override init() {
         super.init()
         setupMultipeerSession()
+        restorePersistedAnchor()
+
+        #if canImport(GroupActivities)
+        let coordinator = SharePlayCoordinator()
+        coordinator.onDataReceived = { [weak self] data in
+            self?.handleIncomingPayload(data, source: "SharePlay")
+        }
+        coordinator.onSessionJoined = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.isSharePlayActive = true
+                self.resendStateToSharePlay()
+            }
+        }
+        coordinator.onSessionEnded = { [weak self] in
+            Task { @MainActor in
+                self?.isSharePlayActive = false
+            }
+        }
+        sharePlayCoordinator = coordinator
+        #endif
+
+#if os(visionOS)
+        if #available(visionOS 26.0, *) {
+            let visionCoordinator = VisionOSSharedSpaceCoordinator()
+            visionCoordinator.onCoordinateData = { [weak self] (message: SharedCoordinateSpaceMessage) in
+                guard let data = try? JSONEncoder().encode(message) else { return }
+                self?.broadcast(data)
+            }
+            visionCoordinator.onSharingEnabledChanged = { (available: Bool) in
+                print("🌐 Shared coordinate \(available ? "enabled" : "disabled")")
+            }
+            visionCoordinator.onError = { (error: Error) in
+                print("❌ Shared coordinate space error: \(error)")
+            }
+            sharedSpaceCoordinator = visionCoordinator
+        }
+#endif
     }
     
     private func setupMultipeerSession() {
@@ -61,6 +119,9 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         multipeerSession?.startHosting()
         isSessionActive = true
         sessionState = "Hosting - Waiting for peers"
+#if os(visionOS)
+        startSharedSpaceCoordinatorIfNeeded()
+#endif
     }
     
     /// Join an existing collaborative session
@@ -76,26 +137,66 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         
         multipeerSession?.startBrowsing()
         sessionState = "Searching for hosts..."
+#if os(visionOS)
+        startSharedSpaceCoordinatorIfNeeded()
+#endif
     }
+
+    #if canImport(GroupActivities)
+    func startSharePlay() async {
+        await sharePlayCoordinator?.start()
+    }
+
+    func stopSharePlay() {
+        sharePlayCoordinator?.stop()
+        isSharePlayActive = false
+    }
+    #endif
+
+#if os(visionOS)
+    func broadcastCurrentSharedAnchor(confidence: Float = 1.0) {
+        let transform: simd_float4x4
+        if #available(visionOS 26.0, *), let latest = sharedSpaceCoordinator?.latestDeviceTransform {
+            transform = latest
+        } else {
+            transform = matrix_identity_float4x4
+        }
+        let message = SharedAnchorMessage(confidence: confidence, transform: transform)
+        sendSharedAnchor(message)
+    }
+
+    var currentSharedSpaceTransform: simd_float4x4 {
+        if #available(visionOS 26.0, *), let latest = sharedSpaceCoordinator?.latestDeviceTransform {
+            return latest
+        }
+        return matrix_identity_float4x4
+    }
+#endif
 
     #if os(iOS)
     /// Send ARCollaborationData to peers (iOS-only)
     func sendCollaborationData(_ data: Data, to peers: [MCPeerID]? = nil) {
         let envelope = CollaborationEnvelope(blob: data)
         guard let payload = try? JSONEncoder().encode(envelope) else { return }
-        let targets = peers ?? connectedPeers
-        multipeerSession?.sendData(payload, to: targets)
-        print("📡 Sent ARCollaborationData (\(data.count) bytes) to \(targets.count) peer(s)")
+        broadcast(payload, to: peers)
+        print("📡 Sent ARCollaborationData (\(data.count) bytes)")
     }
     #endif
 
-    /// Send marker pose to connected peers
-    func sendMarkerPose(markerId: String, worldPosition: SIMD3<Float>, worldOrientation: simd_quatf) {
-        let msg = MarkerPoseMessage(markerId: markerId, worldPosition: worldPosition, worldOrientation: worldOrientation)
-        if let data = try? JSONEncoder().encode(msg) {
-            multipeerSession?.sendData(data, to: connectedPeers)
-            print("📡 Sent marker pose '\(markerId)' to \(connectedPeers.count) peer(s)")
+    /// Broadcast a shared world anchor so peers can align their content spaces
+    func sendSharedAnchor(_ anchor: SharedAnchorMessage, to peers: [MCPeerID]? = nil) {
+        sharedAnchor = SharedWorldAnchor(id: anchor.anchorId,
+                                         transform: anchor.matrix,
+                                         confidence: anchor.confidence,
+                                         timestamp: anchor.timestamp,
+                                         worldMapData: anchor.worldMapData)
+        persistSharedAnchor(anchor: sharedAnchor)
+
+        guard let data = try? JSONEncoder().encode(anchor) else {
+            print("❌ Failed to encode SharedAnchorMessage for broadcast")
+            return
         }
+        broadcast(data, to: peers)
     }
     
     /// Stop the collaborative session
@@ -112,6 +213,19 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         availablePeers.removeAll()
         sessionState = "Not Connected"
         lastError = nil
+        sharedAnchor = nil
+        persistSharedAnchor(anchor: nil)
+#if canImport(GroupActivities)
+        sharePlayCoordinator?.stop()
+        isSharePlayActive = false
+#endif
+#if os(visionOS)
+        sharedSpaceTask?.cancel()
+        sharedSpaceTask = nil
+        if #available(visionOS 26.0, *) {
+            sharedSpaceCoordinator?.stop()
+        }
+#endif
     }
     
     /// Share a diagram with all connected peers including position data
@@ -131,7 +245,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         
         // Send to all peers
         if let data = try? JSONEncoder().encode(sharedDiagram) {
-            multipeerSession?.sendData(data, to: connectedPeers)
+            broadcast(data)
         }
         
         print("📊 Shared diagram '\(filename)' with \(connectedPeers.count) peers")
@@ -151,9 +265,9 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         sharedDiagrams.removeAll { $0.filename == filename }
         
         let removeMessage = RemoveDiagramMessage(filename: filename)
-        if let data = try? JSONEncoder().encode(removeMessage) {
-            multipeerSession?.sendData(data, to: connectedPeers)
-        }
+            if let data = try? JSONEncoder().encode(removeMessage) {
+                broadcast(data)
+            }
         
         print("🗑️ Removed shared diagram '\(filename)'")
     }
@@ -182,7 +296,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             )
             
             if let data = try? JSONEncoder().encode(updateMessage) {
-                multipeerSession?.sendData(data, to: connectedPeers)
+                broadcast(data)
             }
             
             print("🔄 Updated and shared transform for diagram '\(filename)'")
@@ -214,96 +328,132 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         return "macOS"
         #endif
     }
-}
 
-// MARK: - Collaboration Data Envelope (iOS)
-#if os(iOS)
-private struct CollaborationEnvelope: Codable {
-    let kind: String = "collab"
-    let blob: Data
-}
-#endif
-
-// MARK: - Marker Pose Message (cross-platform)
-struct MarkerPoseMessage: Codable {
-    let markerId: String
-    var worldPosition: SIMD3<Float>
-    var worldOrientation: simd_quatf
-
-    enum CodingKeys: String, CodingKey {
-        case markerId
-        case worldPositionX, worldPositionY, worldPositionZ
-        case worldOrientationX, worldOrientationY, worldOrientationZ, worldOrientationW
+    private func broadcast(_ data: Data, to peers: [MCPeerID]? = nil) {
+        if let peers = peers {
+            if !peers.isEmpty {
+                multipeerSession?.sendData(data, to: peers)
+            }
+        } else if !connectedPeers.isEmpty {
+            multipeerSession?.sendData(data, to: connectedPeers)
+        }
+        #if canImport(GroupActivities)
+        if sharePlayCoordinator?.isActive == true {
+            Task { [weak self] in
+                await self?.sharePlayCoordinator?.send(data)
+            }
+        }
+        #endif
     }
 
-    init(markerId: String, worldPosition: SIMD3<Float>, worldOrientation: simd_quatf) {
-        self.markerId = markerId
-        self.worldPosition = worldPosition
-        self.worldOrientation = worldOrientation
+    private func resendStateToSharePlay() {
+        #if canImport(GroupActivities)
+        guard sharePlayCoordinator?.isActive == true else { return }
+        if let anchor = sharedAnchor {
+            let message = makeSharedAnchorMessage(from: anchor)
+            if let data = try? JSONEncoder().encode(message) {
+                Task { [weak self] in
+                    await self?.sharePlayCoordinator?.send(data)
+                }
+            }
+        }
+        for diagram in sharedDiagrams {
+            if let data = try? JSONEncoder().encode(diagram) {
+                Task { [weak self] in
+                    await self?.sharePlayCoordinator?.send(data)
+                }
+            }
+        }
+        #endif
     }
 
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        markerId = try c.decode(String.self, forKey: .markerId)
-        let px = try c.decode(Float.self, forKey: .worldPositionX)
-        let py = try c.decode(Float.self, forKey: .worldPositionY)
-        let pz = try c.decode(Float.self, forKey: .worldPositionZ)
-        worldPosition = SIMD3(px, py, pz)
-        let ox = try c.decode(Float.self, forKey: .worldOrientationX)
-        let oy = try c.decode(Float.self, forKey: .worldOrientationY)
-        let oz = try c.decode(Float.self, forKey: .worldOrientationZ)
-        let ow = try c.decode(Float.self, forKey: .worldOrientationW)
-        worldOrientation = simd_quatf(ix: ox, iy: oy, iz: oz, r: ow)
+    private func makeSharedAnchorMessage(from anchor: SharedWorldAnchor) -> SharedAnchorMessage {
+        SharedAnchorMessage(anchorId: anchor.id,
+                             timestamp: anchor.timestamp,
+                             confidence: anchor.confidence,
+                             transform: anchor.transform,
+                             worldMapData: anchor.worldMapData)
     }
 
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(markerId, forKey: .markerId)
-        try c.encode(worldPosition.x, forKey: .worldPositionX)
-        try c.encode(worldPosition.y, forKey: .worldPositionY)
-        try c.encode(worldPosition.z, forKey: .worldPositionZ)
-        try c.encode(worldOrientation.imag.x, forKey: .worldOrientationX)
-        try c.encode(worldOrientation.imag.y, forKey: .worldOrientationY)
-        try c.encode(worldOrientation.imag.z, forKey: .worldOrientationZ)
-        try c.encode(worldOrientation.real, forKey: .worldOrientationW)
+    private func persistSharedAnchor(anchor: SharedWorldAnchor?) {
+        guard let anchor else {
+            clearPersistedAnchor()
+            return
+        }
+        let persisted = PersistedAnchor(anchor: anchor)
+        do {
+            let data = try JSONEncoder().encode(persisted)
+            try data.write(to: anchorStorageURL, options: .atomic)
+        } catch {
+            print("⚠️ Failed to persist shared anchor: \(error)")
+        }
     }
-}
 
-// MARK: - MultipeerConnectivityDelegate
-extension CollaborativeSessionManager: @preconcurrency MultipeerConnectivityDelegate {
-    func multipeerService(_ service: MultipeerConnectivityService, didReceiveData data: Data, from peer: MCPeerID) {
+    private func restorePersistedAnchor() {
+        guard let data = try? Data(contentsOf: anchorStorageURL),
+              let persisted = try? JSONDecoder().decode(PersistedAnchor.self, from: data) else {
+            return
+        }
+        sharedAnchor = SharedWorldAnchor(id: persisted.id,
+                                         transform: persisted.makeMatrix(),
+                                         confidence: persisted.confidence,
+                                         timestamp: persisted.timestamp,
+                                         worldMapData: persisted.worldMapData)
+    }
+
+    private func clearPersistedAnchor() {
+        try? FileManager.default.removeItem(at: anchorStorageURL)
+    }
+
+    @MainActor
+    private func handleIncomingPayload(_ data: Data, source: String) {
         #if os(iOS)
-        // Try collaboration envelope first (binary payload wrapped in JSON)
         if let envelope = try? JSONDecoder().decode(CollaborationEnvelope.self, from: data), envelope.kind == "collab" {
             onCollaborationDataReceived?(envelope.blob)
-            print("📡 Received ARCollaborationData (\(envelope.blob.count) bytes) from \(peer.displayName)")
+            print("📡 Received ARCollaborationData (\(envelope.blob.count) bytes) from \(source)")
             return
         }
         #endif
 
-        // Marker pose message
-        if let markerMsg = try? JSONDecoder().decode(MarkerPoseMessage.self, from: data) {
-            onMarkerPoseReceived?(markerMsg)
-            print("📡 Received marker pose '\(markerMsg.markerId)' from \(peer.displayName)")
+        if let anchorMsg = try? JSONDecoder().decode(SharedAnchorMessage.self, from: data) {
+            sharedAnchor = SharedWorldAnchor(id: anchorMsg.anchorId,
+                                             transform: anchorMsg.matrix,
+                                             confidence: anchorMsg.confidence,
+                                             timestamp: anchorMsg.timestamp,
+                                             worldMapData: anchorMsg.worldMapData)
+            persistSharedAnchor(anchor: sharedAnchor)
+            onSharedAnchorReceived?(anchorMsg)
+            print("📡 Received shared anchor '\(anchorMsg.anchorId)' from \(source)")
             return
         }
 
-        // Try to decode as SharedDiagram first
+        if let coordinateMsg = try? JSONDecoder().decode(SharedCoordinateSpaceMessage.self, from: data) {
+#if os(visionOS)
+            if #available(visionOS 26.0, *) {
+                sharedSpaceCoordinator?.pushCoordinateData(coordinateMsg)
+            }
+#else
+            print("ℹ️ Ignoring shared coordinate payload (unsupported platform)")
+#endif
+            return
+        }
+
         if let sharedDiagram = try? JSONDecoder().decode(SharedDiagram.self, from: data) {
             if !sharedDiagrams.contains(where: { $0.id == sharedDiagram.id }) {
                 sharedDiagrams.append(sharedDiagram)
-                print("📥 Received shared diagram '\(sharedDiagram.filename)' from \(peer.displayName)")
+                print("📥 Received shared diagram '\(sharedDiagram.filename)' from \(source)")
                 if let pos = sharedDiagram.worldPosition {
                     print("   📍 Position: \(pos)")
                 }
+            } else if let index = sharedDiagrams.firstIndex(where: { $0.id == sharedDiagram.id }) {
+                sharedDiagrams[index] = sharedDiagram
+                sharedDiagrams = sharedDiagrams
             }
             return
         }
-        
-        // Try to decode as UpdateDiagramTransformMessage
+
         if let updateMessage = try? JSONDecoder().decode(UpdateDiagramTransformMessage.self, from: data) {
             if let index = sharedDiagrams.firstIndex(where: { $0.filename == updateMessage.filename }) {
-                // Update the transform data for existing diagram
                 if let pos = updateMessage.worldPosition {
                     sharedDiagrams[index].worldPosition = pos
                 }
@@ -313,21 +463,46 @@ extension CollaborativeSessionManager: @preconcurrency MultipeerConnectivityDele
                 if let scale = updateMessage.worldScale {
                     sharedDiagrams[index].worldScale = scale
                 }
-                print("🔄 Updated transform for diagram '\(updateMessage.filename)'")
-                // Ensure @Published sends change to subscribers
+                print("🔄 Updated transform for diagram '\(updateMessage.filename)' from \(source)")
                 sharedDiagrams = sharedDiagrams
             }
             return
         }
-        
-        // Try to decode as RemoveDiagramMessage
+
         if let removeMessage = try? JSONDecoder().decode(RemoveDiagramMessage.self, from: data) {
             sharedDiagrams.removeAll { $0.filename == removeMessage.filename }
-            print("🗑️ Received remove diagram message for '\(removeMessage.filename)'")
+            print("🗑️ Received remove diagram message for '\(removeMessage.filename)' from \(source)")
             return
         }
-        
-        print("❓ Received unknown data from \(peer.displayName)")
+
+        print("❓ Received unknown data from \(source)")
+    }
+}
+
+#if os(visionOS)
+extension CollaborativeSessionManager {
+    private func startSharedSpaceCoordinatorIfNeeded() {
+        guard #available(visionOS 26.0, *), let coordinator = sharedSpaceCoordinator else { return }
+        sharedSpaceTask?.cancel()
+        sharedSpaceTask = Task { [weak coordinator] in
+            await coordinator?.start()
+        }
+    }
+}
+#endif
+
+// MARK: - Collaboration Data Envelope (iOS)
+#if os(iOS)
+private struct CollaborationEnvelope: Codable {
+    let kind: String = "collab"
+    let blob: Data
+}
+#endif
+
+// MARK: - MultipeerConnectivityDelegate
+extension CollaborativeSessionManager: @preconcurrency MultipeerConnectivityDelegate {
+    func multipeerService(_ service: MultipeerConnectivityService, didReceiveData data: Data, from peer: MCPeerID) {
+        handleIncomingPayload(data, source: peer.displayName)
     }
     
     func multipeerService(_ service: MultipeerConnectivityService, didEncounterError error: Error, context: String) {
@@ -374,9 +549,15 @@ extension CollaborativeSessionManager: @preconcurrency MultipeerConnectivityDele
             // Send current diagrams to new peer
             for diagram in sharedDiagrams {
                 if let data = try? JSONEncoder().encode(diagram) {
-                    multipeerSession?.sendData(data, to: [peer])
+                    broadcast(data, to: [peer])
                     print("📤 Sent shared diagram '\(diagram.filename)' to new peer")
                 }
+            }
+
+            if let anchor = sharedAnchor,
+               let data = try? JSONEncoder().encode(makeSharedAnchorMessage(from: anchor)) {
+                broadcast(data, to: [peer])
+                print("📤 Sent shared anchor '\(anchor.id)' to new peer")
             }
             
         case .connecting:
@@ -482,6 +663,111 @@ struct SharedDiagram: Codable, Identifiable {
     }
 }
 
+struct SharedAnchorMessage: Codable {
+    var anchorId: String
+    var timestamp: Date
+    var confidence: Float
+    var matrix: simd_float4x4
+    var worldMapData: Data?
+
+    enum CodingKeys: String, CodingKey {
+        case anchorId
+        case timestamp
+        case confidence
+        case matrixElements
+        case worldMapData
+    }
+
+    init(anchorId: String = UUID().uuidString,
+         timestamp: Date = Date(),
+         confidence: Float = 1.0,
+         transform: simd_float4x4,
+         worldMapData: Data? = nil) {
+        self.anchorId = anchorId
+        self.timestamp = timestamp
+        self.confidence = confidence
+        self.matrix = transform
+        self.worldMapData = worldMapData
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        anchorId = try container.decode(String.self, forKey: .anchorId)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        confidence = try container.decode(Float.self, forKey: .confidence)
+        let elements = try container.decode([Float].self, forKey: .matrixElements)
+        matrix = SharedAnchorMessage.makeMatrix(from: elements)
+        worldMapData = try container.decodeIfPresent(Data.self, forKey: .worldMapData)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(anchorId, forKey: .anchorId)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(confidence, forKey: .confidence)
+        try container.encode(SharedAnchorMessage.flatten(matrix), forKey: .matrixElements)
+        try container.encodeIfPresent(worldMapData, forKey: .worldMapData)
+    }
+
+    static func flatten(_ matrix: simd_float4x4) -> [Float] {
+        var values: [Float] = []
+        values.reserveCapacity(16)
+        for column in 0..<4 {
+            values.append(matrix[column, 0])
+            values.append(matrix[column, 1])
+            values.append(matrix[column, 2])
+            values.append(matrix[column, 3])
+        }
+        return values
+    }
+
+    static func makeMatrix(from values: [Float]) -> simd_float4x4 {
+        guard values.count == 16 else { return matrix_identity_float4x4 }
+        var columns: [SIMD4<Float>] = []
+        columns.reserveCapacity(4)
+        for column in 0..<4 {
+            columns.append(SIMD4<Float>(values[column * 4 + 0],
+                                        values[column * 4 + 1],
+                                        values[column * 4 + 2],
+                                        values[column * 4 + 3]))
+        }
+        return simd_float4x4(columns)
+    }
+}
+
+struct SharedWorldAnchor {
+    let id: String
+    let transform: simd_float4x4
+    let confidence: Float
+    let timestamp: Date
+    let worldMapData: Data?
+}
+
+struct SharedCoordinateSpaceMessage: Codable {
+    let payload: Data
+    let recipientIdentifiers: [UUID]
+}
+
+private struct PersistedAnchor: Codable {
+    let id: String
+    let timestamp: Date
+    let confidence: Float
+    let matrix: [Float]
+    let worldMapData: Data?
+
+    init(anchor: SharedWorldAnchor) {
+        id = anchor.id
+        timestamp = anchor.timestamp
+        confidence = anchor.confidence
+        matrix = SharedAnchorMessage.flatten(anchor.transform)
+        worldMapData = anchor.worldMapData
+    }
+
+    func makeMatrix() -> simd_float4x4 {
+        SharedAnchorMessage.makeMatrix(from: matrix)
+    }
+}
+
 struct RemoveDiagramMessage: Codable {
     let filename: String
 }
@@ -554,6 +840,122 @@ struct UpdateDiagramTransformMessage: Codable {
         }
     }
 }
+
+#if canImport(GroupActivities)
+@MainActor
+final class SharePlayCoordinator {
+    var onDataReceived: ((Data) -> Void)?
+    var onSessionJoined: (() -> Void)?
+    var onSessionEnded: (() -> Void)?
+
+    var isActive: Bool { currentSession != nil }
+
+    private var currentSession: GroupSession<SharedSpaceActivity>?
+    private var messenger: GroupSessionMessenger?
+    private var messageTask: Task<Void, Never>?
+    private var stateTask: Task<Void, Never>?
+    private var listenerTask: Task<Void, Never>?
+
+    init() {
+        listenerTask = Task { [weak self] in
+            await self?.listenForSessions()
+        }
+    }
+
+    deinit {
+        listenerTask?.cancel()
+    }
+
+    func start() async {
+        do {
+            let activity = SharedSpaceActivity()
+            let result = await activity.prepareForActivation()
+            if result == .activationPreferred {
+                do {
+                    try await activity.activate()
+                } catch {
+                    print("❌ SharePlay activation failed: \(error)")
+                }
+            }
+        } catch {
+            print("❌ SharePlay activation failed: \(error)")
+        }
+    }
+
+    func stop() {
+        messageTask?.cancel()
+        stateTask?.cancel()
+        messageTask = nil
+        stateTask = nil
+        messenger = nil
+        currentSession?.leave()
+        currentSession?.end()
+        currentSession = nil
+        onSessionEnded?()
+    }
+
+    func send(_ data: Data) async {
+        guard let messenger else { return }
+        do {
+            try await messenger.send(data)
+        } catch {
+            print("❌ SharePlay send failed: \(error)")
+        }
+    }
+
+    private func listenForSessions() async {
+        for await session in SharedSpaceActivity.sessions() {
+            configureSession(session)
+        }
+    }
+
+    private func configureSession(_ session: GroupSession<SharedSpaceActivity>) {
+        currentSession?.leave()
+        currentSession?.end()
+        currentSession = session
+        messenger = GroupSessionMessenger(session: session)
+
+        messageTask?.cancel()
+        messageTask = Task {
+            guard let messenger = messenger else { return }
+            for await (data, _) in messenger.messages(of: Data.self) {
+                await MainActor.run { [weak self] in
+                    self?.onDataReceived?(data)
+                }
+            }
+        }
+
+        stateTask?.cancel()
+        stateTask = Task {
+            for await state in session.$state.values {
+                if case .invalidated = state {
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        self.messenger = nil
+                        self.currentSession = nil
+                        self.onSessionEnded?()
+                    }
+                    break
+                }
+            }
+        }
+
+        session.join()
+        onSessionJoined?()
+    }
+}
+
+struct SharedSpaceActivity: GroupActivity {
+    static var activityIdentifier: String { "org.riquelme.avar2.sharedspace" }
+
+    var metadata: GroupActivityMetadata {
+        var metadata = GroupActivityMetadata()
+        metadata.title = "AVAR2 Shared Space"
+        metadata.type = .generic
+        return metadata
+    }
+}
+#endif
 
 // MARK: - CollaborationData (AR platforms)
 #if os(visionOS) || os(iOS)

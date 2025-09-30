@@ -1,4 +1,5 @@
 import SwiftUI
+import simd
 
 #if os(visionOS)
 import RealityKit
@@ -92,9 +93,6 @@ struct VisionOSMainView: View {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @StateObject private var httpServer = HTTPServer()
-    #if os(visionOS)
-    @StateObject private var imageTracker = VisionOSImageTrackingService()
-    #endif
 
     enum InputMode: String {
         case file, json, server
@@ -135,25 +133,30 @@ struct VisionOSMainView: View {
                     .padding(.top)
 
                 #if os(visionOS)
-                // Marker HUD (lightweight)
-                HStack(spacing: 10) {
-                    Label("Marker Tracking", systemImage: imageTracker.isRunning ? "camera.viewfinder" : "camera")
-                        .foregroundColor(imageTracker.isRunning ? .green : .secondary)
-                    if let id = imageTracker.lastMarkerId {
-                        Text(id).font(.caption)
+                HStack(spacing: 12) {
+                    let hasAnchor = collaborativeSession.sharedAnchor != nil
+                    Label("Shared Space", systemImage: hasAnchor ? "checkmark.seal.fill" : "person.3.sequence")
+                        .foregroundColor(hasAnchor ? .green : .secondary)
+                    if let anchor = collaborativeSession.sharedAnchor {
+                        Text(anchor.id.prefix(6))
+                            .font(.caption)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.blue.opacity(0.12), in: .capsule)
                     } else {
-                        Text("No marker").font(.caption).foregroundColor(.secondary)
-                    }
-                    if let t = imageTracker.lastUpdateDate {
-                        Text(t, style: .time).font(.caption2).foregroundColor(.secondary)
+                        Text("Awaiting anchor").font(.caption).foregroundColor(.secondary)
                     }
                     Spacer()
+                    Button {
+                        broadcastSharedAnchor()
+                    } label: {
+                        Label("Broadcast", systemImage: "antenna.radiowaves.left.and.right")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
                 .padding(.horizontal)
                 #endif
+
 
                 Picker("Input Source", selection: $inputMode) {
                     Text("From File").tag(InputMode.file)
@@ -573,14 +576,6 @@ struct VisionOSMainView: View {
                     }
                 }
             }
-            #if os(visionOS)
-            .task {
-                await imageTracker.start()
-                imageTracker.onMarkerPose = { id, pos, rot in
-                    collaborativeSession.sendMarkerPose(markerId: id, worldPosition: pos, worldOrientation: rot)
-                }
-            }
-            #endif
         }
     
     private func validateJSON(_ text: String) {
@@ -599,6 +594,17 @@ struct VisionOSMainView: View {
     }
 }
 
+#if os(visionOS)
+private extension VisionOSMainView {
+    func broadcastSharedAnchor() {
+        collaborativeSession.broadcastCurrentSharedAnchor()
+        if let anchor = collaborativeSession.sharedAnchor {
+            print("📡 visionOS broadcast shared anchor \(anchor.id)")
+        }
+    }
+}
+#endif
+
 struct VisionOSImmersiveView: View {
     @ObservedObject var sharedState: VisionOSAppState
     let collaborativeSession: CollaborativeSessionManager
@@ -614,6 +620,9 @@ struct VisionOSImmersiveView: View {
         .environment(sharedState.appModel)
         .onAppear {
             showBackgroundOverlay = false
+            if collaborativeSession.sharedAnchor == nil {
+                collaborativeSession.broadcastCurrentSharedAnchor()
+            }
         }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
@@ -627,6 +636,28 @@ struct VisionOSImmersiveView: View {
                     savedPlaneViz = nil
                 }
                 showBackgroundOverlay = false
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if let anchor = collaborativeSession.sharedAnchor {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Shared Anchor", systemImage: "checkmark.seal.fill")
+                        .foregroundColor(.green)
+                    Text("ID: \(anchor.id.prefix(6))")
+                        .font(.caption)
+                    Text(String(format: "Confidence: %.2f", anchor.confidence))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(10)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding()
+            } else {
+                Label("Awaiting Shared Anchor", systemImage: "wifi.exclamationmark")
+                    .font(.caption)
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .padding()
             }
         }
     }
