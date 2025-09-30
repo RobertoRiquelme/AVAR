@@ -6,13 +6,16 @@ import ARKit
 import RealityKit
 import CoreGraphics
 import ImageIO
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 final class VisionOSImageTrackingService: ObservableObject {
     private let session = ARKitSession()
     private var provider: ImageTrackingProvider?
     private let markerAssetName = "marker"
-    private let markerPhysicalSize: CGFloat = 0.15
+    private static let defaultMarkerPhysicalSize: CGFloat = 0.15
 
     // Client callback
     var onMarkerPose: ((String, SIMD3<Float>, simd_quatf) -> Void)?
@@ -28,18 +31,19 @@ final class VisionOSImageTrackingService: ObservableObject {
             return
         }
 
-        guard let cg = Self.loadMarkerCGImage(named: markerAssetName) else {
-            errorMessage = "Missing marker image asset '\(markerAssetName).png' in bundle."
+        let referenceImages = Self.loadReferenceImages(targetName: markerAssetName)
+        if referenceImages.isEmpty {
+            print("🛑 VisionOSImageTrackingService: no reference images loaded for marker '\(markerAssetName)'")
+        } else {
+            let names = referenceImages.compactMap { $0.name ?? "<unnamed>" }
+            let sizes = referenceImages.map { $0.physicalSize }
+            print("📷 VisionOSImageTrackingService: loaded \(referenceImages.count) reference image(s): names=\(names) sizes=\(sizes)")
+        }
+        guard !referenceImages.isEmpty else {
+            errorMessage = "Missing marker image asset '\(markerAssetName)' in bundle resources."
             return
         }
-
-        var markerReference = ARKit.ReferenceImage(
-            cgimage: cg,
-            physicalSize: CGSize(width: markerPhysicalSize, height: markerPhysicalSize)
-        )
-        markerReference.name = markerAssetName
-
-        provider = ImageTrackingProvider(referenceImages: [markerReference])
+        provider = ImageTrackingProvider(referenceImages: referenceImages)
         guard provider != nil else {
             errorMessage = "Failed to create ImageTrackingProvider (no reference images)."
             return
@@ -87,9 +91,62 @@ final class VisionOSImageTrackingService: ObservableObject {
         return "marker"
     }
 
-    private static func loadMarkerCGImage(named name: String) -> CGImage? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "png") else { return nil }
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+    private static func loadReferenceImages(targetName: String) -> [ARKit.ReferenceImage] {
+        if let fromCatalog = loadReferenceImagesFromCatalog(targetName: targetName), !fromCatalog.isEmpty {
+            return fromCatalog
+        }
+
+        if let fallback = loadReferenceImageFromFallbacks(names: [targetName, "AVAR2_Marker_A", "AVAR2_Marker_B"]) {
+            return [fallback]
+        }
+
+        return []
+    }
+
+    private static func loadReferenceImagesFromCatalog(targetName: String) -> [ARKit.ReferenceImage]? {
+        do {
+            let images = try ARKit.ReferenceImage.loadReferenceImages(inGroupNamed: "AR Resources", bundle: .main)
+            if images.isEmpty { return [] }
+
+            let matching = images.filter { $0.name == targetName }
+            if !matching.isEmpty { return matching }
+            print("ℹ️ VisionOSImageTrackingService: catalog returned \(images.count) image(s); no exact match for '\(targetName)', using full set")
+            return images
+        } catch {
+            print("🛑 VisionOSImageTrackingService: failed to load reference images from catalog: \(error)")
+            return nil
+        }
+    }
+
+    private static func loadReferenceImageFromFallbacks(names: [String]) -> ARKit.ReferenceImage? {
+        for candidate in names {
+            if let image = loadLoosePNG(named: candidate) {
+                let size = CGSize(width: Self.defaultMarkerPhysicalSize, height: Self.defaultMarkerPhysicalSize)
+                var ref = ARKit.ReferenceImage(cgimage: image, physicalSize: size)
+                ref.name = candidate
+                print("📦 VisionOSImageTrackingService: using fallback PNG '\(candidate)' with size \(size)")
+                return ref
+            }
+#if canImport(UIKit)
+            if let uiImage = UIImage(named: candidate), let cgImage = uiImage.cgImage {
+                let size = CGSize(width: Self.defaultMarkerPhysicalSize, height: Self.defaultMarkerPhysicalSize)
+                var ref = ARKit.ReferenceImage(cgimage: cgImage, physicalSize: size)
+                ref.name = candidate
+                print("📦 VisionOSImageTrackingService: using fallback UIImage '\(candidate)' with size \(size)")
+                return ref
+            }
+#endif
+        }
+        return nil
+    }
+
+    private static func loadLoosePNG(named name: String) -> CGImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "png") else {
+            return nil
+        }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            return nil
+        }
         return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 }

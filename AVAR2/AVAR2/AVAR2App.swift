@@ -497,7 +497,7 @@ struct AVAR2_Legacy: App {
                         if collaborativeSession.isSessionActive {
                             Task {
                                 do {
-                                    let elements = try ElementService.loadScriptOutput(from: newFile).elements
+                                    let elements = try DiagramDataLoader.loadScriptOutput(from: newFile).elements
                                     // Get the position for this diagram
                                     let position = appModel.getNextDiagramPosition(for: newFile)
                                     collaborativeSession.shareDiagram(
@@ -767,6 +767,7 @@ struct AVAR2_Legacy: App {
             }
         }
         .immersionStyle(selection: $immersionStyle, in: .mixed, .full)
+        .immersiveEnvironmentBehavior(.coexist)
     }
 }
 #endif

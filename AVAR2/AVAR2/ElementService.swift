@@ -6,8 +6,11 @@
 //
 
 import Foundation
+import OSLog
 
 enum ElementService {
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementService")
+    private static let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
     /// Loads elements from a JSON or TXT file in the main bundle.
     static func loadElements(from filename: String) throws -> [ElementDTO] {
         // Try common extensions
@@ -57,13 +60,17 @@ enum ElementService {
         }
 
         let data = try Data(contentsOf: url)
-        print("📄 Loading JSON file: \(filename) (\(data.count) bytes)")
+        if isVerboseLoggingEnabled {
+            logger.debug("📄 Loading JSON file: \(filename, privacy: .public) (\(data.count, privacy: .public) bytes)")
+        }
         let decoded = try JSONDecoder().decode(ScriptOutput.self, from: data)
-        print("📋 Decoded \(decoded.elements.count) elements, is2D: \(decoded.is2D)")
-        for (index, element) in decoded.elements.enumerated() {
-            print("   Element \(index): id=\(element.id ?? "nil"), type='\(element.type)', hasShape=\(element.shape != nil)")
-            if let shape = element.shape {
-                print("      Shape: desc='\(shape.shapeDescription ?? "nil")', extent=\(shape.extent ?? [])")
+        if isVerboseLoggingEnabled {
+            logger.debug("📋 Decoded \(decoded.elements.count, privacy: .public) elements, is2D: \(decoded.is2D, privacy: .public)")
+            for (index, element) in decoded.elements.enumerated() {
+                logger.debug("   Element \(index, privacy: .public): id=\(element.id ?? "nil", privacy: .public), type='\(element.type, privacy: .public)', hasShape=\(element.shape != nil, privacy: .public)")
+                if let shape = element.shape {
+                    logger.debug("      Shape: desc='\(shape.shapeDescription ?? "nil", privacy: .public)', extent=\(shape.extent ?? [], privacy: .public)")
+                }
             }
         }
         return decoded

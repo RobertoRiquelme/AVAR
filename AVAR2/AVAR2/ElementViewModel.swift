@@ -20,6 +20,7 @@ import ARKit
 
 // Logger for ViewModel
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel")
+private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
 
 @MainActor
 class ElementViewModel: ObservableObject {
@@ -102,6 +103,11 @@ class ElementViewModel: ObservableObject {
     /// Starting drag position for rotation
     private var rotationStartDragPosition: SIMD3<Float>?
 
+    private func debugLog(_ message: @autoclosure @escaping () -> String) {
+        guard isVerboseLoggingEnabled else { return }
+        logger.debug("\(message(), privacy: .public)")
+    }
+
     // NEW: Snap/unsnap banner
     @Published var snapStatusMessage: String = ""
 
@@ -115,23 +121,23 @@ class ElementViewModel: ObservableObject {
     /// Set the AppModel reference for accessing shared surface anchors
     func setAppModel(_ appModel: AppModel) {
         self.appModel = appModel
-        print("🔧 ElementViewModel: AppModel set, using PERSISTENT surface detection")
-        print("🔧 Surface detection running: \(appModel.surfaceDetector.isRunning), anchors: \(appModel.surfaceDetector.surfaceAnchors.count)")
+        debugLog("🔧 ElementViewModel: AppModel set, using PERSISTENT surface detection")
+        debugLog("🔧 Surface detection running: \(appModel.surfaceDetector.isRunning), anchors: \(appModel.surfaceDetector.surfaceAnchors.count)")
     }
     
     /// Get all available surface anchors with proper coordinate system handling
     private func getAllSurfaceAnchors() -> [PlaneAnchor] {
         guard let appModel = appModel else { 
-            print("⚠️ getAllSurfaceAnchors: No AppModel available")
+            logger.warning("⚠️ getAllSurfaceAnchors: No AppModel available")
             return [] 
         }
         let anchors = appModel.surfaceDetector.surfaceAnchors
-        print("🔍 getAllSurfaceAnchors: Found \(anchors.count) PERSISTENT surface anchors")
+        debugLog("🔍 getAllSurfaceAnchors: Found \(anchors.count) PERSISTENT surface anchors")
         
         // Log each surface for debugging
         for anchor in anchors {
             let surfaceType = getSurfaceTypeName(anchor)
-            print("   📍 Surface \(anchor.id): \(surfaceType)")
+            debugLog("   📍 Surface \(anchor.id): \(surfaceType)")
         }
         
         return anchors
@@ -140,10 +146,10 @@ class ElementViewModel: ObservableObject {
     /// Update the 3D snap message above the grab handle
     private func update3DSnapMessage(_ message: String) {
         guard let grabHandle = grabHandleEntity else { 
-            print("⚠️ Cannot update 3D snap message - no grab handle entity")
+            logger.warning("⚠️ Cannot update 3D snap message - no grab handle entity")
             return 
         }
-        print("🎯 Updating 3D snap message: '\(message)'")
+        debugLog("🎯 Updating 3D snap message: '\(message)'")
         
         // Remove existing snap message
         if let existingMessage = grabHandle.children.first(where: { $0.name == "snapMessage" }) {
@@ -174,17 +180,21 @@ class ElementViewModel: ObservableObject {
         // Add to grab handle
         grabHandle.addChild(textEntity)
         
-        print("🎯 Added 3D snap message: '\(message)' above grab handle")
+        debugLog("🎯 Added 3D snap message: '\(message)' above grab handle")
     }
 
     func loadData(from filename: String) async {
         self.filename = filename  // Store filename for position tracking
         do {
-            let output = try ElementService.loadScriptOutput(from: filename)
+            let output = try DiagramDataLoader.loadScriptOutput(from: filename)
             self.elements = output.elements
             self.isGraph2D = output.is2D
             self.normalizationContext = NormalizationContext(elements: output.elements, is2D: output.is2D)
             logger.log("Loaded \(output.elements.count, privacy: .public) elements (2D: \(output.is2D, privacy: .public)) from \(filename, privacy: .public)")
+        } catch let error as DiagramLoadingError {
+            let message = error.errorDescription ?? "Failed to load diagram"
+            logger.error("\(message, privacy: .public)")
+            self.loadErrorMessage = message
         } catch {
             let msg = "Failed to load \(filename): \(error.localizedDescription)"
             logger.error("\(msg, privacy: .public)")
@@ -192,6 +202,7 @@ class ElementViewModel: ObservableObject {
         }
     }
 
+#if os(visionOS)
     /// Creates and positions all element entities in the scene.
     /// - Parameter onClose: Optional callback to invoke when the close button is tapped.
     func loadElements(in content: RealityViewContent, onClose: (() -> Void)? = nil) {
@@ -202,16 +213,34 @@ class ElementViewModel: ObservableObject {
             return
         }
         
-        let container = createRootContainer(content: content, normalizationContext: normalizationContext)
-        let background = createBackgroundEntity(container: container, normalizationContext: normalizationContext)
-        updateBackgroundEntityCollisionShapes(scale: container.scale.x)
+        let sceneBuilder = DiagramSceneBuilder(
+            filename: filename,
+            isGraph2D: isGraph2D,
+            spawnScale: spawnScale,
+            appModel: appModel,
+            logger: logger
+        )
 
-        setupUIControls(background: background, normalizationContext: normalizationContext, onClose: onClose)
-        createAndPositionElements(container: container, normalizationContext: normalizationContext)
+        let buildResult = sceneBuilder.buildScene(
+            in: content,
+            normalizationContext: normalizationContext,
+            onClose: onClose
+        )
+
+        self.rootEntity = buildResult.container
+        self.backgroundEntity = buildResult.background
+        self.grabHandleEntity = buildResult.grabHandle
+        self.zoomHandleEntity = buildResult.zoomHandle
+        self.rotationButtonEntity = buildResult.rotationButton
+
+        updateBackgroundEntityCollisionShapes(scale: buildResult.container.scale.x)
+
+        createAndPositionElements(container: buildResult.container, normalizationContext: normalizationContext)
 
         updateConnections(in: content)
         addOriginMarker()
     }
+#endif
     
     private func setupSceneContent(_ content: RealityViewContent) {
         self.sceneContent = content
@@ -224,46 +253,12 @@ class ElementViewModel: ObservableObject {
         }
     }
     
-    private func createRootContainer(content: RealityViewContent, normalizationContext: NormalizationContext) -> Entity {
-        let pivot = appModel?.getNextDiagramPosition(for: filename ?? "unknown") ?? SIMD3<Float>(0, 1.0, -2.0)
-        print("📍 Loading diagram at position: \(pivot)")
-        print("📍 Available surfaces: \(appModel?.surfaceDetector.surfaceAnchors.count ?? 0)")
-        
-        let container = Entity()
-        container.name = "graphRoot"
-        container.position = pivot
-        let initialScale = spawnScale
-        container.scale = SIMD3<Float>(repeating: initialScale)
-        print("📏 Applied spawn scale \(initialScale) to diagram container")
-        content.add(container)
-        self.rootEntity = container
-
-        return container
-    }
-    
-    private func createBackgroundEntity(container: Entity, normalizationContext: NormalizationContext) -> Entity {
-        let bgWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
-        let bgHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
-        let bgDepth = normalizationContext.positionCenters.count > 2 ? 
-            Float(normalizationContext.positionRanges[2] / normalizationContext.globalRange * 2) : 0.01
-        
-        let background = Entity()
-        background.name = "graphBackground"
-        let bgShape = ShapeResource.generateBox(size: [bgWidth, bgHeight, bgDepth])
-        background.components.set(CollisionComponent(shapes: [bgShape]))
-        background.position = .zero
-        container.addChild(background)
-        self.backgroundEntity = background
-        
-        return background
-    }
-    
     /// Update the background entity's collision shapes to match the current scale
     /// This ensures snapping calculations use the correct scaled dimensions
     private func updateBackgroundEntityCollisionShapes(scale: Float) {
         guard let background = backgroundEntity,
               let normalizationContext = self.normalizationContext else { 
-            print("⚠️ Cannot update background collision shapes - missing background entity or normalization context")
+            logger.warning("⚠️ Cannot update background collision shapes - missing background entity or normalization context")
             return 
         }
         
@@ -282,108 +277,7 @@ class ElementViewModel: ObservableObject {
         let scaledShape = ShapeResource.generateBox(size: [scaledWidth, scaledHeight, scaledDepth])
         background.components.set(CollisionComponent(shapes: [scaledShape]))
         
-        print("📦 Updated background collision shapes: \(scaledWidth) x \(scaledHeight) x \(scaledDepth) (scale: \(scale))")
-    }
-    
-    private func setupUIControls(background: Entity, normalizationContext: NormalizationContext, onClose: (() -> Void)?) {
-        let bgWidth = Float(normalizationContext.positionRanges[0] / normalizationContext.globalRange * 2)
-        let bgHeight = Float(normalizationContext.positionRanges[1] / normalizationContext.globalRange * 2)
-        let bgDepth = normalizationContext.positionCenters.count > 2 ? 
-            Float(normalizationContext.positionRanges[2] / normalizationContext.globalRange * 2) : 0.01
-        
-        if let onClose = onClose {
-            let closeButton = createCloseButton(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth, onClose: onClose)
-            background.addChild(closeButton)
-        }
-        
-        let grabHandle = createGrabHandle(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth)
-        background.addChild(grabHandle)
-        self.grabHandleEntity = grabHandle
-        print("🎯 Grab handle entity set: \(grabHandle.name)")
-        
-        let zoomHandle = createZoomHandle(bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth)
-        background.addChild(zoomHandle)
-        self.zoomHandleEntity = zoomHandle
-        print("🔍 Zoom handle entity set: \(zoomHandle.name)")
-    }
-    
-    private func createCloseButton(bgWidth: Float, bgHeight: Float, bgDepth: Float, onClose: @escaping () -> Void) -> Entity {
-        let buttonContainer = Entity()
-        buttonContainer.name = "closeButton"
-        
-        let buttonRadius: Float = 0.02
-        let buttonThickness: Float = 0.008
-        let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
-        let buttonMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.8), isMetallic: false)
-        let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
-        buttonEntity.transform.rotation = simd_quatf(angle: .pi/2, axis: [1, 0, 0])
-        buttonContainer.addChild(buttonEntity)
-        
-        let textMesh = MeshResource.generateText(
-            "×",
-            extrusionDepth: 0.002,
-            font: .systemFont(ofSize: 0.06),
-            containerFrame: .zero,
-            alignment: .center,
-            lineBreakMode: .byWordWrapping
-        )
-        let textMaterial = SimpleMaterial(color: .black.withAlphaComponent(0.7), isMetallic: false)
-        let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
-        
-        let textBounds = textMesh.bounds
-        let textOffset = SIMD3<Float>(-textBounds.center.x, -textBounds.center.y, buttonThickness / 2 + 0.001)
-        textEntity.position = textOffset
-        buttonContainer.addChild(textEntity)
-        
-        positionCloseButton(buttonContainer, bgWidth: bgWidth, bgHeight: bgHeight, bgDepth: bgDepth, buttonRadius: buttonRadius)
-        setupButtonInteraction(buttonContainer)
-        
-        return buttonContainer
-    }
-    
-    private func positionCloseButton(_ buttonContainer: Entity, bgWidth: Float, bgHeight: Float, bgDepth: Float, buttonRadius: Float) {
-        let halfH = bgHeight / 2
-        let handleWidth: Float = bgWidth * 0.65
-        let handleHeight: Float = 0.018
-        let handleMargin: Float = 0.015
-        let handlePosY = -halfH - handleHeight / 2 - handleMargin
-        let spacing: Float = 0.015
-        let closePosX = -handleWidth / 2 - buttonRadius - spacing
-        let closePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
-        buttonContainer.position = [closePosX, handlePosY, closePosZ]
-    }
-    
-    private func createGrabHandle(bgWidth: Float, bgHeight: Float, bgDepth: Float) -> Entity {
-        let halfH = bgHeight / 2
-        let handleWidth: Float = bgWidth * 0.65
-        let handleHeight: Float = 0.018
-        let handleThickness: Float = 0.008
-        let handleMargin: Float = 0.015
-        let handleContainer = Entity()
-        handleContainer.name = "grabHandle"
-        
-        let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness], cornerRadius: handleHeight * 0.4)
-        let handleMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)
-        let handleEntity = ModelEntity(mesh: handleMesh, materials: [handleMaterial])
-        handleContainer.addChild(handleEntity)
-        
-        let handlePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
-        handleContainer.position = [0, -halfH - handleHeight / 1 - handleMargin, handlePosZ]
-        
-        setupButtonInteraction(handleContainer)
-        
-        return handleContainer
-    }
-    
-    private func setupButtonInteraction(_ buttonContainer: Entity) {
-        let hoverEffectComponent = HoverEffectComponent()
-        buttonContainer.generateCollisionShapes(recursive: true)
-        buttonContainer.components.set(InputTargetComponent())
-        buttonContainer.components.set(hoverEffectComponent)
-        for child in buttonContainer.children {
-            child.components.set(InputTargetComponent())
-            child.components.set(hoverEffectComponent)
-        }
+        debugLog("📦 Updated background collision shapes: \(scaledWidth) x \(scaledHeight) x \(scaledDepth) (scale: \(scale))")
     }
     
     private func createAndPositionElements(container: Entity, normalizationContext: NormalizationContext) {
@@ -391,41 +285,41 @@ class ElementViewModel: ObservableObject {
         lineEntities.removeAll()
         let hoverEffectComponent = HoverEffectComponent()
         
-        print("🔄 Creating and positioning \(elements.count) elements")
+        debugLog("🔄 Creating and positioning \(self.elements.count) elements")
         var validElements = 0
         
-        for element in elements {
+        for element in self.elements {
             // Skip edge/line elements - they don't need visual representation, only connection info
             if element.type.lowercased() == "edge" || element.shape?.shapeDescription?.lowercased() == "line" {
-                print("🔗 Skipping edge/line element \(element.id ?? "unknown") - used for connections only")
+                debugLog("🔗 Skipping edge/line element \(element.id ?? "unknown") - used for connections only")
                 continue
             }
             
             guard let coords = element.position else { 
-                print("⚠️ Element \(element.id ?? "unknown") has no position - skipping")
+                logger.warning("⚠️ Element \(element.id ?? "unknown") has no position - skipping")
                 continue 
             }
             
             // Skip camera elements - they don't need visual representation
             if element.type.lowercased() == "camera" {
-                print("📷 Skipping camera element \(element.id ?? "unknown")")
+                debugLog("📷 Skipping camera element \(element.id ?? "unknown")")
                 continue
             }
             
             let entity = createEntity(for: element)
             let localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
-            print("📍 Element \(element.id ?? "unknown") positioned at \(localPos)")
+            debugLog("📍 Element \(element.id ?? "unknown") positioned at \(localPos)")
             
             entity.position = localPos
             entity.components.set(hoverEffectComponent)
             container.addChild(entity)
             let elementIdKey = element.id ?? "element_\(UUID().uuidString.prefix(8))"
             entityMap[elementIdKey] = entity
-            print("🗝️ Stored entity with key: '\(elementIdKey)' for element ID: \(element.id ?? "nil")")
+            debugLog("🗝️ Stored entity with key: '\(elementIdKey)' for element ID: \(element.id ?? "nil")")
             validElements += 1
         }
         
-        print("✅ Successfully created \(validElements) out of \(elements.count) elements")
+        logger.info("✅ Successfully created \(validElements) out of \(self.elements.count) elements")
     }
     
     private func calculateElementPosition(coords: [Double], normalizationContext: NormalizationContext) -> SIMD3<Float> {
@@ -451,14 +345,14 @@ class ElementViewModel: ObservableObject {
         lineEntities.forEach { $0.removeFromParent() }
         lineEntities.removeAll()
         // For each element that defines an edge, connect fromId -> toId
-        for edge in elements {
+        for edge in self.elements {
             if let from = edge.fromId, let to = edge.toId {
-                if let line = createLineBetween(from, and: to, colorComponents: edge.color ?? edge.shape?.color) {
+                if let line = self.createLineBetween(from, and: to, colorComponents: edge.color ?? edge.shape?.color) {
                     container.addChild(line)
-                    lineEntities.append(line)
-                    print("📍 Created line between elements \(from) and \(to)")
+                    self.lineEntities.append(line)
+                    self.debugLog("📍 Created line between elements \(from) and \(to)")
                 } else {
-                    print("⚠️ Failed to create line between \(from) and \(to) - entities not found in entityMap")
+                    logger.warning("⚠️ Failed to create line between \(from) and \(to) - entities not found in entityMap")
                 }
             }
         }
@@ -750,7 +644,7 @@ class ElementViewModel: ObservableObject {
     /// Handle rotation button drag to rotate 3D diagrams on Y-axis
     func handleRotationButtonDragChanged(_ value: EntityTargetValue<DragGesture.Value>) {
         guard let container = rootEntity, !isGraph2D else { 
-            print("⚠️ Rotation only available for 3D diagrams")
+            logger.warning("⚠️ Rotation only available for 3D diagrams")
             return 
         }
         
@@ -787,7 +681,7 @@ class ElementViewModel: ObservableObject {
         // Apply rotation to container
         container.setOrientation(newRotation, relativeTo: nil)
         
-        print("🔄 Rotating 3D diagram: angle=\(newAngle) radians (\(newAngle * 180 / .pi) degrees)")
+        debugLog("🔄 Rotating 3D diagram: angle=\(newAngle) radians (\(newAngle * 180 / .pi) degrees)")
     }
     
     /// Handle rotation button drag end
@@ -801,7 +695,7 @@ class ElementViewModel: ObservableObject {
             updateConnections(in: content)
         }
         
-        print("🔄 Rotation gesture ended")
+        debugLog("🔄 Rotation gesture ended")
         
         // Notify transform change
         if let transform = getWorldTransform() {
@@ -883,7 +777,7 @@ class ElementViewModel: ObservableObject {
         let isVertical = abs(normal.y) < verticalThreshold
         
         if isVertical {
-            print("🧱 Detected vertical surface (wall): \(anchor.id) with normal \(normal)")
+            debugLog("🧱 Detected vertical surface (wall): \(anchor.id) with normal \(normal)")
         }
         
         return isVertical
@@ -912,7 +806,7 @@ class ElementViewModel: ObservableObject {
             lowestY = 0
         }
         
-        print("📐 Lowest entity bottom Y position: \(lowestY)")
+        debugLog("📐 Lowest entity bottom Y position: \(lowestY)")
         return lowestY
     }
     
@@ -939,7 +833,7 @@ class ElementViewModel: ObservableObject {
             highestY = 0
         }
         
-        print("📐 Highest entity top Y position: \(highestY)")
+        debugLog("📐 Highest entity top Y position: \(highestY)")
         return highestY
     }
     
@@ -954,7 +848,7 @@ class ElementViewModel: ObservableObject {
         let isHorizontal = abs(normal.y) > horizontalThreshold
         
         if isHorizontal {
-            print("🏢 Detected horizontal surface (floor/table/ceiling): \(anchor.id) with normal \(normal)")
+            debugLog("🏢 Detected horizontal surface (floor/table/ceiling): \(anchor.id) with normal \(normal)")
         }
         
         return isHorizontal
@@ -980,28 +874,29 @@ class ElementViewModel: ObservableObject {
     }
 
     private func setSnapStatusMessage(_ message: String) {
-        print("🔔 Setting snap status message: '\(message)'")
-        print("🔔 Previous message was: '\(snapStatusMessage)'")
-        snapStatusMessage = message
-        print("🔔 Message set successfully. Current value: '\(snapStatusMessage)'")
+        self.debugLog("🔔 Setting snap status message: '\(message)'")
+        self.debugLog("🔔 Previous message was: '\(self.snapStatusMessage)'")
+        self.snapStatusMessage = message
+        self.debugLog("🔔 Message set successfully. Current value: '\(self.snapStatusMessage)'")
         
         // Update the 3D message above grab handle
-        update3DSnapMessage(message)
+        self.update3DSnapMessage(message)
         
         // Optionally auto-clear after a second
-        if alwaysShowSnapMessage == false {
-            print("🔔 Auto-clear enabled - will clear in 1.5 seconds")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        if self.alwaysShowSnapMessage == false {
+            self.debugLog("🔔 Auto-clear enabled - will clear in 1.5 seconds")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self else { return }
                 if self.snapStatusMessage == message {
-                    print("🔔 Auto-clearing message: '\(message)'")
+                    self.debugLog("🔔 Auto-clearing message: '\(message)'")
                     self.snapStatusMessage = ""
                     self.update3DSnapMessage("") // Clear 3D message too
                 } else {
-                    print("🔔 Message changed, not clearing: '\(message)' vs '\(self.snapStatusMessage)'")
+                    self.debugLog("🔔 Message changed, not clearing: '\(message)' vs '\(self.snapStatusMessage)'")
                 }
             }
         } else {
-            print("🔔 Auto-clear disabled (alwaysShowSnapMessage = true)")
+            self.debugLog("🔔 Auto-clear disabled (alwaysShowSnapMessage = true)")
         }
     }
 
@@ -1049,10 +944,10 @@ class ElementViewModel: ObservableObject {
     }
 
     private func createLineBetween(_ id1: String, and id2: String, colorComponents: [Double]?) -> ModelEntity? {
-        print("🔍 Looking for entities with keys: '\(id1)' and '\(id2)'")
-        print("🗂️ Available entity keys: \(Array(entityMap.keys).sorted())")
-        guard let entity1 = entityMap[id1], let entity2 = entityMap[id2] else { 
-            print("❌ Could not find entities for keys '\(id1)' and/or '\(id2)'")
+        self.debugLog("🔍 Looking for entities with keys: '\(id1)' and '\(id2)'")
+        self.debugLog("🗂️ Available entity keys: \(Array(self.entityMap.keys).sorted())")
+        guard let entity1 = self.entityMap[id1], let entity2 = self.entityMap[id2] else { 
+            logger.error("❌ Could not find entities for keys '\(id1)' and/or '\(id2)'")
             return nil 
         }
 
@@ -1140,9 +1035,9 @@ class ElementViewModel: ObservableObject {
         // Orient label into XZ-plane so it faces camera in 2D mode, lift slightly to avoid z-fighting
         labelEntity.position.y += 0.001
         // Debug: print world transform and bounds
-        print("RTLabel [\(String(describing: element.id))] transform:\n\(labelEntity.transform.matrix)")
+        debugLog("RTLabel [\(String(describing: element.id))] transform:\n\(labelEntity.transform.matrix)")
         let bounds = labelEntity.visualBounds(relativeTo: nil)
-        print("RTLabel [\(String(describing: element.id))] bounds center: \(bounds.center), extents: \(bounds.extents)")
+        debugLog("RTLabel [\(String(describing: element.id))] bounds center: \(bounds.center), extents: \(bounds.extents)")
         return labelEntity
     }
     
@@ -1252,26 +1147,26 @@ class ElementViewModel: ObservableObject {
         let planeWidth = Float(planeExtent.width)  // Width along X axis
         let planeHeight = Float(planeExtent.height)  // Height along Z axis
         
-        print("📐 Surface dimensions: \(planeWidth)m x \(planeHeight)m")
-        print("📐 Surface center: \(planePosition)")
-        print("📐 Diagram position: \(diagramPosition)")
+        debugLog("📐 Surface dimensions: \(planeWidth)m x \(planeHeight)m")
+        debugLog("📐 Surface center: \(planePosition)")
+        debugLog("📐 Diagram position: \(diagramPosition)")
         
         // Transform point to plane's local space
         let toPlane = diagramPosition - planePosition
         let localPoint = simd_inverse(planeRotation).act(toPlane)
         
-        print("📐 Local point on surface: \(localPoint)")
+        debugLog("📐 Local point on surface: \(localPoint)")
         
         // Clamp the point to the plane bounds - this enables snapping anywhere on surface
         let clampedX = Swift.max(-planeWidth/2, Swift.min(planeWidth/2, localPoint.x))
         let clampedZ = Swift.max(-planeHeight/2, Swift.min(planeHeight/2, localPoint.z))
         
-        print("📐 Clamped local point: x=\(clampedX), z=\(clampedZ)")
+        debugLog("📐 Clamped local point: x=\(clampedX), z=\(clampedZ)")
         
         // Find nearest point on the plane within bounds
         let nearestOnPlane = planeRotation.act(SIMD3<Float>(clampedX, 0, clampedZ)) + planePosition
         
-        print("📐 Final snap point: \(nearestOnPlane)")
+        debugLog("📐 Final snap point: \(nearestOnPlane)")
         
         return nearestOnPlane
     }
@@ -1314,12 +1209,12 @@ class ElementViewModel: ObservableObject {
     /// Check for surface snapping during pan gestures
     private func checkForSurfaceSnapping(container: Entity, at position: SIMD3<Float>) {
         let availableSurfaces = getAllSurfaceAnchors()
-        print("🔍 checkForSurfaceSnapping called with PERSISTENT surfaces")
-        print("🔍 Diagram position: \(position)")
-        print("🔍 Available PERSISTENT surfaces: \(availableSurfaces.count)")
+        debugLog("🔍 checkForSurfaceSnapping called with PERSISTENT surfaces")
+        debugLog("🔍 Diagram position: \(position)")
+        debugLog("🔍 Available PERSISTENT surfaces: \(availableSurfaces.count)")
         
         guard !availableSurfaces.isEmpty else { 
-            print("🚫 No PERSISTENT surfaces available for snapping")
+            debugLog("🚫 No PERSISTENT surfaces available for snapping")
             return 
         }
         
@@ -1327,7 +1222,7 @@ class ElementViewModel: ObservableObject {
             // Show visual feedback that snapping is available
             let surfaceType = getSurfaceTypeName(nearestSurface)
             let message = "📍 Near \(surfaceType) - Release to Snap!"
-            print("✨ \(message)")
+            debugLog("✨ \(message)")
             setSnapStatusMessage(message)
         } else {
             // Clear snap message if not near any surface
@@ -1345,8 +1240,8 @@ class ElementViewModel: ObservableObject {
         let diagramType = isGraph2D ? "2D" : "3D"
         let targetSurfaceType = isGraph2D ? "vertical (walls)" : "horizontal (floors/tables)"
         
-        print("🔍 Checking \(availableSurfaces.count) PERSISTENT surfaces for \(diagramType) diagram snapping to \(targetSurfaceType) at position \(diagramPosition)")
-        print("🔍 3D diagrams can snap anywhere on horizontal surfaces, not just the center")
+        debugLog("🔍 Checking \(availableSurfaces.count) PERSISTENT surfaces for \(diagramType) diagram snapping to \(targetSurfaceType) at position \(diagramPosition)")
+        debugLog("🔍 3D diagrams can snap anywhere on horizontal surfaces, not just the center")
         
         let validSurfaces = filterValidSurfaces(availableSurfaces)
         let closest = findClosestSurface(validSurfaces, diagramPosition: diagramPosition)
@@ -1357,18 +1252,18 @@ class ElementViewModel: ObservableObject {
     
     private func filterValidSurfaces(_ surfaces: [PlaneAnchor]) -> [PlaneAnchor] {
         return surfaces.filter { surface in
-            let surfaceType = getSurfaceTypeName(surface)
+            let surfaceType = self.getSurfaceTypeName(surface)
             let isValidSurface: Bool
             
             if isGraph2D {
                 isValidSurface = isVerticalSurface(surface)
                 if !isValidSurface {
-                    print("🚫 Skipping non-vertical surface for 2D diagram: \(surface.id) (\(surfaceType))")
+                    self.debugLog("🚫 Skipping non-vertical surface for 2D diagram: \(surface.id) (\(surfaceType))")
                 }
             } else {
                 isValidSurface = isHorizontalSurface(surface) || surfaceType == "Floor" || surfaceType == "Table"
                 if !isValidSurface {
-                    print("🚫 Skipping non-horizontal surface for 3D diagram: \(surface.id) (\(surfaceType))")
+                    self.debugLog("🚫 Skipping non-horizontal surface for 3D diagram: \(surface.id) (\(surfaceType))")
                 }
             }
             
@@ -1382,17 +1277,17 @@ class ElementViewModel: ObservableObject {
         for surface in surfaces {
             let surfacePosition = extractSurfacePosition(surface)
             let distance = distanceToPlane(point: diagramPosition, planeAnchor: surface)
-            let surfaceType = getSurfaceTypeName(surface)
+            let surfaceType = self.getSurfaceTypeName(surface)
             
-            logSurfaceInfo(surface: surface, surfaceType: surfaceType, surfacePosition: surfacePosition, diagramPosition: diagramPosition, distance: distance)
-            
-            if distance <= snapDistance {
+            self.logSurfaceInfo(surface: surface, surfaceType: surfaceType, surfacePosition: surfacePosition, diagramPosition: diagramPosition, distance: distance)
+
+            if distance <= self.snapDistance {
                 if closest == nil || distance < closest!.distance {
                     closest = (surface, distance)
-                    print("🎯 New closest \(isGraph2D ? "wall" : "horizontal surface"): \(surface.id) (\(surfaceType)) at \(distance)m")
+                    self.debugLog("🎯 New closest \(self.isGraph2D ? "wall" : "horizontal surface"): \(surface.id) (\(surfaceType)) at \(distance)m")
                 }
             } else {
-                print("📏 Surface \(surface.id) (\(surfaceType)) too far: \(distance)m > \(snapDistance)m")
+                self.debugLog("📏 Surface \(surface.id) (\(surfaceType)) too far: \(distance)m > \(self.snapDistance)m")
             }
         }
         
@@ -1409,30 +1304,30 @@ class ElementViewModel: ObservableObject {
     }
     
     private func logSurfaceInfo(surface: PlaneAnchor, surfaceType: String, surfacePosition: SIMD3<Float>, diagramPosition: SIMD3<Float>, distance: Float) {
-        print("📍 Surface \(surface.id) (\(surfaceType))")
-        print("   📍 Surface world position: \(surfacePosition)")
-        print("   📍 Diagram position: \(diagramPosition)")
-        print("   📍 Distance: \(distance)m")
+        debugLog("📍 Surface \(surface.id) (\(surfaceType))")
+        debugLog("   📍 Surface world position: \(surfacePosition)")
+        debugLog("   📍 Diagram position: \(diagramPosition)")
+        debugLog("   📍 Distance: \(distance)m")
     }
     
     private func logSnapResult(closest: (surface: PlaneAnchor, distance: Float)?, diagramType: String, targetSurfaceType: String) {
         if let result = closest?.surface {
             let surfaceType = getSurfaceTypeName(result)
-            print("✅ Found snap target for \(diagramType) diagram: \(result.id) (\(surfaceType)) at \(closest!.distance)m")
+            logger.info("✅ Found snap target for \(diagramType) diagram: \(result.id) (\(surfaceType)) at \(closest!.distance)m")
         } else {
-            print("❌ No \(targetSurfaceType) surfaces within snap distance (\(snapDistance)m) for \(diagramType) diagram")
+            logger.error("❌ No \(targetSurfaceType) surfaces within snap distance (\(self.snapDistance)m) for \(diagramType) diagram")
         }
     }
     
     /// Perform smooth snap animation to any surface type
     private func performSnapToSurface(container: Entity, surface: PlaneAnchor) {
         let diagramPosition = container.position(relativeTo: nil)
-        let nearestPointOnSurface = findNearestPointOnSurface(diagramPosition: diagramPosition, surface: surface)
+        let nearestPointOnSurface = self.findNearestPointOnSurface(diagramPosition: diagramPosition, surface: surface)
         let surfaceWorldTransform = surface.originFromAnchorTransform
         let surfaceRotation = simd_quatf(surfaceWorldTransform)
-        let surfaceType = getSurfaceTypeName(surface)
+        let surfaceType = self.getSurfaceTypeName(surface)
         
-        let (snapPosition, diagramOrientation) = calculateSnapPositionAndOrientation(
+        let (snapPosition, diagramOrientation) = self.calculateSnapPositionAndOrientation(
             nearestPointOnSurface: nearestPointOnSurface,
             surfaceRotation: surfaceRotation,
             surfaceType: surfaceType,
@@ -1440,8 +1335,8 @@ class ElementViewModel: ObservableObject {
             isGraph2D: isGraph2D
         )
         
-        animateToSnapPosition(container: container, position: snapPosition, orientation: diagramOrientation)
-        finalizeSnap(surface: surface, surfaceType: surfaceType)
+        self.animateToSnapPosition(container: container, position: snapPosition, orientation: diagramOrientation)
+        self.finalizeSnap(surface: surface, surfaceType: surfaceType)
     }
     
     private func calculateSnapPositionAndOrientation(
@@ -1473,10 +1368,10 @@ class ElementViewModel: ObservableObject {
         if isGraph2D {
             let verticalRotation = simd_quatf(angle: -.pi/2, axis: SIMD3<Float>(1, 0, 0))
             diagramOrientation = surfaceRotation * verticalRotation
-            print("📌 Snapping 2D diagram to wall at \(snapPosition) with rotation")
+            debugLog("📌 Snapping 2D diagram to wall at \(snapPosition) with rotation")
         } else {
             diagramOrientation = container.orientation(relativeTo: nil)
-            print("📌 Snapping 3D diagram to wall at \(snapPosition) preserving orientation")
+            debugLog("📌 Snapping 3D diagram to wall at \(snapPosition) preserving orientation")
         }
         
         return (snapPosition, diagramOrientation)
@@ -1492,10 +1387,10 @@ class ElementViewModel: ObservableObject {
         let diagramOrientation: simd_quatf
         if isGraph2D {
             diagramOrientation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)) // Default upright for 2D
-            print("📌 Snapping 2D diagram to horizontal surface at \(snapPosition) with default orientation")
+            debugLog("📌 Snapping 2D diagram to horizontal surface at \(snapPosition) with default orientation")
         } else {
             diagramOrientation = container.orientation(relativeTo: nil) // Preserve current orientation for 3D
-            print("📌 Snapping 3D diagram to horizontal surface at \(snapPosition) preserving orientation")
+            debugLog("📌 Snapping 3D diagram to horizontal surface at \(snapPosition) preserving orientation")
         }
         
         return (snapPosition, diagramOrientation)
@@ -1511,10 +1406,10 @@ class ElementViewModel: ObservableObject {
         if isGraph2D {
             let upsideDownRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0))
             diagramOrientation = upsideDownRotation
-            print("📌 Snapping 2D diagram to ceiling at \(snapPosition) with upside-down rotation")
+            debugLog("📌 Snapping 2D diagram to ceiling at \(snapPosition) with upside-down rotation")
         } else {
             diagramOrientation = container.orientation(relativeTo: nil)
-            print("📌 Snapping 3D diagram to ceiling at \(snapPosition) preserving orientation")
+            debugLog("📌 Snapping 3D diagram to ceiling at \(snapPosition) preserving orientation")
         }
         
         return (snapPosition, diagramOrientation)
@@ -1524,7 +1419,7 @@ class ElementViewModel: ObservableObject {
         let surfaceNormal = surfaceRotation.act(SIMD3<Float>(0, 1, 0))
         let snapPosition = nearestPointOnSurface + (surfaceNormal * offsetDistance)
         let diagramOrientation = container.orientation(relativeTo: nil)
-        print("📌 Snapping to surface at \(snapPosition)")
+        debugLog("📌 Snapping to surface at \(snapPosition)")
         return (snapPosition, diagramOrientation)
     }
     
@@ -1534,7 +1429,7 @@ class ElementViewModel: ObservableObject {
             let currentScale = rootEntity?.scale.x ?? 1.0
             let scaledLowestY = lowestEntityY * currentScale
             let bottomOffset = offsetDistance - scaledLowestY
-            print("📌 3D diagram bottom offset: \(bottomOffset), lowest entity Y: \(lowestEntityY), scale: \(currentScale), scaled lowest Y: \(scaledLowestY)")
+            debugLog("📌 3D diagram bottom offset: \(bottomOffset), lowest entity Y: \(lowestEntityY), scale: \(currentScale), scaled lowest Y: \(scaledLowestY)")
             return bottomOffset
         } else {
             return offsetDistance
@@ -1547,7 +1442,7 @@ class ElementViewModel: ObservableObject {
             let currentScale = rootEntity?.scale.x ?? 1.0
             let scaledHighestY = highestEntityY * currentScale
             let topOffset = offsetDistance + scaledHighestY
-            print("📌 3D diagram top offset: \(topOffset), highest entity Y: \(highestEntityY), scale: \(currentScale), scaled highest Y: \(scaledHighestY)")
+            debugLog("📌 3D diagram top offset: \(topOffset), highest entity Y: \(highestEntityY), scale: \(currentScale), scaled highest Y: \(scaledHighestY)")
             return topOffset
         } else {
             return offsetDistance
@@ -1570,7 +1465,7 @@ class ElementViewModel: ObservableObject {
     private func finalizeSnap(surface: PlaneAnchor, surfaceType: String) {
         currentSnappedSurface = surface
         let message = "✅ Snapped to \(surfaceType)!"
-        print("✅ \(message)")
+        logger.info("✅ \(message)")
         setSnapStatusMessage(message)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
@@ -1581,116 +1476,6 @@ class ElementViewModel: ObservableObject {
     }
     
     // Removed 3D text message functions - using existing overlay system instead
-    
-    /// Creates an L-shaped zoom handle at the bottom right of the diagram
-    private func createZoomHandle(bgWidth: Float, bgHeight: Float, bgDepth: Float) -> Entity {
-        let zoomHandleContainer = Entity()
-        zoomHandleContainer.name = "zoomHandle"
-        
-        // Native visionOS zoom handle dimensions - wider for better usability
-        let handleThickness: Float = 0.008  // Thinner for more native feel
-        let handleLength: Float = 0.08  // Even longer for easier grabbing
-        let handleWidth: Float = 0.02   // Even wider for better touch target
-        let cornerRadius: Float = handleWidth * 0.3  // Rounded corners like native
-        
-        // Create the horizontal part of the L with rounded corners
-        let horizontalMesh = MeshResource.generateBox(size: [handleLength, handleWidth, handleThickness], cornerRadius: cornerRadius)
-        let horizontalMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)  // Semi-transparent like native
-        let horizontalEntity = ModelEntity(mesh: horizontalMesh, materials: [horizontalMaterial])
-        horizontalEntity.name = "zoomHandleHorizontal"
-        
-        // Create the vertical part of the L with rounded corners
-        let verticalMesh = MeshResource.generateBox(size: [handleWidth, handleLength, handleThickness], cornerRadius: cornerRadius)
-        let verticalMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)  // Semi-transparent like native
-        let verticalEntity = ModelEntity(mesh: verticalMesh, materials: [verticalMaterial])
-        verticalEntity.name = "zoomHandleVertical"
-        
-        // Position the parts to form a native-style L shape (⅃) - positioned in the actual corner
-        // Vertical part positioned at the right edge
-        verticalEntity.position = [handleLength/2 - handleWidth/2, 0, 0]
-        // Horizontal part extends from the bottom of the vertical part
-        horizontalEntity.position = [0, -handleLength/2 + handleWidth/2, 0]
-        
-        // Add both parts to container
-        zoomHandleContainer.addChild(horizontalEntity)
-        zoomHandleContainer.addChild(verticalEntity)
-        
-        // Add rotation button for 3D diagrams only
-        if !isGraph2D {
-            let rotationButton = createRotationButton(handleWidth: handleWidth, handleLength: handleLength, handleThickness: handleThickness)
-            zoomHandleContainer.addChild(rotationButton)
-            // Store reference for gesture handling
-            self.rotationButtonEntity = rotationButton
-        }
-        
-        // Position exactly at the bottom right corner like native visionOS
-        let halfW = bgWidth / 2
-        let halfH = bgHeight / 2
-        let margin: Float = 0.02  // Smaller margin for tighter corner placement
-        // Position on front face for 3D diagrams, slightly in front for 2D diagrams
-        let zoomPosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
-        zoomHandleContainer.position = [halfW - margin, -halfH + margin, zoomPosZ]
-        
-        // Enable interaction
-        zoomHandleContainer.generateCollisionShapes(recursive: true)
-        zoomHandleContainer.components.set(InputTargetComponent())
-        let hoverEffectComponent = HoverEffectComponent()
-        zoomHandleContainer.components.set(hoverEffectComponent)
-        
-        // Enable interaction on child entities too
-        for child in zoomHandleContainer.children {
-            child.components.set(InputTargetComponent())
-            child.components.set(hoverEffectComponent)
-        }
-        
-        return zoomHandleContainer
-    }
-    
-    /// Creates a circular rotation button for 3D diagrams
-    /// Positioned on top of the bottom of the L and to the left of the upper part
-    private func createRotationButton(handleWidth: Float, handleLength: Float, handleThickness: Float) -> Entity {
-        let rotationButtonContainer = Entity()
-        rotationButtonContainer.name = "rotationButton"
-        
-        // Create circular button (cylinder)
-        let buttonRadius: Float = handleWidth * 0.8  // Slightly smaller than handle width
-        let buttonThickness: Float = handleThickness * 1.5  // Slightly thicker than handle
-        let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
-        
-        // Use a different color to distinguish from zoom handle
-        let buttonMaterial = SimpleMaterial(color: .systemBlue.withAlphaComponent(0.8), isMetallic: false)
-        let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
-        buttonEntity.name = "rotationButtonCylinder"
-        
-        // Rotate the cylinder to lie flat (perpendicular to Z axis)
-        buttonEntity.transform.rotation = simd_quatf(angle: .pi/2, axis: [1, 0, 0])
-        
-        rotationButtonContainer.addChild(buttonEntity)
-        
-        // Position: "on top of the bottom of the scale L, and to the left of the upper part of the L"
-        // Bottom of L (horizontal part) is at [0, -handleLength/2 + handleWidth/2, 0]
-        // Upper part of L (vertical part) is at [handleLength/2 - handleWidth/2, 0, 0]
-        // So position should be to the left of vertical part and on top of horizontal part
-        let buttonX = handleLength/2 - handleWidth/2 - buttonRadius * 2 - 0.025  // To the left of vertical part
-        let buttonY = -handleLength/2 + handleWidth/2 + buttonRadius + 0.03 // On top of horizontal part
-        let buttonZ = buttonThickness/2 + handleThickness/2 - 0.01 // + 0.002  // Slightly in front
-        
-        rotationButtonContainer.position = [buttonX, buttonY, buttonZ]
-        
-        // Enable interaction
-        rotationButtonContainer.generateCollisionShapes(recursive: true)
-        rotationButtonContainer.components.set(InputTargetComponent())
-        let hoverEffectComponent = HoverEffectComponent()
-        rotationButtonContainer.components.set(hoverEffectComponent)
-        
-        // Enable interaction on child entities too
-        for child in rotationButtonContainer.children {
-            child.components.set(InputTargetComponent())
-            child.components.set(hoverEffectComponent)
-        }
-        
-        return rotationButtonContainer
-    }
     
     /// Add a red sphere at [0,0,0] to highlight the diagram's origin point
     private func addOriginMarker() {
@@ -1709,7 +1494,7 @@ class ElementViewModel: ObservableObject {
         // Add to container
         container.addChild(sphereEntity)
         
-        print("🔴 Added red origin marker at [0,0,0]")
+        debugLog("🔴 Added red origin marker at [0,0,0]")
     }
     
 }
@@ -1735,21 +1520,28 @@ class ElementViewModel: ObservableObject {
     @Published var isViewMode: Bool = false
     @Published var isGraph2D: Bool = false
     @Published var selectedAnchor: Any? = nil
-    
+
     private var appModel: AppModel?
-    
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel.iOS")
+    private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
+
+    private func debugLog(_ message: String) {
+        guard isVerboseLoggingEnabled else { return }
+        logger.debug("\(message, privacy: .public)")
+    }
+
     func setAppModel(_ appModel: AppModel) {
         self.appModel = appModel
-        print("📱 iOS: AppModel set")
+        debugLog("📱 iOS: AppModel set")
     }
     
     func loadData(from filename: String) async {
         do {
             // iOS stub - basic data loading without 3D rendering
-            let scriptOutput = try ElementService.loadScriptOutput(from: filename)
+            let scriptOutput = try DiagramDataLoader.loadScriptOutput(from: filename)
             self.elements = scriptOutput.elements
             self.loadErrorMessage = nil
-            print("📱 iOS: Loaded \(elements.count) elements from \(filename)")
+            debugLog("📱 iOS: Loaded \(elements.count) elements from \(filename)")
             
             // Determine if it's a 2D graph based on elements
             self.isGraph2D = elements.allSatisfy { element in
@@ -1758,44 +1550,44 @@ class ElementViewModel: ObservableObject {
             }
         } catch {
             self.loadErrorMessage = "Failed to load \(filename): \(error.localizedDescription)"
-            print("📱 iOS: Failed to load \(filename): \(error)")
+            debugLog("📱 iOS: Failed to load \(filename): \(error)")
         }
     }
     
     // Stub methods for iOS compatibility
     func loadElements(in content: Any, onClose: (() -> Void)? = nil) {
-        print("📱 iOS: 3D element rendering not available")
+        debugLog("📱 iOS: 3D element rendering not available")
     }
     
     func updateConnections(in content: Any) {
-        print("📱 iOS: 3D connection updates not available")
+        debugLog("📱 iOS: 3D connection updates not available")
     }
     
     func snapToSurface(_ anchor: Any) {
-        print("📱 iOS: Surface snapping not available")
+        debugLog("📱 iOS: Surface snapping not available")
     }
     
     func resetToFrontPosition() {
         containerPosition = SIMD3<Float>(0, 0, -1.5)
         containerScale = 1.0
-        print("📱 iOS: Reset to default position")
+        debugLog("📱 iOS: Reset to default position")
     }
     
     // Drag handling methods for iOS compatibility
     func handleDragChanged(_ value: Any) {
-        print("📱 iOS: Drag changed - 3D manipulation not available")
+        debugLog("📱 iOS: Drag changed - 3D manipulation not available")
     }
     
     func handleDragEnded(_ value: Any) {
-        print("📱 iOS: Drag ended - 3D manipulation not available")
+        debugLog("📱 iOS: Drag ended - 3D manipulation not available")
     }
     
     func handlePanChanged(_ value: Any) {
-        print("📱 iOS: Pan changed - 3D manipulation not available")
+        debugLog("📱 iOS: Pan changed - 3D manipulation not available")
     }
     
     func handlePanEnded(_ value: Any) {
-        print("📱 iOS: Pan ended - 3D manipulation not available")
+        debugLog("📱 iOS: Pan ended - 3D manipulation not available")
     }
 }
 #endif

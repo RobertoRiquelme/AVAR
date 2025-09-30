@@ -24,3 +24,18 @@ enum Constants {
     /// Scale factor for 3D drag translation: smaller values reduce sensitivity.
     static let dragTranslationScale: Float = 0.001
 }
+
+/// Runtime-configurable placement settings for diagrams in world space.
+struct WorldPlacementConfiguration {
+    var eyeLevel: Float
+    var frontOffset: Float
+    var gridSpacing: Float
+
+    static var `default`: WorldPlacementConfiguration {
+        WorldPlacementConfiguration(
+            eyeLevel: Constants.eyeLevel,
+            frontOffset: Constants.frontOffset,
+            gridSpacing: 0.9
+        )
+    }
+}

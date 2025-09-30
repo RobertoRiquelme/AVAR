@@ -33,7 +33,7 @@ struct iOS_ContentView: View {
                         arViewModel.onAlignmentModeChanged()
                     } label: { Label("One‑shot", systemImage: arViewModel.alignmentMode == .oneShot ? "checkmark" : "dot.scope") }
 
-                    if !arViewModel.availableMarkerIds.isEmpty {
+                    if arViewModel.availableMarkerIds.count > 1 {
                         Menu("Choose Marker") {
                             ForEach(arViewModel.availableMarkerIds, id: \.self) { id in
                                 Button {

@@ -49,6 +49,7 @@ struct PlatformApp: App {
             VisionOSImmersiveView(sharedState: visionOSState, collaborativeSession: collaborativeSession, immersionStyle: immersionStyleVisionOS)
         }
         .immersionStyle(selection: $immersionStyleVisionOS, in: .mixed, .full)
+        .immersiveEnvironmentBehavior(.coexist)
     }
     #endif
     
@@ -353,7 +354,7 @@ struct VisionOSMainView: View {
                         if collaborativeSession.isSessionActive {
                             Task {
                                 do {
-                                    let elements = try ElementService.loadScriptOutput(from: newFile).elements
+                                    let elements = try DiagramDataLoader.loadScriptOutput(from: newFile).elements
                                     collaborativeSession.shareDiagram(filename: newFile, elements: elements)
                                 } catch {
                                     print("❌ Failed to share diagram: \(error)")
@@ -611,6 +612,9 @@ struct VisionOSImmersiveView: View {
             sharedState.appModel.freeDiagramPosition(filename: file)
         }, collaborativeSession: collaborativeSession, showBackgroundOverlay: showBackgroundOverlay)
         .environment(sharedState.appModel)
+        .onAppear {
+            showBackgroundOverlay = false
+        }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
                 if savedPlaneViz == nil { savedPlaneViz = sharedState.appModel.showPlaneVisualization }
@@ -622,6 +626,7 @@ struct VisionOSImmersiveView: View {
                     sharedState.appModel.surfaceDetector.setVisualizationVisible(restore)
                     savedPlaneViz = nil
                 }
+                showBackgroundOverlay = false
             }
         }
     }

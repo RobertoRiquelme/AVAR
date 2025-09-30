@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import OSLog
 
 /// Maintains app-wide state
 @MainActor
@@ -26,19 +27,26 @@ class AppModel {
     // Debug: plane visualization toggle (start disabled)
     var showPlaneVisualization = false
 
-    // Dynamic positioning for multiple diagrams (keep content near the user)
-    private struct GridSlot: Hashable {
-        let x: Int
-        let z: Int
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "AppModel")
+    private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
 
-        func offset(spacing: Float) -> SIMD3<Float> {
-            SIMD3<Float>(Float(x) * spacing, 0, Float(z) * spacing)
+    // Dynamic positioning for multiple diagrams (keep content near the user)
+    private let layoutCoordinatorMaxRadius = 20
+    private var layoutCoordinator = DiagramLayoutCoordinator(
+        spacing: WorldPlacementConfiguration.default.gridSpacing,
+        skipBehindUser: true,
+        maxSearchRadius: 20
+    )
+
+    var worldPlacement: WorldPlacementConfiguration = .default {
+        didSet {
+            layoutCoordinator = DiagramLayoutCoordinator(
+                spacing: worldPlacement.gridSpacing,
+                skipBehindUser: true,
+                maxSearchRadius: layoutCoordinatorMaxRadius
+            )
         }
     }
-
-    private let gridSpacing: Float = 0.9  // 90 cm steps keep diagrams within reach
-    private var occupiedSlots: Set<GridSlot> = []
-    private var filenameToSlot: [String: GridSlot] = [:]
 
     // Default scale used when spawning diagrams (30% smaller than previous default)
     let defaultDiagramScale: Float = PlatformConfiguration.diagramScale * 0.7
@@ -49,44 +57,41 @@ class AppModel {
     
     func startSurfaceDetectionIfNeeded() async {
         guard !surfaceDetectionStarted else { 
-            print("🚫 Surface detection already started - skipping")
+            if self.isVerboseLoggingEnabled {
+                self.logger.debug("🚫 Surface detection already started - skipping")
+            }
             return 
         }
-        print("🚀 Starting ONE-TIME surface detection for entire app session...")
+        if self.isVerboseLoggingEnabled {
+            self.logger.debug("🚀 Starting ONE-TIME surface detection for entire app session...")
+        }
         surfaceDetectionStarted = true
         await surfaceDetector.run()
     }
     
     /// Force restart surface detection (use carefully)
     func restartSurfaceDetection() async {
-        print("🔄 Force restarting surface detection...")
+        self.logger.info("🔄 Force restarting surface detection...")
         surfaceDetectionStarted = false
         await startSurfaceDetectionIfNeeded()
     }
     
     /// Get the next position for a diagram, filling nearby grid slots before moving far away
     func getNextDiagramPosition(for filename: String) -> SIMD3<Float> {
-        let basePosition = SIMD3<Float>(0, 1.0, -2.0)  // Constants.eyeLevel, Constants.frontOffset
+        let basePosition = SIMD3<Float>(0, worldPlacement.eyeLevel, worldPlacement.frontOffset)
 
-        if let existingSlot = filenameToSlot[filename] {
-            occupiedSlots.insert(existingSlot)
-            let position = basePosition + existingSlot.offset(spacing: gridSpacing)
-            print("📍 Reusing diagram position: \(position) (slot: \(existingSlot)) for file: \(filename)")
-            print("🔢 Occupied slots: \(occupiedSlots.count) | Stored diagrams: \(filenameToSlot.count)")
-            print("🔍 Surface detection status: running=\(surfaceDetector.isRunning), anchors=\(surfaceDetector.surfaceAnchors.count)")
-            return position
+        let position = layoutCoordinator.position(for: filename, basePosition: basePosition)
+        if let slot = layoutCoordinator.slot(for: filename) {
+            if self.isVerboseLoggingEnabled {
+                self.logger.debug("📍 Diagram position for \(filename, privacy: .public): \(String(describing: position), privacy: .public) (slot: \(String(describing: slot), privacy: .public))")
+            }
+        } else if self.isVerboseLoggingEnabled {
+            self.logger.debug("📍 Diagram position for \(filename, privacy: .public): \(String(describing: position), privacy: .public) (slot: none)")
         }
-
-        // Find the first available slot (closest to center)
-        let nextSlot = findNextAvailableSlot()
-        occupiedSlots.insert(nextSlot)
-        filenameToSlot[filename] = nextSlot
-
-        let offset = nextSlot.offset(spacing: gridSpacing)
-        let position = basePosition + offset
-        print("📍 New diagram position: \(position) (slot: \(nextSlot)) for file: \(filename)")
-        print("🔢 Occupied slots: \(occupiedSlots.count) | Stored diagrams: \(filenameToSlot.count)")
-        print("🔍 Surface detection status: running=\(surfaceDetector.isRunning), anchors=\(surfaceDetector.surfaceAnchors.count)")
+        if self.isVerboseLoggingEnabled {
+            self.logger.debug("🔢 Occupied slots: \(self.layoutCoordinatorOccupancyCount(), privacy: .public) | Stored diagrams: \(self.layoutCoordinatorStoredCount(), privacy: .public)")
+            self.logger.debug("🔍 Surface detection status: running=\(self.surfaceDetector.isRunning, privacy: .public), anchors=\(self.surfaceDetector.surfaceAnchors.count, privacy: .public)")
+        }
         return position
     }
     
@@ -94,7 +99,7 @@ class AppModel {
     func registerDiagram(id: Int, filename: String, index: Int) {
         activeDiagrams[id] = index
         diagramFiles[id] = filename
-        print("📝 Registered diagram: id=\(id), filename=\(filename), index=\(index)")
+        self.logger.info("📝 Registered diagram id=\(id, privacy: .public) filename=\(filename, privacy: .public) index=\(index, privacy: .public)")
     }
     
     /// Check if diagram exists and get its info
@@ -110,15 +115,16 @@ class AppModel {
     func removeDiagram(id: Int) {
         activeDiagrams.removeValue(forKey: id)
         diagramFiles.removeValue(forKey: id)
-        print("🗑️ Removed diagram: id=\(id)")
+        if self.isVerboseLoggingEnabled {
+            self.logger.debug("🗑️ Removed diagram id=\(id, privacy: .public)")
+        }
     }
     
     /// Free up a position when diagram is removed
     func freeDiagramPosition(filename: String) {
-        if let slot = filenameToSlot[filename] {
-            occupiedSlots.remove(slot)
-            filenameToSlot.removeValue(forKey: filename)
-            print("🆓 Freed slot \(slot) for diagram: \(filename)")
+        layoutCoordinator.release(filename: filename)
+        if self.isVerboseLoggingEnabled {
+            self.logger.debug("🆓 Freed slot for diagram: \(filename, privacy: .public)")
         }
 
         // Also remove from ID tracking if it exists
@@ -132,67 +138,17 @@ class AppModel {
     
     /// Reset diagram positioning (when exiting immersive space)
     func resetDiagramPositioning() {
-        occupiedSlots.removeAll()
-        filenameToSlot.removeAll()
+        layoutCoordinator.reset()
         activeDiagrams.removeAll()
         diagramFiles.removeAll()
-        print("🔄 Reset diagram positioning")
+        self.logger.info("🔄 Reset diagram positioning")
     }
 
-    private func findNextAvailableSlot() -> GridSlot {
-        var index = 0
-        while true {
-            let candidate = gridSlot(for: index)
-            if candidate.z > 0 {
-                index += 1
-                continue // Skip slots that would place content behind the user
-            }
-
-            if !occupiedSlots.contains(candidate) {
-                return candidate
-            }
-            index += 1
-        }
-    }
-
-    private func gridSlot(for index: Int) -> GridSlot {
-        if index == 0 {
-            return GridSlot(x: 0, z: 0)
-        }
-
-        var currentIndex = 0
-        var stepSize = 1
-        var x = 0
-        var z = 0
-
-        while true {
-            for _ in 0..<stepSize {
-                x += 1
-                currentIndex += 1
-                if currentIndex == index { return GridSlot(x: x, z: z) }
-            }
-
-            for _ in 0..<stepSize {
-                z += 1
-                currentIndex += 1
-                if currentIndex == index { return GridSlot(x: x, z: z) }
-            }
-
-            stepSize += 1
-
-            for _ in 0..<stepSize {
-                x -= 1
-                currentIndex += 1
-                if currentIndex == index { return GridSlot(x: x, z: z) }
-            }
-
-            for _ in 0..<stepSize {
-                z -= 1
-                currentIndex += 1
-                if currentIndex == index { return GridSlot(x: x, z: z) }
-            }
-
-            stepSize += 1
+    /// Update the diagram placement configuration at runtime.
+    func applyWorldPlacement(_ configuration: WorldPlacementConfiguration, resetPositions: Bool = true) {
+        worldPlacement = configuration
+        if resetPositions {
+            resetDiagramPositioning()
         }
     }
 
@@ -200,6 +156,20 @@ class AppModel {
     func togglePlaneVisualization() {
         showPlaneVisualization.toggle()
         surfaceDetector.setVisualizationVisible(showPlaneVisualization)
-        print("🎨 Plane visualization: \(showPlaneVisualization ? "ON" : "OFF")")
+        if self.isVerboseLoggingEnabled {
+            self.logger.debug("🎨 Plane visualization: \(self.showPlaneVisualization ? "ON" : "OFF", privacy: .public)")
+        }
+    }
+}
+
+// MARK: - Debug helpers
+
+private extension AppModel {
+    func layoutCoordinatorOccupancyCount() -> Int {
+        return layoutCoordinator.occupancyCount
+    }
+
+    func layoutCoordinatorStoredCount() -> Int {
+        return layoutCoordinator.storedFilenameCount
     }
 }

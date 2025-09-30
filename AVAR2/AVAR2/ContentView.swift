@@ -51,7 +51,7 @@ struct ContentView: View {
                collaborativeSession?.isSessionActive == true,
                !collaborativeSession!.sharedDiagrams.contains(where: { $0.filename == filename }) {
                 do {
-                    let elements = try ElementService.loadScriptOutput(from: filename).elements
+                    let elements = try DiagramDataLoader.loadScriptOutput(from: filename).elements
                     collaborativeSession?.shareDiagram(
                         filename: filename,
                         elements: elements,
