@@ -53,11 +53,11 @@ struct CollaborativeSessionView: View {
             Image(systemName: sessionManager.isSessionActive ? "wifi" : "wifi.slash")
                 .font(.system(size: 40))
                 .foregroundColor(sessionManager.isSessionActive ? .green : .gray)
-            
+
             Text(sessionManager.sessionState)
                 .font(.headline)
                 .multilineTextAlignment(.center)
-            
+
             if sessionManager.isHost {
                 Text("You are hosting")
                     .font(.caption)
@@ -65,6 +65,36 @@ struct CollaborativeSessionView: View {
                     .padding(.vertical, 4)
                     .background(Color.blue.opacity(0.2))
                     .cornerRadius(8)
+            }
+
+            // Shared anchor status indicator
+            if sessionManager.isSessionActive {
+                if let anchor = sessionManager.sharedAnchor {
+                    HStack(spacing: 4) {
+                        Image(systemName: "link.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Anchor: \(anchor.id.prefix(6))...")
+                            .font(.caption2)
+                        Text("conf: \(String(format: "%.0f%%", anchor.confidence * 100))")
+                            .font(.caption2)
+                            .foregroundColor(anchor.confidence > 0.8 ? .green : .orange)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(6)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "link.circle")
+                            .foregroundColor(.orange)
+                        Text("No shared anchor - positions may misalign")
+                            .font(.caption2)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(6)
+                }
             }
 
 #if canImport(GroupActivities)
@@ -132,7 +162,7 @@ struct CollaborativeSessionView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity)
-                
+
                 Button("Join Session") {
                     Task {
                         await sessionManager.joinSession()
@@ -141,6 +171,23 @@ struct CollaborativeSessionView: View {
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
             } else {
+                // Anchor broadcast button - important for proper alignment
+                if sessionManager.isHost {
+                    #if os(visionOS)
+                    Button(action: {
+                        sessionManager.broadcastCurrentSharedAnchor()
+                    }) {
+                        HStack {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                            Text(sessionManager.sharedAnchor == nil ? "Broadcast Anchor (Required)" : "Update Anchor")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(sessionManager.sharedAnchor == nil ? .orange : .blue)
+                    .frame(maxWidth: .infinity)
+                    #endif
+                }
+
                 Button("Stop Session") {
                     sessionManager.stopSession()
                 }

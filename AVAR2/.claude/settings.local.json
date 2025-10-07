@@ -15,7 +15,8 @@
       "Bash(xcrun simctl boot:*)",
       "Bash(xcrun simctl install:*)",
       "Bash(xcrun simctl launch:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(xcrun simctl list:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

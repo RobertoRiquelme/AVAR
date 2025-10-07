@@ -501,7 +501,7 @@ struct AVAR2_Legacy: App {
                                     // Get the position for this diagram
                                     let position = appModel.getNextDiagramPosition(for: newFile)
                                     collaborativeSession.shareDiagram(
-                                        filename: newFile, 
+                                        filename: newFile,
                                         elements: elements,
                                         worldPosition: position,
                                         worldOrientation: simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)),

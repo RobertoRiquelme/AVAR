@@ -276,31 +276,35 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     func updateDiagramTransform(filename: String, worldPosition: SIMD3<Float>? = nil,
                                 worldOrientation: simd_quatf? = nil, worldScale: Float? = nil) {
         // Update local copy
-        if let index = sharedDiagrams.firstIndex(where: { $0.filename == filename }) {
-            if let pos = worldPosition {
-                sharedDiagrams[index].worldPosition = pos
-            }
-            if let orient = worldOrientation {
-                sharedDiagrams[index].worldOrientation = orient
-            }
-            if let scale = worldScale {
-                sharedDiagrams[index].worldScale = scale
-            }
-            
-            // Send update to peers
-            let updateMessage = UpdateDiagramTransformMessage(
-                filename: filename,
-                worldPosition: worldPosition,
-                worldOrientation: worldOrientation,
-                worldScale: worldScale
-            )
-            
-            if let data = try? JSONEncoder().encode(updateMessage) {
-                broadcast(data)
-            }
-            
-            print("🔄 Updated and shared transform for diagram '\(filename)'")
+        guard let index = sharedDiagrams.firstIndex(where: { $0.filename == filename }) else {
+            return
         }
+
+        if let pos = worldPosition {
+            sharedDiagrams[index].worldPosition = pos
+        }
+        if let orient = worldOrientation {
+            sharedDiagrams[index].worldOrientation = orient
+        }
+        if let scale = worldScale {
+            sharedDiagrams[index].worldScale = scale
+        }
+
+        // Send update to peers (fast path - no error checking needed during drag)
+        let updateMessage = UpdateDiagramTransformMessage(
+            filename: filename,
+            worldPosition: worldPosition,
+            worldOrientation: worldOrientation,
+            worldScale: worldScale
+        )
+
+        // Encode and broadcast (JSONEncoder is cached per thread by Swift)
+        if let data = try? JSONEncoder().encode(updateMessage) {
+            broadcast(data)
+        }
+
+        // Remove expensive print during frequent updates
+        // print("🔄 Updated and shared transform for diagram '\(filename)'")
     }
     
     #if os(iOS)

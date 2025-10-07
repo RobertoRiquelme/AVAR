@@ -34,28 +34,68 @@ struct ContentView: View {
             print("📋 ContentView task started for: \(filename)")
             viewModel.setAppModel(appModel)
             await viewModel.loadData(from: filename)
-            
+
+            // Throttler for collaborative sync (class to allow mutation in closure)
+            class UpdateThrottler {
+                var lastUpdateTime = ContinuousClock.now
+                let updateInterval: Duration = .milliseconds(100) // Max 10 updates/second
+
+                func shouldUpdate() -> Bool {
+                    let now = ContinuousClock.now
+                    if lastUpdateTime.advanced(by: updateInterval) <= now {
+                        lastUpdateTime = now
+                        return true
+                    }
+                    return false
+                }
+            }
+            let throttler = UpdateThrottler()
+
             // Set up transform change callback for collaborative sync
             viewModel.onTransformChanged = { position, orientation, scale in
-                // Update collaborative session with new transform
-                collaborativeSession?.updateDiagramTransform(
+                // Throttle updates to avoid lag during drag
+                guard throttler.shouldUpdate() else { return }
+                guard let session = collaborativeSession else { return }
+
+                let worldPosition: SIMD3<Float>
+                if let sharedAnchor = session.sharedAnchor {
+                    // Transform to anchor-local coordinates (fast operation)
+                    worldPosition = simd_float4x4.toAnchorSpace(worldPosition: position, anchorTransform: sharedAnchor.transform)
+                } else {
+                    worldPosition = position
+                }
+
+                // Update collaborative session (network call - expensive)
+                session.updateDiagramTransform(
                     filename: filename,
-                    worldPosition: position,
+                    worldPosition: worldPosition,
                     worldOrientation: orientation,
                     worldScale: scale
                 )
             }
-            
+
             // Share initial position with collaborative session
             if let transform = viewModel.getWorldTransform(),
                collaborativeSession?.isSessionActive == true,
                !collaborativeSession!.sharedDiagrams.contains(where: { $0.filename == filename }) {
                 do {
                     let elements = try DiagramDataLoader.loadScriptOutput(from: filename).elements
+
+                    // Transform to anchor-local coordinates before sharing
+                    let worldPosition: SIMD3<Float>
+                    if let sharedAnchor = collaborativeSession?.sharedAnchor {
+                        // Transform to anchor's local coordinate system
+                        worldPosition = simd_float4x4.toAnchorSpace(worldPosition: transform.position, anchorTransform: sharedAnchor.transform)
+                        print("📍 Initial share for '\(filename)': world \(transform.position) → anchor-local \(worldPosition)")
+                    } else {
+                        worldPosition = transform.position
+                        print("⚠️ Initial share for '\(filename)' without shared anchor")
+                    }
+
                     collaborativeSession?.shareDiagram(
                         filename: filename,
                         elements: elements,
-                        worldPosition: transform.position,
+                        worldPosition: worldPosition,
                         worldOrientation: transform.orientation,
                         worldScale: transform.scale
                     )

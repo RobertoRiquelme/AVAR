@@ -332,17 +332,38 @@ class ARViewModel: NSObject, ObservableObject {
         let transform: simd_float4x4
 
         // Choose mapping based on mode
-        let hostMatrix = Self.makeHostTransform(from: diagram)
         if alignmentMode == .sharedSpace {
-            if diagram.worldPosition != nil {
-                transform = hostMatrix
-                print("📍 Placing '\(diagram.filename)' using shared world transform")
-            } else if let sharedAnchorTransform {
-                transform = sharedAnchorTransform
+            if let anchorLocal = diagram.worldPosition, let sharedAnchor = sharedAnchorTransform {
+                // Transform from anchor-local coordinates to this device's world coordinates
+                let localPosition = simd_float4x4.fromAnchorSpace(anchorLocalPosition: anchorLocal, anchorTransform: sharedAnchor)
+
+                // Build transform matrix with orientation and scale
+                var matrix = matrix_identity_float4x4
+                if let worldOrient = diagram.worldOrientation {
+                    matrix = simd_matrix4x4(worldOrient)
+                }
+                if let worldScale = diagram.worldScale {
+                    let scaleMatrix = simd_float4x4(diagonal: SIMD4<Float>(worldScale, worldScale, worldScale, 1.0))
+                    matrix = matrix * scaleMatrix
+                }
+                matrix.columns.3 = SIMD4<Float>(localPosition.x, localPosition.y, localPosition.z, 1.0)
+
+                transform = matrix
+                print("📍 Placing '\(diagram.filename)' from anchor-local to world")
+                print("   Anchor-local: \(anchorLocal) → World: \(localPosition)")
+            } else if diagram.worldPosition != nil && sharedAnchorTransform == nil {
+                // Have position but no anchor - use fallback and warn
+                transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
+                print("⚠️ Missing shared anchor for '\(diagram.filename)' - using fallback")
+                print("   Position will be misaligned until anchor is established")
+            } else if let sharedAnchor = sharedAnchorTransform {
+                // Have anchor but no position - place at anchor
+                transform = sharedAnchor
                 print("📍 Using shared anchor transform for '\(diagram.filename)'")
             } else {
+                // No anchor, no position - use fallback
                 transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
-                print("📍 Awaiting shared transform; using fallback for '\(diagram.filename)'")
+                print("📍 Awaiting shared anchor; using fallback for '\(diagram.filename)'")
             }
         } else {
             transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
@@ -404,21 +425,6 @@ class ARViewModel: NSObject, ObservableObject {
         return anchor
     }
 
-    // Build a 4x4 transform matrix from a SharedDiagram's host world position and orientation
-    private static func makeHostTransform(from diagram: SharedDiagram) -> simd_float4x4 {
-        var matrix = matrix_identity_float4x4
-        if let worldOrient = diagram.worldOrientation {
-            matrix = matrix * simd_matrix4x4(worldOrient)
-        }
-        if let worldScale = diagram.worldScale {
-            let scaleMatrix = float4x4(diagonal: SIMD4<Float>(repeating: worldScale))
-            matrix = matrix * scaleMatrix
-        }
-        if let worldPos = diagram.worldPosition {
-            matrix.columns.3 = SIMD4<Float>(worldPos.x, worldPos.y, worldPos.z, 1.0)
-        }
-        return matrix
-    }
 
     // Public helper to reset the mapping (e.g., user taps Recenter)
     func resetMapping() {
@@ -508,21 +514,30 @@ class ARViewModel: NSObject, ObservableObject {
         // Create mesh and material using the element's properties
         let (mesh, material) = element.meshAndMaterial(normalization: normalization)
         let entity = ModelEntity(mesh: mesh, materials: [material])
-        
+
         // Calculate normalized position
         let dims = normalization.positionCenters.count
         let rawX = position.count > 0 ? position[0] : 0
         let rawY = position.count > 1 ? position[1] : 0
         let rawZ = dims > 2 && position.count > 2 ? position[2] : 0
         let globalRange = normalization.globalRange
-        
+
         let normX = (rawX - normalization.positionCenters[0]) / globalRange * 2
         let normY = (rawY - normalization.positionCenters[1]) / globalRange * 2
         let normZ = dims > 2 ? (rawZ - normalization.positionCenters[2]) / globalRange * 2 : 0
-        
+
         let yPos = normalization.is2D ? -Float(normY) : Float(normY)
         entity.position = SIMD3<Float>(Float(normX), yPos, Float(normZ))
-        
+
+        // For 2D diagrams, rotate cylinders/ellipses to face forward (toward viewer)
+        if normalization.is2D {
+            if let shapeDesc = element.shape?.shapeDescription?.lowercased(),
+               (shapeDesc.contains("ellipse") || shapeDesc.contains("cylinder")) {
+                // Rotate 90 degrees around X-axis so circular face points toward viewer
+                entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
+            }
+        }
+
         // Store ID for connection lookups
         entity.name = element.id ?? "element_\(index)"
         
