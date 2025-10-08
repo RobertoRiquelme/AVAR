@@ -38,7 +38,7 @@ struct ContentView: View {
             // Throttler for collaborative sync (class to allow mutation in closure)
             class UpdateThrottler {
                 var lastUpdateTime = ContinuousClock.now
-                let updateInterval: Duration = .milliseconds(100) // Max 10 updates/second
+                let updateInterval: Duration = .milliseconds(16) // ~60 updates/sec for low-latency collaboration
 
                 func shouldUpdate() -> Bool {
                     let now = ContinuousClock.now
@@ -57,18 +57,11 @@ struct ContentView: View {
                 guard throttler.shouldUpdate() else { return }
                 guard let session = collaborativeSession else { return }
 
-                let worldPosition: SIMD3<Float>
-                if let sharedAnchor = session.sharedAnchor {
-                    // Transform to anchor-local coordinates (fast operation)
-                    worldPosition = simd_float4x4.toAnchorSpace(worldPosition: position, anchorTransform: sharedAnchor.transform)
-                } else {
-                    worldPosition = position
-                }
-
-                // Update collaborative session (network call - expensive)
+                // Modern approach: Send device-relative positions
+                // SharedCoordinateSpace handles spatial alignment automatically
                 session.updateDiagramTransform(
                     filename: filename,
-                    worldPosition: worldPosition,
+                    worldPosition: position,  // Device-relative, no transform needed!
                     worldOrientation: orientation,
                     worldScale: scale
                 )
@@ -81,24 +74,16 @@ struct ContentView: View {
                 do {
                     let elements = try DiagramDataLoader.loadScriptOutput(from: filename).elements
 
-                    // Transform to anchor-local coordinates before sharing
-                    let worldPosition: SIMD3<Float>
-                    if let sharedAnchor = collaborativeSession?.sharedAnchor {
-                        // Transform to anchor's local coordinate system
-                        worldPosition = simd_float4x4.toAnchorSpace(worldPosition: transform.position, anchorTransform: sharedAnchor.transform)
-                        print("📍 Initial share for '\(filename)': world \(transform.position) → anchor-local \(worldPosition)")
-                    } else {
-                        worldPosition = transform.position
-                        print("⚠️ Initial share for '\(filename)' without shared anchor")
-                    }
-
+                    // Modern approach: Send device-relative position
+                    // SharedCoordinateSpace handles spatial alignment automatically
                     collaborativeSession?.shareDiagram(
                         filename: filename,
                         elements: elements,
-                        worldPosition: worldPosition,
+                        worldPosition: transform.position,  // Device-relative!
                         worldOrientation: transform.orientation,
                         worldScale: transform.scale
                     )
+                    print("📍 Shared diagram '\(filename)' at device-relative position: \(transform.position)")
                 } catch {
                     print("❌ Failed to share diagram on initial load: \(error)")
                 }

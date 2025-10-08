@@ -333,47 +333,50 @@ class ARViewModel: NSObject, ObservableObject {
 
         // Choose mapping based on mode
         if alignmentMode == .sharedSpace {
-            if let anchorLocal = diagram.worldPosition, let sharedAnchor = sharedAnchorTransform {
-                // Transform from anchor-local coordinates to this device's world coordinates
-                let localPosition = simd_float4x4.fromAnchorSpace(anchorLocalPosition: anchorLocal, anchorTransform: sharedAnchor)
+            // iOS uses anchor-relative positioning (visionOS sends positions already transformed)
+            if let anchorRelativePos = diagram.worldPosition, let sharedAnchor = sharedAnchorTransform {
+                // Position is already relative to host's device frame
+                // Build local transform matrix with anchor-relative position
+                var localMatrix = matrix_identity_float4x4
+                if let anchorRelativeOrient = diagram.worldOrientation {
+                    localMatrix = simd_matrix4x4(anchorRelativeOrient)
+                }
+                localMatrix.columns.3 = SIMD4<Float>(anchorRelativePos.x, anchorRelativePos.y, anchorRelativePos.z, 1.0)
 
-                // Build transform matrix with orientation and scale
+                // Use only the rotation from the shared anchor to avoid inheriting host translation offsets
+                var anchorRotation = sharedAnchor
+                anchorRotation.columns.3 = SIMD4<Float>(0, 0, 0, 1)
+
+                transform = anchorRotation * localMatrix
+                print("📍 Placing '\(diagram.filename)' using anchor-relative position: \(anchorRelativePos)")
+                print("   Shared anchor rotation applied (translation removed for per-user placement)")
+            } else if let position = diagram.worldPosition {
+                // Have position but no anchor - place at absolute position (will be wrong but visible)
                 var matrix = matrix_identity_float4x4
-                if let worldOrient = diagram.worldOrientation {
-                    matrix = simd_matrix4x4(worldOrient)
+                if let orientation = diagram.worldOrientation {
+                    matrix = simd_matrix4x4(orientation)
                 }
-                if let worldScale = diagram.worldScale {
-                    let scaleMatrix = simd_float4x4(diagonal: SIMD4<Float>(worldScale, worldScale, worldScale, 1.0))
-                    matrix = matrix * scaleMatrix
-                }
-                matrix.columns.3 = SIMD4<Float>(localPosition.x, localPosition.y, localPosition.z, 1.0)
-
+                matrix.columns.3 = SIMD4<Float>(position.x, position.y, position.z, 1.0)
                 transform = matrix
-                print("📍 Placing '\(diagram.filename)' from anchor-local to world")
-                print("   Anchor-local: \(anchorLocal) → World: \(localPosition)")
-            } else if diagram.worldPosition != nil && sharedAnchorTransform == nil {
-                // Have position but no anchor - use fallback and warn
-                transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
-                print("⚠️ Missing shared anchor for '\(diagram.filename)' - using fallback")
-                print("   Position will be misaligned until anchor is established")
+                print("⚠️ No shared anchor - placing '\(diagram.filename)' at absolute position (may be incorrect)")
             } else if let sharedAnchor = sharedAnchorTransform {
-                // Have anchor but no position - place at anchor
+                // Fallback: Have anchor but no position - place at anchor
                 transform = sharedAnchor
-                print("📍 Using shared anchor transform for '\(diagram.filename)'")
+                print("📍 Using shared anchor transform for '\(diagram.filename)' (fallback)")
             } else {
-                // No anchor, no position - use fallback
+                // Fallback: No position data - use default placement
                 transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
-                print("📍 Awaiting shared anchor; using fallback for '\(diagram.filename)'")
+                print("📍 Using fallback positioning for '\(diagram.filename)'")
             }
         } else {
             transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
             print("📍 Local preview positioning for '\(diagram.filename)'")
         }
-        
+
         let anchor = AnchorEntity(world: transform)
         anchor.name = "shared_diagram_\(diagram.filename)"
-        
-        // Apply scale if provided
+
+        // Apply scale to anchor (only once, not in the matrix above)
         if let worldScale = diagram.worldScale {
             anchor.scale = SIMD3<Float>(repeating: worldScale)
             print("📏 Applying scale \(worldScale) to '\(diagram.filename)'")

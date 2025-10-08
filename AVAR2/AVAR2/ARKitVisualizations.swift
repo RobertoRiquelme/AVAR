@@ -9,7 +9,29 @@ import ARKit
 import SwiftUI
 
 #if os(visionOS)
-// Surface visualization colors based on classification
+// Surface visualization helpers used by plane visualizations
+extension PlaneAnchor {
+    var classificationColor: UIColor {
+        classification.color
+    }
+
+    var classificationDisplayName: String {
+        switch classification {
+        case .wall: return "Wall"
+        case .floor: return "Floor"
+        case .ceiling: return "Ceiling"
+        case .table: return "Table"
+        case .door: return "Door"
+        case .seat: return "Seat"
+        case .window: return "Window"
+        case .undetermined: return "Undetermined"
+        case .notAvailable: return "Not Available"
+        case .unknown: return "Unknown"
+        @unknown default: return "Unknown"
+        }
+    }
+}
+
 extension PlaneAnchor.Classification {
     var color: UIColor {
         switch self {
@@ -39,3 +61,6 @@ extension PlaneAnchor.Classification {
     }
 }
 #endif
+
+
+

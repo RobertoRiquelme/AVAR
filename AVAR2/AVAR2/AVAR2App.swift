@@ -495,6 +495,7 @@ struct AVAR2_Legacy: App {
                         
                         // Share with collaborative session if active
                         if collaborativeSession.isSessionActive {
+                            #if os(visionOS)
                             Task {
                                 do {
                                     let elements = try DiagramDataLoader.loadScriptOutput(from: newFile).elements
@@ -511,6 +512,9 @@ struct AVAR2_Legacy: App {
                                     print("❌ Failed to share diagram: \(error)")
                                 }
                             }
+                            #else
+                            print("ℹ️ Ignoring share request for \(newFile) on iOS client; receive-only mode")
+                            #endif
                         }
                         
                         // Ensure plane visualization starts disabled for new diagrams

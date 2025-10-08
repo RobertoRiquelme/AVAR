@@ -34,21 +34,9 @@ extension simd_float4x4 {
         return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
     }
 
-    /// Converts a local world position to anchor-local coordinates
-    /// This transforms the position into the anchor's coordinate system (including rotation)
-    static func toAnchorSpace(worldPosition: SIMD3<Float>, anchorTransform: simd_float4x4) -> SIMD3<Float> {
-        // Transform position into anchor's local coordinate system
-        // This is: anchor.inverse * worldPosition
-        return anchorTransform.inverse.transformPosition(worldPosition)
-    }
-
-    /// Converts an anchor-local position back to world coordinates
-    /// This transforms from the anchor's coordinate system to the client's world
-    static func fromAnchorSpace(anchorLocalPosition: SIMD3<Float>, anchorTransform: simd_float4x4) -> SIMD3<Float> {
-        // Transform from anchor's local space to world space
-        // This is: anchor * anchorLocalPosition
-        return anchorTransform.transformPosition(anchorLocalPosition)
-    }
+    // Note: Manual anchor transformation methods removed
+    // Modern approach (visionOS 2+): Use device-relative positions
+    // SharedCoordinateSpaceProvider handles spatial alignment automatically
 }
 
 extension SIMD4 where Scalar == Float {

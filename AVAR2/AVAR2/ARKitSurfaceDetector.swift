@@ -98,18 +98,19 @@ final class ARKitSurfaceDetector: ObservableObject {
     @MainActor
     private func updatePlaneVisualization(_ anchor: PlaneAnchor) {
         if let entity = entityMap[anchor.id] {
-            print("🔄 Updating existing plane visualization: \(anchor.id), classification: \(anchor.classification.description)")
+            print("🔄 Updating existing plane visualization: \(anchor.id), classification: \(anchor.classificationDisplayName)")
             let planeEntity = entity.findEntity(named: "plane") as! ModelEntity
             let newMesh = MeshResource.generatePlane(width: anchor.geometry.extent.width, height: anchor.geometry.extent.height)
             planeEntity.model!.mesh = newMesh
             planeEntity.transform = Transform(matrix: anchor.geometry.extent.anchorFromExtentTransform)
+            planeEntity.model?.materials = [UnlitMaterial(color: anchor.classificationColor)]
         } else {
-            print("➕ Adding new plane visualization: \(anchor.id), classification: \(anchor.classification.description)")
+            print("➕ Adding new plane visualization: \(anchor.id), classification: \(anchor.classificationDisplayName)")
             // Create a new entity to represent this plane
             let entity = Entity()
             
             // Create plane visualization with color based on classification
-            let material = UnlitMaterial(color: anchor.classification.color)
+            let material = UnlitMaterial(color: anchor.classificationColor)
             let planeEntity = ModelEntity(
                 mesh: .generatePlane(width: anchor.geometry.extent.width, height: anchor.geometry.extent.height),
                 materials: [material]
@@ -118,9 +119,7 @@ final class ARKitSurfaceDetector: ObservableObject {
             planeEntity.transform = Transform(matrix: anchor.geometry.extent.anchorFromExtentTransform)
             
             // Add classification label
-            let textEntity = ModelEntity(
-                mesh: .generateText(anchor.classification.description)
-            )
+            let textEntity = ModelEntity(mesh: .generateText(anchor.classificationDisplayName))
             textEntity.scale = SIMD3(0.01, 0.01, 0.01)
             
             entity.addChild(planeEntity)
