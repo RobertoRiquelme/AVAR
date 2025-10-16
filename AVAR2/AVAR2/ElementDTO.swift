@@ -71,7 +71,7 @@ struct ScriptOutput: Codable {
 /// One "node" or "shape" in your visualization.
 struct ElementDTO: Codable {
     let shape: ShapeDTO?        // e.g. Box, Line, Sphere, etc.
-    let position: [Double]?     // 2D or 3D coordinates
+    var position: [Double]?     // 2D or 3D coordinates
     let color: [Double]?        // RGBA, etc.
     let id: String?             // optional ID (can be string or numeric)
     let type: String            // e.g. "camera", "RTelement", etc.

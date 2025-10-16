@@ -66,6 +66,17 @@ struct ContentView: View {
                     worldScale: scale
                 )
             }
+            
+            // Send per-element edits to peers when a node drag ends
+            viewModel.onElementMoved = { elementId, localPos in
+                guard let session = collaborativeSession else { return }
+                session.updateElementPosition(
+                    filename: filename,
+                    elementId: elementId,
+                    localPosition: localPos
+                )
+            }
+
 
             // Share initial position with collaborative session
             if let transform = viewModel.getWorldTransform(),

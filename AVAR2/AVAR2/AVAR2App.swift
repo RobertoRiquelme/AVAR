@@ -752,8 +752,11 @@ struct AVAR2_Legacy: App {
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
             ImmersiveSpaceWrapper(activeFiles: activeFiles, onClose: { file in
+                // Local Cleanup
                 activeFiles.removeAll { $0 == file }
                 appModel.freeDiagramPosition(filename: file)
+                // Broadcast to everyone else
+                collaborativeSession.removeDiagram(filename: file)
             }, collaborativeSession: collaborativeSession)
             .environment(appModel)
             .onChange(of: String(describing: immersionStyle)) { _, newKey in
@@ -769,6 +772,11 @@ struct AVAR2_Legacy: App {
                     }
                 }
             }
+            .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
+                let shared = Set(diagrams.map { $0.filename })
+                activeFiles.removeAll { !shared.contains($0) }
+            }
+
         }
         .immersionStyle(selection: $immersionStyle, in: .mixed, .full)
         .immersiveEnvironmentBehavior(.coexist)

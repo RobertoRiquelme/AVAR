@@ -60,6 +60,8 @@ class ElementViewModel: ObservableObject {
     /// Starting uniform scale for the container when zoom begins
     private var zoomStartScale: Float?
     
+    /// Called when an individual element has been repositioned in container-local space
+    var onElementMoved: ((String, SIMD3<Float>) -> Void)?
     /// Callback for when diagram transform changes (for syncing)
     var onTransformChanged: ((SIMD3<Float>, simd_quatf, Float) -> Void)?
     /// Pivot point in world space at zoom start
@@ -432,6 +434,13 @@ class ElementViewModel: ObservableObject {
         // Notify transform change
         if let transform = getWorldTransform() {
             onTransformChanged?(transform.position, transform.orientation, transform.scale)
+        }
+        // If the gesture ended on an element_*, report its new local position
+        if value.entity.name.hasPrefix("element_") {
+            let raw = value.entity.name
+            let elementId = String(raw.dropFirst("element_".count))
+            let localPos = value.entity.position                   // local to the diagram container
+            onElementMoved?(elementId, localPos)
         }
     }
 

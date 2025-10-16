@@ -616,6 +616,8 @@ struct VisionOSImmersiveView: View {
         ImmersiveSpaceWrapper(activeFiles: sharedState.activeFiles, onClose: { file in
             sharedState.activeFiles.removeAll { $0 == file }
             sharedState.appModel.freeDiagramPosition(filename: file)
+            // 🔴 Broadcast removal so peers remove too
+            collaborativeSession.removeDiagram(filename: file)
         }, collaborativeSession: collaborativeSession, showBackgroundOverlay: showBackgroundOverlay)
         .environment(sharedState.appModel)
         .onAppear {
@@ -623,6 +625,10 @@ struct VisionOSImmersiveView: View {
             if collaborativeSession.sharedAnchor == nil {
                 collaborativeSession.broadcastCurrentSharedAnchor()
             }
+        }
+        .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
+            let shared = Set(diagrams.map { $0.filename })
+            sharedState.activeFiles.removeAll { !shared.contains($0) }
         }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
