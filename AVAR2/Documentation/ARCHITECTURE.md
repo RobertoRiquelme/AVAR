@@ -2,7 +2,7 @@
 
 ## Overview
 
-AVAR2 is a visionOS application for displaying and interacting with 3D/2D data visualizations in augmented reality. The app uses ARKit for surface detection and RealityKit for rendering interactive 3D diagrams that can be positioned, scaled, and snapped to real-world surfaces.
+AVAR2 is a multi-platform (visionOS and iOS) application for displaying and interacting with 3D/2D data visualizations in augmented reality. The app uses ARKit for surface detection, RealityKit for rendering interactive 3D diagrams, SharePlay for collaborative experiences, and includes an HTTP server for remote diagram loading. Diagrams can be positioned, scaled, and snapped to real-world surfaces.
 
 > **📊 Architecture Diagrams**: All visual diagrams referenced in this document can be found in [ARCHITECTURE_DIAGRAMS.md](./ARCHITECTURE_DIAGRAMS.md)
 
@@ -12,10 +12,11 @@ AVAR2 is a visionOS application for displaying and interacting with 3D/2D data v
 
 The system follows a layered architecture with clear separation of concerns:
 
-- **User Interface Layer**: SwiftUI views and RealityKit integration
-- **View Model Layer**: Business logic and state management  
-- **Service Layer**: Data loading and AR functionality
-- **Data Layer**: Models and factories for content generation
+- **User Interface Layer**: Platform-specific SwiftUI views (visionOS/iOS) and RealityKit integration
+- **View Model Layer**: Business logic, state management, and collaboration coordination
+- **Service Layer**: Data loading, HTTP server, AR functionality, and surface detection
+- **Data Layer**: Models, DTOs, and factories for content generation
+- **Networking Layer**: HTTP server and SharePlay integration
 
 *See [High-Level System Architecture diagram](./ARCHITECTURE_DIAGRAMS.md#high-level-system-architecture) for visual representation.*
 
@@ -23,12 +24,16 @@ The system follows a layered architecture with clear separation of concerns:
 
 The application uses an MVVM pattern with the following key components:
 
-- **AVAR2App**: Application entry point and lifecycle management
-- **ContentView**: Primary UI view with RealityView integration
-- **AppModel**: Global state management and surface detection coordination
-- **ElementViewModel**: Diagram rendering and interaction logic
-- **ARKitSurfaceDetector**: Real-world surface detection service
-- **ElementService**: Data loading and parsing service
+- **PlatformApp**: Main application entry point with platform-specific UI (visionOS/iOS)
+- **AVAR2App**: Shared UI components and views (HTTP server tab, immersive wrapper, FPS monitor)
+- **ContentView**: Primary UI view with RealityView integration for individual diagrams
+- **AppModel**: Global state management, surface detection coordination, and diagram positioning
+- **ElementViewModel**: Diagram rendering, interaction logic, and scene management
+- **HTTPServer**: Local HTTP server for receiving diagram data from external sources
+- **CollaborativeSessionManager**: SharePlay integration and spatial anchor sharing
+- **SurfaceDetector**: Real-world surface detection service (ARKit on visionOS)
+- **ElementService**: Data loading and parsing from bundle and shared storage
+- **DiagramStorage**: Shared file storage for HTTP-received diagrams
 - **ElementDTO**: Data transfer objects for diagram elements
 
 *See [Component Class Diagram](./ARCHITECTURE_DIAGRAMS.md#component-class-diagram) for detailed relationships.*
@@ -37,19 +42,44 @@ The application uses an MVVM pattern with the following key components:
 
 ### 1. Application Layer
 
-#### AVAR2App
-- **Purpose**: Main application entry point
+#### PlatformApp
+- **Purpose**: Main application entry point (@main)
 - **Responsibilities**:
+  - Platform-specific UI routing (visionOS vs iOS)
   - App lifecycle management
-  - Global state initialization
   - Immersive space management
 
-#### ContentView
-- **Purpose**: Primary UI view for displaying diagrams
+#### VisionOSMainView
+- **Purpose**: Launcher window for visionOS
 - **Responsibilities**:
-  - RealityView integration
+  - Input mode selection (File, JSON, HTTP Server)
+  - HTTP server controls
+  - Collaborative session management
+  - Immersion controls
+  - Diagram loading interface
+
+#### VisionOSImmersiveView
+- **Purpose**: Immersive space container for visionOS
+- **Responsibilities**:
+  - Wraps ImmersiveSpaceWrapper
+  - Manages immersion style (mixed/full)
+  - Displays collaborative session indicators
+
+#### AVAR2App (Shared Components)
+- **Purpose**: Reusable UI components across platform-specific views
+- **Components**:
+  - HTTPServerTabView: Server control UI
+  - ImmersiveSpaceWrapper: Background and content management
+  - StaticSurfaceView: Plane detection visualization
+  - FPSMonitor: Performance monitoring
+
+#### ContentView
+- **Purpose**: RealityView container for individual diagrams
+- **Responsibilities**:
+  - RealityView integration per diagram
   - Gesture handling orchestration
   - Error presentation
+  - Collaborative diagram synchronization
 
 ### 2. Business Logic Layer
 
@@ -57,17 +87,30 @@ The application uses an MVVM pattern with the following key components:
 - **Purpose**: Global application state management
 - **Key Features**:
   - Persistent surface detection coordination
-  - Diagram positioning management
+  - Intelligent diagram positioning (grid layout, surface snapping)
+  - Diagram tracking with ID-based updates
   - Debug visualization controls
+  - Multi-diagram state management
 
 #### ElementViewModel
-- **Purpose**: Diagram rendering and interaction logic
+- **Purpose**: Diagram rendering and interaction logic (per-diagram instance)
 - **Responsibilities**:
-  - Data loading and processing
+  - Data loading from files or HTTP
   - 3D entity creation and management
   - User interaction handling (pan, drag, zoom)
   - Surface snapping logic
   - Connection line rendering
+  - Scene rebuilding and updates
+  - Collaborative position synchronization
+
+#### CollaborativeSessionManager
+- **Purpose**: Multi-user session coordination
+- **Key Features**:
+  - SharePlay GroupActivity integration
+  - Spatial anchor broadcasting and synchronization
+  - Diagram sharing across devices
+  - Participant tracking
+  - Message passing for real-time updates
 
 ### 3. Service Layer
 
@@ -75,16 +118,44 @@ The application uses an MVVM pattern with the following key components:
 - **Purpose**: Data loading and parsing
 - **Capabilities**:
   - JSON/TXT file loading from bundle
+  - Loading from shared app group storage (HTTP diagrams)
+  - Loading from temporary directory (manual JSON)
   - ScriptOutput deserialization
   - Error handling for missing files
 
-#### ARKitSurfaceDetector
-- **Purpose**: Real-world surface detection
+#### DiagramDataLoader
+- **Purpose**: Centralized diagram loading with error handling
+- **Features**:
+  - Consistent error messages
+  - Verbose logging support (via AVAR_VERBOSE_LOGS)
+  - Wraps ElementService calls
+
+#### DiagramStorage
+- **Purpose**: Shared file storage management
+- **Features**:
+  - App group container access
+  - File URL generation
+  - Shared directory creation
+  - Cross-component file access
+
+#### HTTPServer
+- **Purpose**: Local HTTP server for remote diagram loading
+- **Features**:
+  - Socket-based server on port 8081
+  - POST endpoint at `/avar`
+  - JSON validation and parsing
+  - Callback-based diagram notification
+  - Real-time logging
+  - Automatic diagram drawing on receipt
+
+#### SurfaceDetector (formerly ARKitSurfaceDetector)
+- **Purpose**: Real-world surface detection (visionOS only)
 - **Features**:
   - Horizontal and vertical plane detection
   - Surface classification (wall, floor, table, etc.)
   - Visual debugging overlays
   - Persistent anchor management
+  - Toggle visibility controls
 
 ### 4. Data Layer
 
@@ -104,6 +175,27 @@ The application uses an MVVM pattern with the following key components:
   - Material creation
 
 ## Data Flow
+
+### HTTP Server Diagram Flow
+
+The HTTP server enables remote diagram loading with the following process:
+
+1. **Server Start**: HTTPServer starts listening on port 8081
+2. **Callback Registration**: VisionOSMainView.onAppear sets httpServer.onJSONReceived callback
+3. **Request Receipt**: POST request arrives at `/avar` endpoint with JSON body
+4. **JSON Validation**: Server validates JSON syntax
+5. **Parsing**: JSONDecoder decodes into ScriptOutput
+6. **Callback Invocation**: onJSONReceived closure called on main thread
+7. **Immersive Space Check**: Ensures immersive space is open
+8. **ID Check**: Examines diagram.id for update vs new diagram logic
+9. **File Storage**: Saves JSON to DiagramStorage shared directory
+10. **State Update**: Appends filename to activeFiles array
+11. **SwiftUI Reaction**: ForEach creates ContentView for new file
+12. **Scene Creation**: ElementViewModel loads and renders diagram
+
+**Critical Fix**: The callback MUST be set in `.onAppear` (not `.task`) to ensure it's available before the first HTTP request arrives.
+
+*See HTTP Server Sequence diagram for visual flow.*
 
 ### Diagram Loading Flow
 
@@ -330,42 +422,79 @@ The gesture system uses a state machine approach to handle different types of us
 - Animation smoothness
 - Cross-device compatibility
 
+## Platform-Specific Architecture
+
+### visionOS
+- **Full immersive experience** with mixed and full immersion modes
+- **Surface detection** via ARKit for plane detection
+- **Spatial anchors** for collaborative session alignment
+- **RealityKit** for 3D rendering in immersive space
+- **HTTP server** for remote diagram loading
+- **Can share** diagrams in collaborative sessions
+
+### iOS
+- **AR companion mode** for collaborative sessions
+- **Receive-only** for shared diagrams
+- **No immersive space** (uses standard AR view)
+- **No HTTP server** (not supported on iOS)
+- **ARKit** for basic AR tracking
+
+### Shared Components
+- **SwiftUI** views from AVAR2App.swift
+- **Data models** (ElementDTO, ScriptOutput)
+- **CollaborativeSessionManager** (platform-aware)
+- **Element rendering** logic in ElementViewModel
+
 ## Dependencies
 
 ### External Frameworks
 - **SwiftUI**: UI framework
 - **RealityKit**: 3D rendering and AR
-- **ARKit**: Surface detection and tracking
+- **ARKit**: Surface detection and tracking (visionOS/iOS)
+- **GroupActivities**: SharePlay integration for collaboration
 - **simd**: Mathematical operations
 - **OSLog**: Logging and debugging
+- **Network**: Socket-based HTTP server
 
 ### Internal Dependencies
 - Modular component architecture
 - Clear separation of concerns
 - Minimal coupling between layers
+- Platform-specific compilation directives (#if os(visionOS))
 
 ## Security Considerations
 
-- No sensitive data processing
-- Local file access only
-- AR permissions properly managed
-- User privacy respected (no data collection)
+- **No sensitive data processing**: Diagrams are non-sensitive visualization data
+- **Local network only**: HTTP server binds to local interfaces
+- **No authentication**: HTTP server is designed for trusted local network use
+- **File access**: Limited to app sandbox and shared app group container
+- **AR permissions**: ARKit permissions properly requested and managed
+- **User privacy**: No data collection, analytics, or external network calls
+- **SharePlay**: Uses Apple's secure GroupActivities framework
 
 ## Future Enhancements
 
 ### Planned Features
-1. **Multi-user Collaboration**: Shared AR experiences
-2. **Advanced Gestures**: Pinch-to-zoom, rotation
-3. **Custom Shaders**: Enhanced visual effects
-4. **Export Functionality**: Save/share diagrams
+1. **HTTP Server Authentication**: Add token-based authentication for remote access
+2. **Advanced Gestures**: Enhanced pinch-to-zoom, multi-finger rotation
+3. **Custom Shaders**: Enhanced visual effects and materials
+4. **Export Functionality**: Save diagram layouts, export snapshots
 5. **Voice Commands**: Accessibility improvements
+6. **Persistent Diagrams**: Save diagram positions across app launches
+7. **WebSocket Support**: Real-time bidirectional communication
+8. **Diagram Animations**: Animated transitions between states
 
 ### Technical Debt
-1. Refactor remaining long methods
-2. Implement comprehensive error recovery
-3. Add performance monitoring
-4. Enhance logging system
-5. Improve test coverage
+1. ~~Remove AVAR2_Legacy to avoid confusion~~ ✅ Completed
+2. ~~Fix HTTP server callback timing issue~~ ✅ Completed (moved to .onAppear)
+3. Add comprehensive unit tests for HTTP server
+4. Refactor remaining long methods in ElementViewModel
+5. Implement comprehensive error recovery for network failures
+6. Add performance monitoring and profiling
+7. Enhance logging system with structured logging
+8. Improve test coverage for collaborative features
+9. Document all public APIs
+10. Add integration tests for SharePlay functionality
 
 ---
 
