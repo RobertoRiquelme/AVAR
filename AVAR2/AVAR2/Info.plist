@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -40,6 +38,13 @@
 				<key>NSTemporaryExceptionMinimumTLSVersion</key>
 				<string>TLSv1.0</string>
 			</dict>
+			<key>172.20.12.11</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
 			<key>localhost</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
@@ -59,12 +64,6 @@
 	<array>
 		<string>_avar2-collab._tcp</string>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>This app uses the camera to detect surfaces for anchoring 3D content in your environment.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>This app uses the local network to discover and connect to other AVAR2 devices for collaborative diagram viewing.</string>
-	<key>NSWorldSensingUsageDescription</key>
-	<string>This app uses world sensing to detect tables, walls, and other surfaces for positioning diagrams in your space.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationPreferredDefaultSceneSessionRole</key>

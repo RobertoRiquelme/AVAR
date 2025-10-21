@@ -43,7 +43,22 @@ enum ElementService {
             }
         }
 
-        // If not found in bundle, check temporary directory
+        // If not found in bundle, check shared diagram storage (HTTP uploads)
+        if fileURL == nil {
+            if let storageDirectory = try? DiagramStorage.sharedDirectory() {
+                for ext in exts {
+                    let storedURL = storageDirectory
+                        .appendingPathComponent(filename)
+                        .appendingPathExtension(ext)
+                    if FileManager.default.fileExists(atPath: storedURL.path) {
+                        fileURL = storedURL
+                        break
+                    }
+                }
+            }
+        }
+
+        // Legacy fallback: check the temporary directory
         if fileURL == nil {
             for ext in exts {
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename).appendingPathExtension(ext)

@@ -10,6 +10,9 @@ import QuartzCore
 import RealityKit
 import RealityKitContent
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 extension Notification.Name {
     static let setImmersionLevel = Notification.Name("setImmersionLevel")
@@ -18,7 +21,7 @@ extension Notification.Name {
 /// Separate view for HTTP Server tab to reduce complexity
 struct HTTPServerTabView: View {
     @ObservedObject var httpServer: HTTPServer
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("HTTP Server Controls")
@@ -75,6 +78,7 @@ struct ServerStatusView: View {
 /// Server logs section
 struct ServerLogsView: View {
     @ObservedObject var httpServer: HTTPServer
+    @State private var didCopyJSON = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -120,10 +124,23 @@ struct ServerLogsView: View {
             // Last received JSON in a collapsible section
             if !httpServer.lastReceivedJSON.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Last Received JSON:")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .padding(.horizontal)
+                    HStack(spacing: 8) {
+                        Text("Last Received JSON:")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        
+                        Spacer()
+                        
+                        Button {
+                            copyJSONToClipboard(httpServer.lastReceivedJSON)
+                        } label: {
+                            Label(didCopyJSON ? "Copied" : "Copy", systemImage: didCopyJSON ? "checkmark" : "doc.on.doc")
+                                .labelStyle(.titleAndIcon)
+                        }
+                        .buttonStyle(.bordered)
+                        .font(.caption2)
+                    }
+                    .padding(.horizontal)
                     
                     ScrollView {
                         Text(httpServer.lastReceivedJSON)
@@ -132,11 +149,32 @@ struct ServerLogsView: View {
                             .padding(6)
                             .background(Color.blue.opacity(0.1))
                             .cornerRadius(6)
+                            .textSelection(.enabled)
                     }
                     .frame(height: 60)
                     .padding(.horizontal)
+                    
+                    if didCopyJSON {
+                        Text("Copied to clipboard")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                            .padding(.horizontal)
+                    }
                 }
             }
+        }
+    }
+}
+
+private extension ServerLogsView {
+    func copyJSONToClipboard(_ json: String) {
+        guard !json.isEmpty else { return }
+#if canImport(UIKit)
+        UIPasteboard.general.string = json
+#endif
+        didCopyJSON = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            didCopyJSON = false
         }
     }
 }
@@ -155,7 +193,7 @@ struct StaticSurfaceView: View {
 
 /// Wrapper for the entire immersive space with proper background positioning
 struct ImmersiveSpaceWrapper: View {
-    let activeFiles: [String]
+    @Binding var activeFiles: [String]
     let onClose: (String) -> Void
     @Environment(AppModel.self) private var appModel
     var collaborativeSession: CollaborativeSessionManager? = nil
@@ -196,7 +234,7 @@ struct ImmersiveSpaceWrapper: View {
             }
             
             // The actual content (diagrams, surface detection)
-            ImmersiveContentView(activeFiles: activeFiles, onClose: onClose, immersionLevel: $immersionLevel, showDebugInfo: $showDebugInfo, collaborativeSession: collaborativeSession)
+            ImmersiveContentView(activeFiles: $activeFiles, onClose: onClose, immersionLevel: $immersionLevel, showDebugInfo: $showDebugInfo, collaborativeSession: collaborativeSession)
                 .environment(appModel)
             
         }
@@ -258,13 +296,13 @@ struct ImmersiveSpaceWrapper: View {
 
 /// Immersive content view with digital crown support (now without background overlay)
 struct ImmersiveContentView: View {
-    let activeFiles: [String]
+    @Binding var activeFiles: [String]
     let onClose: (String) -> Void
     @Binding var immersionLevel: Double
     @Binding var showDebugInfo: Bool
     @Environment(AppModel.self) private var appModel
     var collaborativeSession: CollaborativeSessionManager? = nil
-    
+
     var body: some View {
         ZStack {
             // Static surface detection layer - completely independent
@@ -272,7 +310,7 @@ struct ImmersiveContentView: View {
                 .environment(appModel)
                 .opacity(1.0 - immersionLevel * 0.5) // Fade out surface detection slightly
                 .animation(.easeInOut(duration: 0.3), value: immersionLevel)
-            
+
             // Dynamic diagrams layer - updates when activeFiles changes
             Group {
                 ForEach(activeFiles, id: \.self) { file in
@@ -376,6 +414,7 @@ struct AVAR2_Legacy: App {
 
 
     init() {
+        print("🚀 AVAR2_Legacy init() called")
         // Find all .txt resources in the main bundle
         let names = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil)?
             .map { $0.deletingPathExtension().lastPathComponent }
@@ -383,6 +422,7 @@ struct AVAR2_Legacy: App {
         self.files = names
         // Default to first file if available
         _selectedFile = State(initialValue: names.first ?? "")
+        print("🚀 AVAR2_Legacy init() completed")
     }
 
     var body: some SwiftUI.Scene {
@@ -469,21 +509,10 @@ struct AVAR2_Legacy: App {
                         }
 
                         // Ensure immersive space is open
-                        #if os(visionOS)
-                        if !hasEnteredImmersive {
-                            print("🔄 Immersive space not open, opening now...")
-                            do {
-                                await openImmersiveSpace(id: "MainImmersive")
-                                hasEnteredImmersive = true
-                                print("✅ Immersive space opened for diagram")
-                            } catch {
-                                print("❌ Failed to open immersive space for diagram: \(error)")
-                                return
-                            }
+                        guard await ensureImmersiveSpaceActive() else {
+                            print("🚫 Unable to present immersive space for manual diagram")
+                            return
                         }
-                        #else
-                        print("⚠️ Immersive spaces not available on iOS")
-                        #endif
 
                         let newFile = inputMode == .file ? selectedFile : "input_json_\(UUID().uuidString)"
                         if inputMode == .json {
@@ -623,44 +652,137 @@ struct AVAR2_Legacy: App {
             .sheet(isPresented: $showingCollaborativeSession) {
                 CollaborativeSessionView(sessionManager: collaborativeSession)
             }
+            .onAppear {
+                print("🔧 WindowGroup VStack onAppear called")
+                // Set up HTTP server callback immediately on appear
+                print("🔧 Setting up HTTP server callback in onAppear")
+                httpServer.onJSONReceived = { scriptOutput, rawJSON in
+                    print("🎉 CALLBACK INVOKED with \(scriptOutput.elements.count) elements!")
+                    Task { @MainActor in
+                        // Ensure immersive space is open (re-open if the user closed it)
+                        guard await self.ensureImmersiveSpaceActive() else {
+                            print("🚫 Unable to present immersive space for HTTP diagram")
+                            return
+                        }
+
+                        // Handle diagram ID logic
+                        if let diagramId = scriptOutput.id {
+                            // Diagram has ID - check if it exists
+                            if let existingInfo = self.appModel.getDiagramInfo(for: diagramId) {
+                                // Diagram exists - update/redraw it
+                                print("🔄 Updating existing diagram with ID: \(diagramId)")
+
+                                // Find and remove the existing diagram from activeFiles
+                                self.activeFiles.removeAll { $0 == existingInfo.filename }
+
+                                // Create new filename for the update
+                                let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
+
+                                do {
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for diagram update")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
+
+                                    print("🔄 Redrawing diagram with ID: \(diagramId)")
+                                    self.activeFiles.append(newFile)
+
+                                    // Update AppModel tracking
+                                    self.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
+
+                                } catch {
+                                    print("❌ Failed to save updated HTTP diagram: \(error)")
+                                }
+                            } else {
+                                // New diagram with ID
+                                print("➕ Creating new diagram with ID: \(diagramId)")
+
+                                let newFile = "http_diagram_\(diagramId)"
+                                do {
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for new diagram with ID")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
+
+                                    print("📊 Adding new HTTP diagram: \(newFile)")
+                                    let diagramIndex = self.activeFiles.count
+                                    self.activeFiles.append(newFile)
+
+                                    // Register in AppModel
+                                    self.appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
+
+                                } catch {
+                                    print("❌ Failed to save new HTTP diagram: \(error)")
+                                }
+                            }
+                        } else {
+                            // No ID - create new diagram
+                            print("➕ Creating new diagram without ID")
+
+                            let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
+                            do {
+                                guard let data = rawJSON.data(using: .utf8) else {
+                                    print("❌ Failed to convert raw JSON to data for new diagram without ID")
+                                    return
+                                }
+                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                try data.write(to: tempURL)
+
+                                print("✅ File saved to: \(tempURL.path)")
+                                print("✅ File exists: \(FileManager.default.fileExists(atPath: tempURL.path))")
+                                print("✅ File size: \(data.count) bytes")
+                                print("📊 Adding HTTP diagram: \(newFile) to activeFiles")
+                                print("📊 Current activeFiles count: \(self.activeFiles.count)")
+                                self.activeFiles.append(newFile)
+                                print("📊 New activeFiles count: \(self.activeFiles.count)")
+                                print("📊 activeFiles content: \(self.activeFiles)")
+
+                            } catch {
+                                print("❌ Failed to save HTTP diagram: \(error)")
+                            }
+                        }
+
+                        // Ensure plane visualization starts disabled for new diagrams
+                        self.appModel.showPlaneVisualization = false
+                        self.appModel.surfaceDetector.setVisualizationVisible(false)
+                    }
+                }
+                print("🔧 HTTP server callback setup complete in onAppear")
+            }
             .onChange(of: scenePhase) { oldPhase, newPhase in
                 if newPhase == .background {
                     exit(0)
                 }
             }
             .task {
+                print("🔧 .task block started in WindowGroup")
                 // Auto-open immersive space on launch
                 if !hasLaunched {
                     hasLaunched = true
                     print("🚀 App launching - starting surface detection...")
                     // Start surface detection BEFORE opening immersive space
                     await appModel.startSurfaceDetectionIfNeeded()
-                    
+
                     print("🎯 Opening immersive space...")
-                    do {
-                        await openImmersiveSpace(id: "MainImmersive")
-                        hasEnteredImmersive = true
+                    let opened = await ensureImmersiveSpaceActive()
+                    if opened {
                         print("✅ Immersive space opened successfully")
-                    } catch {
-                        print("❌ Failed to open immersive space: \(error)")
-                        hasEnteredImmersive = false
                     }
                 }
-                
+
                 // Set up HTTP server callback for automatic diagram loading
-                httpServer.onJSONReceived = { scriptOutput in
+                print("🔧 Setting up HTTP server callback")
+                httpServer.onJSONReceived = { scriptOutput, rawJSON in
+                    print("🎉 CALLBACK INVOKED with \(scriptOutput.elements.count) elements!")
                     Task { @MainActor in
-                        // Ensure immersive space is open
-                        if !hasEnteredImmersive {
-                            print("🔄 Immersive space not open, opening now for HTTP diagram...")
-                            do {
-                                await openImmersiveSpace(id: "MainImmersive")
-                                hasEnteredImmersive = true
-                                print("✅ Immersive space opened for HTTP diagram")
-                            } catch {
-                                print("❌ Failed to open immersive space for HTTP diagram: \(error)")
-                                return
-                            }
+                        // Ensure immersive space is open (re-open if the user closed it)
+                        guard await ensureImmersiveSpaceActive() else {
+                            print("🚫 Unable to present immersive space for HTTP diagram")
+                            return
                         }
                         
                         // Handle diagram ID logic
@@ -676,14 +798,13 @@ struct AVAR2_Legacy: App {
                                 // Create new filename for the update
                                 let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
                                 
-                                // Save updated JSON to temporary file
-                                let tempURL = FileManager.default.temporaryDirectory
-                                    .appendingPathComponent(newFile)
-                                    .appendingPathExtension("txt")
-                                
                                 do {
-                                    let jsonData = try JSONEncoder().encode(scriptOutput)
-                                    try jsonData.write(to: tempURL)
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for diagram update")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
                                     
                                     print("🔄 Redrawing diagram with ID: \(diagramId)")
                                     activeFiles.append(newFile)
@@ -699,13 +820,13 @@ struct AVAR2_Legacy: App {
                                 print("➕ Creating new diagram with ID: \(diagramId)")
                                 
                                 let newFile = "http_diagram_\(diagramId)"
-                                let tempURL = FileManager.default.temporaryDirectory
-                                    .appendingPathComponent(newFile)
-                                    .appendingPathExtension("txt")
-                                
                                 do {
-                                    let jsonData = try JSONEncoder().encode(scriptOutput)
-                                    try jsonData.write(to: tempURL)
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for new diagram with ID")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
                                     
                                     print("📊 Adding new HTTP diagram: \(newFile)")
                                     let diagramIndex = activeFiles.count
@@ -723,16 +844,22 @@ struct AVAR2_Legacy: App {
                             print("➕ Creating new diagram without ID")
                             
                             let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
-                            let tempURL = FileManager.default.temporaryDirectory
-                                .appendingPathComponent(newFile)
-                                .appendingPathExtension("txt")
-                            
                             do {
-                                let jsonData = try JSONEncoder().encode(scriptOutput)
-                                try jsonData.write(to: tempURL)
-                                
-                                print("📊 Adding HTTP diagram: \(newFile)")
+                                guard let data = rawJSON.data(using: .utf8) else {
+                                    print("❌ Failed to convert raw JSON to data for new diagram without ID")
+                                    return
+                                }
+                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                try data.write(to: tempURL)
+
+                                print("✅ File saved to: \(tempURL.path)")
+                                print("✅ File exists: \(FileManager.default.fileExists(atPath: tempURL.path))")
+                                print("✅ File size: \(data.count) bytes")
+                                print("📊 Adding HTTP diagram: \(newFile) to activeFiles")
+                                print("📊 Current activeFiles count: \(activeFiles.count)")
                                 activeFiles.append(newFile)
+                                print("📊 New activeFiles count: \(activeFiles.count)")
+                                print("📊 activeFiles content: \(activeFiles)")
                                 
                             } catch {
                                 print("❌ Failed to save HTTP diagram: \(error)")
@@ -744,6 +871,7 @@ struct AVAR2_Legacy: App {
                         appModel.surfaceDetector.setVisualizationVisible(false)
                     }
                 }
+                print("🔧 HTTP server callback setup complete")
             }
         }
         .defaultSize(width: 1000, height: 1000)
@@ -751,7 +879,7 @@ struct AVAR2_Legacy: App {
 
         // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
-            ImmersiveSpaceWrapper(activeFiles: activeFiles, onClose: { file in
+            ImmersiveSpaceWrapper(activeFiles: $activeFiles, onClose: { file in
                 activeFiles.removeAll { $0 == file }
                 appModel.freeDiagramPosition(filename: file)
             }, collaborativeSession: collaborativeSession)
@@ -772,6 +900,27 @@ struct AVAR2_Legacy: App {
         }
         .immersionStyle(selection: $immersionStyle, in: .mixed, .full)
         .immersiveEnvironmentBehavior(.coexist)
+    }
+}
+#endif
+
+#if os(visionOS)
+private extension AVAR2_Legacy {
+    /// Makes sure an immersive space is active. If the user has closed it, we re-open it.
+    @MainActor
+    func ensureImmersiveSpaceActive() async -> Bool {
+        if hasEnteredImmersive {
+            return true
+        }   
+        do {
+            try await openImmersiveSpace(id: "MainImmersive")
+            hasEnteredImmersive = true
+            return true
+        } catch {
+            print("❌ Failed to open immersive space: \(error.localizedDescription)")
+            hasEnteredImmersive = false
+            return false
+        }
     }
 }
 #endif

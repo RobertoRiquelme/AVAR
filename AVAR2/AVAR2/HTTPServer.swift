@@ -65,7 +65,7 @@ class HTTPServer: ObservableObject {
     private let queue = DispatchQueue(label: "HTTPServer")
     private let maxLogs = 50 // Limit log entries to prevent memory issues
     
-    var onJSONReceived: ((ScriptOutput) -> Void)?
+    var onJSONReceived: ((ScriptOutput, String) -> Void)?
     
     /// Add a log entry to both console and UI logs
     private func log(_ message: String) {
@@ -377,12 +377,19 @@ class HTTPServer: ObservableObject {
         
         do {
             let scriptOutput = try JSONDecoder().decode(ScriptOutput.self, from: jsonData)
-            
+            let rawJSON = cleanedBody
+
+            log("🔔 About to invoke onJSONReceived callback")
+            log("🔔 Callback is: \(self.onJSONReceived == nil ? "NIL" : "SET")")
+
             DispatchQueue.main.async {
+                print("🔔 Inside DispatchQueue.main.async")
                 self.lastReceivedJSON = cleanedBody
-                self.onJSONReceived?(scriptOutput)
+                print("🔔 About to call callback with \(scriptOutput.elements.count) elements")
+                self.onJSONReceived?(scriptOutput, rawJSON)
+                print("🔔 Callback invoked (if it was set)")
             }
-            
+
             sendResponse(connection: connection, statusCode: 200, body: "\"done\"", contentType: "application/json")
             log("✅ Successfully parsed and processed diagram with \(scriptOutput.elements.count) elements")
             
