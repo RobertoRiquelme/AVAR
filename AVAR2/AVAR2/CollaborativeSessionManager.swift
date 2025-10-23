@@ -348,13 +348,25 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
     
     /// Remove a diagram from sharing
+    @MainActor
     func removeDiagram(filename: String) {
-        sharedDiagrams.removeAll { $0.filename == filename }
-        
+        // 🔎 Be tolerant to filename variants (temp names, suffixes)
+        let before = sharedDiagrams.count
+        sharedDiagrams.removeAll { d in
+            d.filename == filename ||
+            d.filename.hasPrefix(filename) ||   // remove "foo" will match "foo_123"
+            filename.hasPrefix(d.filename)      // remove "foo_123" will match "foo"
+        }
+
+        // 🔔 Force a Combine publish even if the array mutates in-place
+        sharedDiagrams = sharedDiagrams
+
+        // Broadcast to peers
         let removeMessage = RemoveDiagramMessage(filename: filename)
         broadcast(.remove(removeMessage))
-        
-        print("🗑️ Removed shared diagram '\(filename)'")
+
+        let after = sharedDiagrams.count
+        print("🗑️ removeDiagram('\(filename)'): \(before - after) removed; now \(after) remaining")
     }
     
     /// Update the transform of an existing shared diagram
@@ -408,6 +420,48 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
         // Remove expensive print during frequent updates
         // print("🔄 Updated and shared transform for diagram '\(filename)'")
+    }
+
+    // MARK: 2c — Public API to send per-element edits and update local state
+    @MainActor
+    func updateElementPosition(filename: String,
+                               elementId: String,
+                               localPosition: SIMD3<Float>) {
+        // 1) Broadcast to all peers
+        let payload = ElementPositionMessage(filename: filename,
+                                             elementId: elementId,
+                                             localPosition: localPosition)
+        broadcast(.elementMoved(payload))
+
+        // 2) Update our authoritative local model (rebuild diagram with edited elements)
+        guard let dIndex = sharedDiagrams.firstIndex(where: { $0.filename == filename }) else {
+            return
+        }
+        let old = sharedDiagrams[dIndex]
+
+        // SharedDiagram.elements is 'let', so rebuild a new array then a new diagram
+        var newElements = old.elements
+        if let eIndex = newElements.firstIndex(where: { $0.id == elementId }) {
+            var updated = newElements[eIndex]
+            // Store local (container) coords as Doubles for consistency with other fields.
+            updated.position = [Double(localPosition.x),
+                                Double(localPosition.y),
+                                Double(localPosition.z)]
+            newElements[eIndex] = updated
+
+            let newDiagram = SharedDiagram(
+                id: old.id,
+                filename: old.filename,
+                elements: newElements,
+                timestamp: Date(),                      // refresh timestamp on edit
+                worldPosition: old.worldPosition,
+                worldOrientation: old.worldOrientation,
+                worldScale: old.worldScale
+            )
+            sharedDiagrams[dIndex] = newDiagram
+            // 🔔 Force a publish
+            sharedDiagrams = sharedDiagrams
+        }
     }
     
     #if os(iOS)
@@ -580,8 +634,48 @@ private extension CollaborativeSessionManager {
             }
 
         case .remove(let removeMessage):
-            sharedDiagrams.removeAll { $0.filename == removeMessage.filename }
-            print("🗑️ Received remove diagram message for '\(removeMessage.filename)' from \(source)")
+            let target = removeMessage.filename
+            let before = sharedDiagrams.count
+            sharedDiagrams.removeAll { d in
+                d.filename == target ||
+                d.filename.hasPrefix(target) ||
+                target.hasPrefix(d.filename)
+            }
+            // 🔔 Force a Combine publish so all subscribers refresh
+            sharedDiagrams = sharedDiagrams
+            let after = sharedDiagrams.count
+            print("🗑️ Received remove for '\(target)' from \(source). Removed \(before - after); now \(after).")
+
+        case .elementMoved(let p):
+            if let dIndex = sharedDiagrams.firstIndex(where: { $0.filename == p.filename }) {
+                let old = sharedDiagrams[dIndex]
+                var newElements = old.elements
+                if let eIndex = newElements.firstIndex(where: { $0.id == p.elementId }) {
+                    var updated = newElements[eIndex]
+                    updated.position = [Double(p.localPosition.x),
+                                        Double(p.localPosition.y),
+                                        Double(p.localPosition.z)]
+                    newElements[eIndex] = updated
+
+                    let newDiagram = SharedDiagram(
+                        id: old.id,
+                        filename: old.filename,
+                        elements: newElements,
+                        timestamp: Date(),
+                        worldPosition: old.worldPosition,
+                        worldOrientation: old.worldOrientation,
+                        worldScale: old.worldScale
+                    )
+                    sharedDiagrams[dIndex] = newDiagram
+                    // 🔔 Force a Combine publish so all subscribers refresh
+                    sharedDiagrams = sharedDiagrams
+                    print("✏️ Element '\(p.elementId)' moved in '\(p.filename)' from \(source)")
+                } else {
+                    print("⚠️ Received elementMoved for unknown element '\(p.elementId)' in '\(p.filename)'")
+                }
+            } else {
+                print("⚠️ Received elementMoved for unknown diagram '\(p.filename)'")
+            }
 
         case .arCollaboration(let blob):
 #if os(iOS)
@@ -859,6 +953,7 @@ enum SharedSpaceEnvelope: Codable {
     case transform(UpdateDiagramTransformMessage)
     case remove(RemoveDiagramMessage)
     case arCollaboration(Data)
+    case elementMoved(ElementPositionMessage)   // 🆕
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -872,6 +967,7 @@ enum SharedSpaceEnvelope: Codable {
         case transform
         case remove
         case arCollaboration
+        case elementMoved    // 🆕
     }
 
     func encode(to encoder: Encoder) throws {
@@ -895,6 +991,9 @@ enum SharedSpaceEnvelope: Codable {
         case .arCollaboration(let data):
             try container.encode(EnvelopeType.arCollaboration, forKey: .type)
             try container.encode(data, forKey: .payload)
+        case .elementMoved(let msg):                               // 🆕
+            try container.encode(EnvelopeType.elementMoved, forKey: .type)
+            try container.encode(msg, forKey: .payload)
         }
     }
 
@@ -920,6 +1019,9 @@ enum SharedSpaceEnvelope: Codable {
         case .arCollaboration:
             let data = try container.decode(Data.self, forKey: .payload)
             self = .arCollaboration(data)
+        case .elementMoved:
+            let msg = try container.decode(ElementPositionMessage.self, forKey: .payload)   // 🆕
+            self = .elementMoved(msg)
         }
     }
 }
@@ -962,7 +1064,7 @@ struct UpdateDiagramTransformMessage: Codable {
         case worldScale
     }
     
-    init(filename: String, worldPosition: SIMD3<Float>? = nil, 
+    init(filename: String, worldPosition: SIMD3<Float>? = nil,
          worldOrientation: simd_quatf? = nil, worldScale: Float? = nil) {
         self.filename = filename
         self.worldPosition = worldPosition
@@ -1014,6 +1116,44 @@ struct UpdateDiagramTransformMessage: Codable {
         if let scale = worldScale {
             try container.encode(scale, forKey: .worldScale)
         }
+    }
+}
+
+/// Lightweight per-element position update (container-local coordinates)
+struct ElementPositionMessage: Codable {
+    let filename: String
+    let elementId: String
+    var localPosition: SIMD3<Float>
+
+    enum CodingKeys: String, CodingKey {
+        case filename
+        case elementId
+        case localPosX, localPosY, localPosZ
+    }
+
+    init(filename: String, elementId: String, localPosition: SIMD3<Float>) {
+        self.filename = filename
+        self.elementId = elementId
+        self.localPosition = localPosition
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        filename = try c.decode(String.self, forKey: .filename)
+        elementId = try c.decode(String.self, forKey: .elementId)
+        let x = try c.decode(Float.self, forKey: .localPosX)
+        let y = try c.decode(Float.self, forKey: .localPosY)
+        let z = try c.decode(Float.self, forKey: .localPosZ)
+        localPosition = SIMD3<Float>(x, y, z)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(filename, forKey: .filename)
+        try c.encode(elementId, forKey: .elementId)
+        try c.encode(localPosition.x, forKey: .localPosX)
+        try c.encode(localPosition.y, forKey: .localPosY)
+        try c.encode(localPosition.z, forKey: .localPosZ)
     }
 }
 
