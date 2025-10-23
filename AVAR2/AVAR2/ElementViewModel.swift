@@ -42,6 +42,10 @@ class ElementViewModel: ObservableObject {
     #endif
     /// Root container for all graph entities (so we can scale/transform as a group)
     private var rootEntity: Entity?
+    /// Stores the close callback so we can rebuild after async loads.
+    private var pendingOnClose: (() -> Void)?
+    /// Marks whether a scene rebuild should occur when data/content become available.
+    private var rebuildPending = false
     /// Default scale applied when spawning a diagram (30% smaller)
     private var spawnScale: Float {
         appModel?.defaultDiagramScale ?? PlatformConfiguration.diagramScale * 0.7
@@ -186,20 +190,30 @@ class ElementViewModel: ObservableObject {
     }
 
     func loadData(from filename: String) async {
+        print("🔍 ElementViewModel.loadData called for: \(filename)")
         self.filename = filename  // Store filename for position tracking
+        rebuildPending = true
+        print("🔍 rebuildPending set to true, sceneContent is: \(sceneContent == nil ? "nil" : "set")")
         do {
+            print("🔍 About to call DiagramDataLoader for: \(filename)")
             let output = try DiagramDataLoader.loadScriptOutput(from: filename)
             self.elements = output.elements
             self.isGraph2D = output.is2D
             self.normalizationContext = NormalizationContext(elements: output.elements, is2D: output.is2D)
             logger.log("Loaded \(output.elements.count, privacy: .public) elements (2D: \(output.is2D, privacy: .public)) from \(filename, privacy: .public)")
+            print("✅ Successfully loaded \(output.elements.count) elements")
+            print("🔍 About to call rebuildSceneIfNeeded")
+            rebuildSceneIfNeeded()
+            print("🔍 rebuildSceneIfNeeded completed")
         } catch let error as DiagramLoadingError {
             let message = error.errorDescription ?? "Failed to load diagram"
             logger.error("\(message, privacy: .public)")
+            print("❌ DiagramLoadingError: \(message)")
             self.loadErrorMessage = message
         } catch {
             let msg = "Failed to load \(filename): \(error.localizedDescription)"
             logger.error("\(msg, privacy: .public)")
+            print("❌ General error: \(msg)")
             self.loadErrorMessage = msg
         }
     }
@@ -208,13 +222,37 @@ class ElementViewModel: ObservableObject {
     /// Creates and positions all element entities in the scene.
     /// - Parameter onClose: Optional callback to invoke when the close button is tapped.
     func loadElements(in content: RealityViewContent, onClose: (() -> Void)? = nil) {
+        print("🎯 loadElements called")
+        pendingOnClose = onClose
         setupSceneContent(content)
-        
-        guard let normalizationContext = self.normalizationContext else {
-            logger.error("Missing normalization context; call loadData(from:) before loadElements(in:)")
+        rebuildPending = true
+        print("🎯 rebuildPending set to true in loadElements")
+        rebuildSceneIfNeeded()
+    }
+#endif
+
+    private func rebuildSceneIfNeeded() {
+        print("🏗️ rebuildSceneIfNeeded called")
+        print("🏗️ rebuildPending: \(rebuildPending)")
+        print("🏗️ normalizationContext: \(normalizationContext == nil ? "nil" : "set")")
+        print("🏗️ sceneContent: \(sceneContent == nil ? "nil" : "set")")
+        #if os(visionOS)
+        guard rebuildPending,
+              let normalizationContext = self.normalizationContext,
+              let content = self.sceneContent else {
+            print("🏗️ Guard failed - scene rebuild skipped")
             return
         }
-        
+        print("🏗️ All conditions met - proceeding with scene rebuild")
+        rebuildPending = false
+
+        if let existing = rootEntity {
+            content.remove(existing)
+        }
+        if let background = backgroundEntity {
+            content.remove(background)
+        }
+
         let sceneBuilder = DiagramSceneBuilder(
             filename: filename,
             isGraph2D: isGraph2D,
@@ -226,7 +264,7 @@ class ElementViewModel: ObservableObject {
         let buildResult = sceneBuilder.buildScene(
             in: content,
             normalizationContext: normalizationContext,
-            onClose: onClose
+            onClose: pendingOnClose
         )
 
         self.rootEntity = buildResult.container
@@ -236,22 +274,32 @@ class ElementViewModel: ObservableObject {
         self.rotationButtonEntity = buildResult.rotationButton
 
         updateBackgroundEntityCollisionShapes(scale: buildResult.container.scale.x)
-
         createAndPositionElements(container: buildResult.container, normalizationContext: normalizationContext)
-
         updateConnections(in: content)
         addOriginMarker()
+        #else
+        // No immersive scene on iOS.
+        #endif
     }
-#endif
     
     private func setupSceneContent(_ content: RealityViewContent) {
+        print("🎬 setupSceneContent called")
+        print("🎬 rebuildPending: \(rebuildPending)")
         self.sceneContent = content
-        
+
         if let existing = rootEntity {
             content.remove(existing)
         }
         if let bg = backgroundEntity {
             content.remove(bg)
+        }
+
+        // If data was already loaded but scene wasn't ready, rebuild now
+        if rebuildPending {
+            print("🎬 Data was already loaded, triggering rebuildSceneIfNeeded")
+            rebuildSceneIfNeeded()
+        } else {
+            print("🎬 No rebuild pending")
         }
     }
     

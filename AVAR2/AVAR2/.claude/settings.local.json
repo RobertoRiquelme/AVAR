@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ide__getDiagnostics",
+      "Read(//Users/robertoriquelme/Developer/UC/AVAR/AVAR2/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

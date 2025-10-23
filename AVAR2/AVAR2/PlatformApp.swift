@@ -5,6 +5,9 @@ import simd
 import RealityKit
 import RealityKitContent
 #endif
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Shared state for visionOS app
 @MainActor
@@ -106,6 +109,7 @@ struct VisionOSMainView: View {
     @State private var hasLaunched: Bool = false
 
     @State private var inputMode: InputMode = .file
+    @State private var didCopyJSON = false
     @State private var jsonInput: String = ""
     @State private var isJSONValid: Bool = false
     @State private var showingCollaborativeSession = false
@@ -291,10 +295,23 @@ struct VisionOSMainView: View {
                             // Last received JSON
                             if !httpServer.lastReceivedJSON.isEmpty {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Last Received JSON:")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                        .padding(.horizontal)
+                                    HStack(spacing: 8) {
+                                        Text("Last Received JSON:")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                        
+                                        Spacer()
+                                        
+                                        Button {
+                                            copyJSONToClipboard(httpServer.lastReceivedJSON)
+                                        } label: {
+                                            Label(didCopyJSON ? "Copied" : "Copy", systemImage: didCopyJSON ? "checkmark" : "doc.on.doc")
+                                                .labelStyle(.titleAndIcon)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .font(.caption2)
+                                    }
+                                    .padding(.horizontal)
                                     
                                     ScrollView {
                                         Text(httpServer.lastReceivedJSON)
@@ -303,9 +320,17 @@ struct VisionOSMainView: View {
                                             .padding(6)
                                             .background(Color.blue.opacity(0.1))
                                             .cornerRadius(6)
+                                            .textSelection(.enabled)
                                     }
                                     .frame(height: 60)
                                     .padding(.horizontal)
+                                    
+                                    if didCopyJSON {
+                                        Text("Copied to clipboard")
+                                            .font(.caption2)
+                                            .foregroundColor(.green)
+                                            .padding(.horizontal)
+                                    }
                                 }
                             }
                         }
@@ -459,41 +484,132 @@ struct VisionOSMainView: View {
                     exit(0)
                 }
             }
+            .onAppear {
+                print("🔧 VisionOSMainView.onAppear called!")
+                // Set up HTTP server callback IMMEDIATELY on appear
+                print("🔧 Setting httpServer.onJSONReceived callback NOW")
+                httpServer.onJSONReceived = { scriptOutput, rawJSON in
+                    print("🎉 CALLBACK INVOKED with \(scriptOutput.elements.count) elements!")
+                    Task { @MainActor in
+                        // Ensure immersive space is open (re-open if the user closed it)
+                        guard await self.ensureImmersiveSpaceActive() else {
+                            print("🚫 Unable to present immersive space for HTTP diagram")
+                            return
+                        }
+
+                        // Handle diagram ID logic
+                        if let diagramId = scriptOutput.id {
+                            // Diagram has ID - check if it exists
+                            if let existingInfo = self.sharedState.appModel.getDiagramInfo(for: diagramId) {
+                                // Diagram exists - update/redraw it
+                                print("🔄 Updating existing diagram with ID: \(diagramId)")
+
+                                // Find and remove the existing diagram from activeFiles
+                                self.sharedState.activeFiles.removeAll { $0 == existingInfo.filename }
+
+                                // Create new filename for the update
+                                let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
+
+                                // Save updated JSON to temporary file
+                                do {
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for diagram update")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
+
+                                    print("🔄 Redrawing diagram with ID: \(diagramId)")
+                                    self.sharedState.activeFiles.append(newFile)
+
+                                    // Update AppModel tracking
+                                    self.sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
+
+                                } catch {
+                                    print("❌ Failed to save updated HTTP diagram: \(error)")
+                                }
+                            } else {
+                                // New diagram with ID
+                                print("➕ Creating new diagram with ID: \(diagramId)")
+
+                                let newFile = "http_diagram_\(diagramId)"
+                                do {
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for new diagram with ID")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
+
+                                    print("📊 Adding new HTTP diagram: \(newFile)")
+                                    let diagramIndex = self.sharedState.activeFiles.count
+                                    self.sharedState.activeFiles.append(newFile)
+
+                                    // Register in AppModel
+                                    self.sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
+
+                                } catch {
+                                    print("❌ Failed to save new HTTP diagram: \(error)")
+                                }
+                            }
+                        } else {
+                            // No ID - create new diagram
+                            print("➕ Creating new diagram without ID")
+
+                            let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
+                            do {
+                                guard let data = rawJSON.data(using: .utf8) else {
+                                    print("❌ Failed to convert raw JSON to data for new diagram without ID")
+                                    return
+                                }
+                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                try data.write(to: tempURL)
+
+                                print("📊 Adding HTTP diagram: \(newFile)")
+                                self.sharedState.activeFiles.append(newFile)
+
+                            } catch {
+                                print("❌ Failed to save HTTP diagram: \(error)")
+                            }
+                        }
+
+                        print("🔥 Final activeFiles count: \(self.sharedState.activeFiles.count)")
+                        print("🔥 Callback complete - SwiftUI should now update the view")
+
+                        // Ensure plane visualization starts disabled for new diagrams
+                        self.sharedState.appModel.showPlaneVisualization = false
+                        self.sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+                    }
+                }
+                print("🔧 HTTP server callback setup complete!")
+            }
             .task {
+                print("🔧 VisionOSMainView.task called!")
                 // Auto-open immersive space on launch
                 if !hasLaunched {
                     hasLaunched = true
                     print("🚀 App launching - starting surface detection...")
                     // Start surface detection BEFORE opening immersive space
                     await sharedState.appModel.startSurfaceDetectionIfNeeded()
-                    
+
                     print("🎯 Opening immersive space...")
-                    do {
-                        await openImmersiveSpace(id: "MainImmersive")
-                        hasEnteredImmersive = true
+                    let opened = await ensureImmersiveSpaceActive()
+                    if opened {
                         print("✅ Immersive space opened successfully")
-                    } catch {
-                        print("❌ Failed to open immersive space: \(error)")
-                        hasEnteredImmersive = false
                     }
                 }
-                
-                // Set up HTTP server callback for automatic diagram loading
-                httpServer.onJSONReceived = { scriptOutput in
+
+                // Set up HTTP server callback for automatic diagram loading (kept as backup)
+                print("🔧 Setting httpServer.onJSONReceived callback in .task (backup)")
+                httpServer.onJSONReceived = { scriptOutput, rawJSON in
+                    print("🎉 CALLBACK INVOKED FROM .task with \(scriptOutput.elements.count) elements!")
                     Task { @MainActor in
-                        // Ensure immersive space is open
-                        if !hasEnteredImmersive {
-                            print("🔄 Immersive space not open, opening now for HTTP diagram...")
-                            do {
-                                await openImmersiveSpace(id: "MainImmersive")
-                                hasEnteredImmersive = true
-                                print("✅ Immersive space opened for HTTP diagram")
-                            } catch {
-                                print("❌ Failed to open immersive space for HTTP diagram: \(error)")
-                                return
-                            }
+                        // Ensure immersive space is open (re-open if the user closed it)
+                        guard await ensureImmersiveSpaceActive() else {
+                            print("🚫 Unable to present immersive space for HTTP diagram")
+                            return
                         }
-                        
+
                         // Handle diagram ID logic
                         if let diagramId = scriptOutput.id {
                             // Diagram has ID - check if it exists
@@ -508,17 +624,17 @@ struct VisionOSMainView: View {
                                 let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
                                 
                                 // Save updated JSON to temporary file
-                                let tempURL = FileManager.default.temporaryDirectory
-                                    .appendingPathComponent(newFile)
-                                    .appendingPathExtension("txt")
-                                
                                 do {
-                                    let jsonData = try JSONEncoder().encode(scriptOutput)
-                                    try jsonData.write(to: tempURL)
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for diagram update")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
                                     
                                     print("🔄 Redrawing diagram with ID: \(diagramId)")
                                     sharedState.activeFiles.append(newFile)
-                                    
+
                                     // Update AppModel tracking
                                     sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
                                     
@@ -530,18 +646,18 @@ struct VisionOSMainView: View {
                                 print("➕ Creating new diagram with ID: \(diagramId)")
                                 
                                 let newFile = "http_diagram_\(diagramId)"
-                                let tempURL = FileManager.default.temporaryDirectory
-                                    .appendingPathComponent(newFile)
-                                    .appendingPathExtension("txt")
-                                
                                 do {
-                                    let jsonData = try JSONEncoder().encode(scriptOutput)
-                                    try jsonData.write(to: tempURL)
+                                    guard let data = rawJSON.data(using: .utf8) else {
+                                        print("❌ Failed to convert raw JSON to data for new diagram with ID")
+                                        return
+                                    }
+                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                    try data.write(to: tempURL)
                                     
                                     print("📊 Adding new HTTP diagram: \(newFile)")
                                     let diagramIndex = sharedState.activeFiles.count
                                     sharedState.activeFiles.append(newFile)
-                                    
+
                                     // Register in AppModel
                                     sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
                                     
@@ -554,22 +670,25 @@ struct VisionOSMainView: View {
                             print("➕ Creating new diagram without ID")
                             
                             let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
-                            let tempURL = FileManager.default.temporaryDirectory
-                                .appendingPathComponent(newFile)
-                                .appendingPathExtension("txt")
-                            
                             do {
-                                let jsonData = try JSONEncoder().encode(scriptOutput)
-                                try jsonData.write(to: tempURL)
+                                guard let data = rawJSON.data(using: .utf8) else {
+                                    print("❌ Failed to convert raw JSON to data for new diagram without ID")
+                                    return
+                                }
+                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                try data.write(to: tempURL)
                                 
                                 print("📊 Adding HTTP diagram: \(newFile)")
                                 sharedState.activeFiles.append(newFile)
-                                
+
                             } catch {
                                 print("❌ Failed to save HTTP diagram: \(error)")
                             }
                         }
-                        
+
+                        print("🔥 Final activeFiles count: \(sharedState.activeFiles.count)")
+                        print("🔥 Callback complete - SwiftUI should now update the view")
+
                         // Ensure plane visualization starts disabled for new diagrams
                         sharedState.appModel.showPlaneVisualization = false
                         sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
@@ -611,9 +730,9 @@ struct VisionOSImmersiveView: View {
     let immersionStyle: ImmersionStyle
     @State private var showBackgroundOverlay = false
     @State private var savedPlaneViz: Bool? = nil
-    
+
     var body: some View {
-        ImmersiveSpaceWrapper(activeFiles: sharedState.activeFiles, onClose: { file in
+        ImmersiveSpaceWrapper(activeFiles: $sharedState.activeFiles, onClose: { file in
             sharedState.activeFiles.removeAll { $0 == file }
             sharedState.appModel.freeDiagramPosition(filename: file)
             // 🔴 Broadcast removal so peers remove too
@@ -669,4 +788,36 @@ struct VisionOSImmersiveView: View {
     }
 }
 
+#endif
+
+#if os(visionOS)
+private extension VisionOSMainView {
+    /// Makes sure an immersive space is active. If the user has closed it, we re-open it.
+    @MainActor
+    func ensureImmersiveSpaceActive() async -> Bool {
+        if hasEnteredImmersive {
+            return true
+        }
+        do {
+            try await openImmersiveSpace(id: "MainImmersive")
+            hasEnteredImmersive = true
+            return true
+        } catch {
+            print("❌ Failed to open immersive space: \(error.localizedDescription)")
+            hasEnteredImmersive = false
+            return false
+        }
+    }
+
+    func copyJSONToClipboard(_ json: String) {
+        guard !json.isEmpty else { return }
+#if canImport(UIKit)
+        UIPasteboard.general.string = json
+#endif
+        didCopyJSON = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            didCopyJSON = false
+        }
+    }
+}
 #endif

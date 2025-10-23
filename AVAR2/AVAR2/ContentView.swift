@@ -26,14 +26,18 @@ struct ContentView: View {
 
     var body: some View {
         RealityView { content in
+            print("🎨 RealityView make block called for: \(filename)")
             viewModel.loadElements(in: content, onClose: onClose)
         } update: { content in
+            print("🔄 RealityView update block called for: \(filename)")
             viewModel.updateConnections(in: content)
         }
         .task {
             print("📋 ContentView task started for: \(filename)")
             viewModel.setAppModel(appModel)
+            print("📋 About to load data for: \(filename)")
             await viewModel.loadData(from: filename)
+            print("📋 Data load completed for: \(filename)")
 
             // Throttler for collaborative sync (class to allow mutation in closure)
             class UpdateThrottler {
