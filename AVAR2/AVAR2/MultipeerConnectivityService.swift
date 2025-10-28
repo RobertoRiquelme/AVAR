@@ -36,6 +36,7 @@ class MultipeerConnectivityService: NSObject, ObservableObject {
     /// Start hosting/advertising this device
     func startHosting() {
         stopAll() // Stop any existing services
+        makeFreshSession()      // Para asegurarnos
         
         advertiser = MCNearbyServiceAdvertiser(
             peer: localPeerID,
@@ -56,6 +57,7 @@ class MultipeerConnectivityService: NSObject, ObservableObject {
     /// Start browsing for hosts
     func startBrowsing() {
         stopAll() // Stop any existing services
+        makeFreshSession()
         
         browser = MCNearbyServiceBrowser(peer: localPeerID, serviceType: serviceType)
         browser?.delegate = self
@@ -69,6 +71,7 @@ class MultipeerConnectivityService: NSObject, ObservableObject {
     func stop() {
         stopAll()
         session.disconnect()
+        makeFreshSession()
     }
     
     private func stopAll() {
@@ -124,6 +127,16 @@ class MultipeerConnectivityService: NSObject, ObservableObject {
         return "macOS"
         #endif
     }
+    
+    private func makeFreshSession() {
+        // Tear down old delegate just in case
+        session.delegate = nil
+        // Recreate a brand-new session
+        let newSession = MCSession(peer: localPeerID, securityIdentity: nil, encryptionPreference: .required)
+        newSession.delegate = self
+        session = newSession
+    }
+
 }
 
 // MARK: - MCSessionDelegate

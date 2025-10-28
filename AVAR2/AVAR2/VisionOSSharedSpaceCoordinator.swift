@@ -7,9 +7,10 @@ import QuartzCore
 @available(visionOS 26.0, *)
 @MainActor
 final class VisionOSSharedSpaceCoordinator {
-    private let session = ARKitSession()
-    private let worldTracking = WorldTrackingProvider()
-    private let sharedProvider = SharedCoordinateSpaceProvider()
+    private var session: ARKitSession?
+    private var worldTracking: WorldTrackingProvider?
+    private var sharedProvider: SharedCoordinateSpaceProvider?
+    
     private var coordinateTask: Task<Void, Never>?
     private var eventTask: Task<Void, Never>?
     private var deviceAnchorTask: Task<Void, Never>?
@@ -26,14 +27,28 @@ final class VisionOSSharedSpaceCoordinator {
             return
         }
 
+        makeFreshSession()
+        
+        guard let session, let worldTracking, let sharedProvider else { return }
+        
         do {
             try await session.run([worldTracking, sharedProvider])
+            
             coordinateTask?.cancel()
-            coordinateTask = Task { [weak self] in await self?.pumpCoordinateSpaceData() }
+            coordinateTask = Task { [weak self] in
+                await self?.pumpCoordinateSpaceData()
+            }
+            
             eventTask?.cancel()
-            eventTask = Task { [weak self] in await self?.monitorEvents() }
+            eventTask = Task { [weak self] in
+                await self?.monitorEvents()
+            }
+            
             deviceAnchorTask?.cancel()
-            deviceAnchorTask = Task { [weak self] in await self?.trackDeviceAnchor() }
+            deviceAnchorTask = Task { [weak self] in
+                await self?.trackDeviceAnchor()
+            }
+            
             print("🌐 Shared coordinate space provider started")
         } catch {
             onError?(error)
@@ -42,29 +57,43 @@ final class VisionOSSharedSpaceCoordinator {
     }
 
     func stop() {
-        coordinateTask?.cancel()
-        eventTask?.cancel()
-        deviceAnchorTask?.cancel()
-        coordinateTask = nil
-        eventTask = nil
-        deviceAnchorTask = nil
-        session.stop()
+        coordinateTask?.cancel(); coordinateTask = nil
+        eventTask?.cancel();      eventTask = nil
+        deviceAnchorTask?.cancel(); deviceAnchorTask = nil
+        
+        session?.stop()
+        session = nil
+        worldTracking = nil
+        sharedProvider = nil
+        
         print("🌐 Shared coordinate space provider stopped")
     }
 
+    // If your API for push is async, make this `async` and call with `await`.
     func pushCoordinateData(_ message: SharedCoordinateSpaceMessage) {
+        guard let provider = sharedProvider else {
+            print("⚠️ SharedCoordinateSpaceProvider not active; dropping payload")
+            return
+        }
         guard let coordinateData = SharedCoordinateSpaceProvider.CoordinateSpaceData(data: message.payload) else {
             print("⚠️ Ignoring invalid coordinate space payload")
             return
         }
-        sharedProvider.push(data: coordinateData)
+        provider.push(data: coordinateData)
     }
 
     private func pumpCoordinateSpaceData() async {
         while !Task.isCancelled {
-            if let data = sharedProvider.nextCoordinateSpaceData {
-                let message = SharedCoordinateSpaceMessage(payload: data.data,
-                                                            recipientIdentifiers: data.recipientIdentifiers)
+            guard let provider = sharedProvider else {
+                // Provider was torn down (e.g., stop()); back off and try again until task is cancelled.
+                try? await Task.sleep(for: .milliseconds(200))
+                continue
+            }
+            if let data = provider.nextCoordinateSpaceData {
+                let message = SharedCoordinateSpaceMessage(
+                    payload: data.data,
+                    recipientIdentifiers: data.recipientIdentifiers
+                )
                 onCoordinateData?(message)
             } else {
                 try? await Task.sleep(for: .milliseconds(200))
@@ -73,7 +102,9 @@ final class VisionOSSharedSpaceCoordinator {
     }
 
     private func monitorEvents() async {
-        for await event in sharedProvider.eventUpdates {
+        // We must unwrap before iterating; optional AsyncSequence doesn't conform to AsyncSequence.
+        guard let provider = sharedProvider else { return }
+        for await event in provider.eventUpdates {
             switch event {
             case .sharingEnabled:
                 onSharingEnabledChanged?(true)
@@ -87,11 +118,19 @@ final class VisionOSSharedSpaceCoordinator {
 
     private func trackDeviceAnchor() async {
         while !Task.isCancelled {
-            if let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) {
+            if let worldTracking,
+               let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) {
                 latestDeviceTransform = anchor.originFromAnchorTransform
             }
             try? await Task.sleep(for: .milliseconds(120))
         }
+    }
+    
+    private func makeFreshSession() {
+        // Create brand-new instances each start; stopped providers cannot be re-run.
+        session = ARKitSession()
+        worldTracking = WorldTrackingProvider()
+        sharedProvider = SharedCoordinateSpaceProvider()
     }
 }
 #endif
