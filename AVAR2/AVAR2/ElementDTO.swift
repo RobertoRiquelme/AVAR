@@ -163,9 +163,10 @@ struct ShapeDTO: Codable {
     let text: String?       // any label
     let color: [Double]?    // sometimes color appears here
     let id: String?         // some shapes carry their own id
+    let radius: Double?     // optional radius for cylinders/edges
 
     private enum CodingKeys: String, CodingKey {
-        case shapeDescription, extent, text, color, id
+        case shapeDescription, extent, text, color, id, radius
     }
     
     // Custom initializer for string fallback
@@ -175,6 +176,7 @@ struct ShapeDTO: Codable {
         self.text = nil
         self.color = nil
         self.id = nil
+        self.radius = nil
     }
     
     // Custom decoder to debug shape parsing
@@ -190,6 +192,7 @@ struct ShapeDTO: Codable {
         
         self.text = try container.decodeIfPresent(String.self, forKey: .text)
         self.color = try container.decodeIfPresent([Double].self, forKey: .color)
+        self.radius = try container.decodeIfPresent(Double.self, forKey: .radius)
         
         // Decode id as String (primary) or convert from Int, or leave nil (same logic as ElementDTO)
         if let strID = try? container.decode(String.self, forKey: .id) {

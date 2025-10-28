@@ -408,10 +408,8 @@ class ARViewModel: NSObject, ObservableObject {
         
         // Add connections between elements
         for edge in diagram.elements {
-            if let from = edge.fromId, let to = edge.toId {
-                if let connectionEntity = createConnection(from: from, to: to, in: diagramContainer, color: edge.color) {
-                    diagramContainer.addChild(connectionEntity)
-                }
+            if let connectionEntity = createConnection(for: edge, in: diagramContainer) {
+                diagramContainer.addChild(connectionEntity)
             }
         }
         
@@ -549,16 +547,17 @@ class ARViewModel: NSObject, ObservableObject {
         return entity
     }
     
-    private func createConnection(from: String, to: String, in container: Entity, color: [Double]?) -> ModelEntity? {
+    private func createConnection(for edge: ElementDTO, in container: Entity) -> ModelEntity? {
+        guard let fromId = edge.fromId, let toId = edge.toId else { return nil }
         // Find entities by name
         var fromEntity: Entity? = nil
         var toEntity: Entity? = nil
         
         for child in container.children {
-            if child.name == from {
+            if child.name == fromId {
                 fromEntity = child
             }
-            if child.name == to {
+            if child.name == toId {
                 toEntity = child
             }
             if fromEntity != nil && toEntity != nil {
@@ -567,7 +566,7 @@ class ARViewModel: NSObject, ObservableObject {
         }
         
         guard let entity1 = fromEntity, let entity2 = toEntity else {
-            print("📱 ⚠️ Could not find entities for connection from '\(from)' to '\(to)'")
+            print("📱 ⚠️ Could not find entities for connection from '\(fromId)' to '\(toId)'")
             return nil
         }
         
@@ -578,9 +577,10 @@ class ARViewModel: NSObject, ObservableObject {
         
         guard length > 0 else { return nil }
         
-        let mesh = MeshResource.generateBox(size: SIMD3(length, 0.002, 0.002))
+        let radius = max(Float(edge.shape?.radius ?? 0.005), 0.0005)
+        let mesh = MeshResource.generateCylinder(height: length, radius: radius)
         let materialColor: UIColor = {
-            if let rgba = color {
+            if let rgba = edge.color ?? edge.shape?.color {
                 return UIColor(
                     red: CGFloat(rgba[safe: 0] ?? 0.5),
                     green: CGFloat(rgba[safe: 1] ?? 0.5),
@@ -597,7 +597,7 @@ class ARViewModel: NSObject, ObservableObject {
         
         // Orient the line along the vector
         let direction = lineVector / length
-        let quat = simd_quatf(from: SIMD3<Float>(1, 0, 0), to: direction)
+        let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: direction)
         lineEntity.orientation = quat
         
         return lineEntity

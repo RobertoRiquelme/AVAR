@@ -396,15 +396,9 @@ class ElementViewModel: ObservableObject {
         lineEntities.removeAll()
         // For each element that defines an edge, connect fromId -> toId
         for edge in self.elements {
-            if let from = edge.fromId, let to = edge.toId {
-                if let line = self.createLineBetween(from, and: to, colorComponents: edge.color ?? edge.shape?.color) {
-                    container.addChild(line)
-                    self.lineEntities.append(line)
-                    self.debugLog("📍 Created line between elements \(from) and \(to)")
-                } else {
-                    logger.warning("⚠️ Failed to create line between \(from) and \(to) - entities not found in entityMap")
-                }
-            }
+            guard let connection = self.createConnectionEntity(for: edge) else { continue }
+            container.addChild(connection)
+            self.lineEntities.append(connection)
         }
     }
 
@@ -1000,43 +994,46 @@ class ElementViewModel: ObservableObject {
         return entity
     }
 
-    private func createLineBetween(_ id1: String, and id2: String, colorComponents: [Double]?) -> ModelEntity? {
-        self.debugLog("🔍 Looking for entities with keys: '\(id1)' and '\(id2)'")
+    private func createConnectionEntity(for edge: ElementDTO) -> ModelEntity? {
+        guard let fromId = edge.fromId, let toId = edge.toId else { return nil }
+        self.debugLog("🔍 Looking for entities with keys: '\(fromId)' and '\(toId)'")
         self.debugLog("🗂️ Available entity keys: \(Array(self.entityMap.keys).sorted())")
-        guard let entity1 = self.entityMap[id1], let entity2 = self.entityMap[id2] else { 
-            logger.error("❌ Could not find entities for keys '\(id1)' and/or '\(id2)'")
-            return nil 
+        guard let fromEntity = self.entityMap[fromId], let toEntity = self.entityMap[toId] else {
+            logger.error("❌ Could not find entities for keys '\(fromId)' and/or '\(toId)'")
+            return nil
         }
 
-        let pos1 = entity1.position
-        let pos2 = entity2.position
+        let pos1 = fromEntity.position
+        let pos2 = toEntity.position
         let lineVector = pos2 - pos1
         let length = simd_length(lineVector)
+        guard length > 0 else { return nil }
 
-        let mesh = MeshResource.generateBox(size: SIMD3(length, 0.002, 0.002))
+        let radius = max(Float(edge.shape?.radius ?? 0.005), 0.0005)
+        let mesh = MeshResource.generateCylinder(height: length, radius: radius)
         let materialColor: UIColor = {
-            if let rgba = colorComponents {
+            let rgba = edge.color ?? edge.shape?.color
+            if let components = rgba, components.count >= 3 {
                 return UIColor(
-                    red: CGFloat(rgba[0]),
-                    green: CGFloat(rgba[1]),
-                    blue: CGFloat(rgba[2]),
-                    alpha: rgba.count > 3 ? CGFloat(rgba[3]) : 1.0
+                    red: CGFloat(components[0]),
+                    green: CGFloat(components[1]),
+                    blue: CGFloat(components[2]),
+                    alpha: components.count > 3 ? CGFloat(components[3]) : 1.0
                 )
             }
             return .gray
         }()
         let material = SimpleMaterial(color: materialColor, isMetallic: false)
 
-        let lineEntity = ModelEntity(mesh: mesh, materials: [material])
-        lineEntity.position = pos1 + (lineVector / 2)
-        // Orient the line along the vector: rotate +X axis to match the direction
+        let connectionEntity = ModelEntity(mesh: mesh, materials: [material])
+        connectionEntity.position = pos1 + (lineVector / 2)
         if length > 0 {
             let direction = lineVector / length
-            let quat = simd_quatf(from: SIMD3<Float>(1, 0, 0), to: direction)
-            lineEntity.orientation = quat
+            let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: direction)
+            connectionEntity.orientation = quat
         }
 
-        return lineEntity
+        return connectionEntity
     }
 
     private func createLabelEntity(text: String) -> Entity {
