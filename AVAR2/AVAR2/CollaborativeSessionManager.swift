@@ -128,17 +128,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
 #if os(visionOS)
         if #available(visionOS 26.0, *) {
-            let visionCoordinator = VisionOSSharedSpaceCoordinator()
-            visionCoordinator.onCoordinateData = { [weak self] (message: SharedCoordinateSpaceMessage) in
-                self?.broadcast(.coordinate(message))
-            }
-            visionCoordinator.onSharingEnabledChanged = { (available: Bool) in
-                print("🌐 Shared coordinate \(available ? "enabled" : "disabled")")
-            }
-            visionCoordinator.onError = { (error: Error) in
-                print("❌ Shared coordinate space error: \(error)")
-            }
-            sharedSpaceCoordinator = visionCoordinator
+            sharedSpaceCoordinator = buildSharedSpaceCoordinator()
         }
 #endif
     }
@@ -148,7 +138,25 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         multipeerSession?.delegate = self
     }
     
-    /// Start hosting a collaborative session
+    
+#if os(visionOS)
+    @available(visionOS 26.0, *)
+    private func buildSharedSpaceCoordinator() -> VisionOSSharedSpaceCoordinator {
+        let c = VisionOSSharedSpaceCoordinator()
+        c.onCoordinateData = { [weak self] (message: SharedCoordinateSpaceMessage) in
+            self?.broadcast(.coordinate(message))
+        }
+        c.onSharingEnabledChanged = { (available: Bool) in
+            print("🌐 Shared coordinate \(available ? "enabled" : "disabled")")
+        }
+        c.onError = { (error: Error) in
+            print("❌ Shared coordinate space error: \(error)")
+        }
+        return c
+    }
+#endif
+
+/// Start hosting a collaborative session
     func startHosting() async {
         print("🤝 Starting collaborative session as host")
         lastError = nil // Clear any previous errors
@@ -273,6 +281,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         sharedSpaceTask = nil
         if #available(visionOS 26.0, *) {
             sharedSpaceCoordinator?.stop()
+            sharedSpaceCoordinator = nil
         }
 #endif
     }
@@ -691,13 +700,18 @@ private extension CollaborativeSessionManager {
 #if os(visionOS)
 extension CollaborativeSessionManager {
     private func startSharedSpaceCoordinatorIfNeeded() {
-        guard #available(visionOS 26.0, *), let coordinator = sharedSpaceCoordinator else { return }
+        guard #available(visionOS 26.0, *) else { return }
+        if sharedSpaceCoordinator == nil {
+            sharedSpaceCoordinator = buildSharedSpaceCoordinator()
+        }
+        guard let coordinator = sharedSpaceCoordinator else { return }
         sharedSpaceTask?.cancel()
         sharedSpaceTask = Task { [weak coordinator] in
             await coordinator?.start()
         }
     }
 }
+
 #endif
 
 // MARK: - MultipeerConnectivityDelegate
