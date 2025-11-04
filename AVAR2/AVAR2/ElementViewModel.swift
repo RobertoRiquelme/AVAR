@@ -972,6 +972,19 @@ class ElementViewModel: ObservableObject {
             return entity
         }
 
+        // Special case: RSCircle with borderColor/borderWidth (hollow donut)
+        if desc.contains("circle") && desc.contains("rs") && element.borderColor != nil {
+            let entity = createHollowCircleEntity(for: element, normalization: normalizationContext)
+            entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
+
+            // Only add interaction components for 3D diagrams
+            if !isGraph2D {
+                entity.generateCollisionShapes(recursive: true)
+                entity.components.set(InputTargetComponent())
+            }
+            return entity
+        }
+
         let (mesh, material) = element.meshAndMaterial(normalization: normalizationContext)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         // Rotate cylinders (ellipses/circles) to be flat in XY plane
@@ -1004,6 +1017,12 @@ class ElementViewModel: ObservableObject {
     }
 
     private func createConnectionEntity(for edge: ElementDTO) -> ModelEntity? {
+        // Check if this is an RSPolyline with points array
+        if let points = edge.points, points.count >= 2 {
+            return createPolylineEntity(for: edge, points: points)
+        }
+
+        // Standard direct connection between two entities
         guard let fromId = edge.fromId, let toId = edge.toId else { return nil }
         self.debugLog("🔍 Looking for entities with keys: '\(fromId)' and '\(toId)'")
         self.debugLog("🗂️ Available entity keys: \(Array(self.entityMap.keys).sorted())")
@@ -1056,6 +1075,62 @@ class ElementViewModel: ObservableObject {
         return connectionEntity
     }
 
+    /// Creates a polyline entity from multiple waypoints (for RSPolyline)
+    private func createPolylineEntity(for edge: ElementDTO, points: [[Double]]) -> ModelEntity? {
+        guard let normContext = normalizationContext else { return nil }
+
+        let containerEntity = ModelEntity()
+
+        // Convert points to SIMD3 positions using normalization
+        var positions: [SIMD3<Float>] = []
+        for point in points {
+            let coords = point + [0.0] // Add Z coordinate if missing
+            let pos = calculateElementPosition(coords: coords, normalizationContext: normContext)
+            positions.append(pos)
+        }
+
+        guard positions.count >= 2 else { return nil }
+
+        // Get line color and radius
+        let materialColor: UIColor = {
+            let rgba = edge.color ?? edge.borderColor ?? edge.shape?.color
+            if let components = rgba, components.count >= 3 {
+                return UIColor(
+                    red: CGFloat(components[0]),
+                    green: CGFloat(components[1]),
+                    blue: CGFloat(components[2]),
+                    alpha: components.count > 3 ? CGFloat(components[3]) : 1.0
+                )
+            }
+            return .gray
+        }()
+        let material = SimpleMaterial(color: materialColor, isMetallic: false)
+        let radius = max(Float(edge.shape?.radius ?? 0.005), 0.0005)
+
+        // Create a line segment for each pair of consecutive points
+        for i in 0..<(positions.count - 1) {
+            let pos1 = positions[i]
+            let pos2 = positions[i + 1]
+            let lineVector = pos2 - pos1
+            let length = simd_length(lineVector)
+            guard length > 0 else { continue }
+
+            let mesh = MeshResource.generateCylinder(height: length, radius: radius)
+            let segmentEntity = ModelEntity(mesh: mesh, materials: [material])
+            segmentEntity.position = pos1 + (lineVector / 2)
+
+            if length > 0 {
+                let direction = lineVector / length
+                let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: direction)
+                segmentEntity.orientation = quat
+            }
+
+            containerEntity.addChild(segmentEntity)
+        }
+
+        return containerEntity
+    }
+
     /// Creates an arrow marker entity for edge endpoints
     private func createArrowMarkerEntity(
         markerShape: ShapeDTO,
@@ -1104,6 +1179,91 @@ class ElementViewModel: ObservableObject {
     }
 
     /// Creates a 2D RTlabel/RSLabel entity using the shape.text or element.text and shape.extent or element.extent to size the text container.
+    /// Creates a hollow circle (donut) entity for RSCircle with borderColor
+    private func createHollowCircleEntity(for element: ElementDTO, normalization: NormalizationContext) -> Entity {
+        let extent = element.extent ?? element.shape?.extent ?? []
+
+        // Get diameter from extent
+        let diameter = extent.count > 0 ? Float(extent[0] / normalization.globalRange * 2) : 0.1
+        let outerRadius = diameter / 2.0
+
+        // Calculate border width as thickness of the ring
+        let borderWidth = element.borderWidth ?? element.shape?.borderWidth ?? 1.0
+        let normalizedBorderWidth = Float(borderWidth / normalization.globalRange * 2)
+
+        // Get border color
+        let borderRGBA = element.borderColor ?? [0.5, 0.5, 0.5, 1.0]
+        let borderColor = UIColor(
+            red: CGFloat(borderRGBA[0]),
+            green: CGFloat(borderRGBA[1]),
+            blue: CGFloat(borderRGBA[2]),
+            alpha: borderRGBA.count > 3 ? CGFloat(borderRGBA[3]) : 1.0
+        )
+        let borderMaterial = SimpleMaterial(color: borderColor, roughness: 0.5, isMetallic: false)
+
+        // Create a donut ring using custom mesh
+        let height: Float = 0.001 // Minimal depth for 2D
+        let ringMesh = createDonutMesh(outerRadius: outerRadius, borderWidth: normalizedBorderWidth, height: height)
+
+        let ringEntity = ModelEntity(mesh: ringMesh, materials: [borderMaterial])
+        ringEntity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
+
+        return ringEntity
+    }
+
+    /// Creates a custom donut (ring) mesh
+    private func createDonutMesh(outerRadius: Float, borderWidth: Float, height: Float) -> MeshResource {
+        let innerRadius = max(outerRadius - borderWidth, 0.001)
+        let segments = 32 // Number of segments for smooth circle
+
+        var positions: [SIMD3<Float>] = []
+        var indices: [UInt32] = []
+
+        // Create vertices for outer and inner circles at top and bottom
+        for i in 0...segments {
+            let angle = Float(i) * (2 * .pi / Float(segments))
+            let cos = cosf(angle)
+            let sin = sinf(angle)
+
+            // Outer circle - top
+            positions.append(SIMD3<Float>(outerRadius * cos, height / 2, outerRadius * sin))
+            // Inner circle - top
+            positions.append(SIMD3<Float>(innerRadius * cos, height / 2, innerRadius * sin))
+            // Outer circle - bottom
+            positions.append(SIMD3<Float>(outerRadius * cos, -height / 2, outerRadius * sin))
+            // Inner circle - bottom
+            positions.append(SIMD3<Float>(innerRadius * cos, -height / 2, innerRadius * sin))
+        }
+
+        // Create triangles for the ring (top, bottom, outer edge, inner edge)
+        for i in 0..<segments {
+            let base = UInt32(i * 4)
+            let nextBase = UInt32((i + 1) * 4)
+
+            // Top face
+            indices.append(contentsOf: [base, nextBase, nextBase + 1])
+            indices.append(contentsOf: [base, nextBase + 1, base + 1])
+
+            // Bottom face
+            indices.append(contentsOf: [base + 2, nextBase + 3, nextBase + 2])
+            indices.append(contentsOf: [base + 2, base + 3, nextBase + 3])
+
+            // Outer edge
+            indices.append(contentsOf: [base, nextBase + 2, nextBase])
+            indices.append(contentsOf: [base, base + 2, nextBase + 2])
+
+            // Inner edge
+            indices.append(contentsOf: [base + 1, nextBase + 1, nextBase + 3])
+            indices.append(contentsOf: [base + 1, nextBase + 3, base + 3])
+        }
+
+        var descriptor = MeshDescriptor()
+        descriptor.positions = .init(positions)
+        descriptor.primitives = .triangles(indices)
+
+        return try! MeshResource.generate(from: [descriptor])
+    }
+
     private func createRTLabelEntity(for element: ElementDTO, normalization: NormalizationContext) -> Entity {
         // For RSLabel, text is at element level; for RTLabel, text is in shape
         let rawText = element.text ?? element.shape?.text
