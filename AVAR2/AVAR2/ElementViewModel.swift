@@ -956,20 +956,26 @@ class ElementViewModel: ObservableObject {
             preconditionFailure("Normalization context must be set before creating entities")
         }
 
-        let desc = element.shape?.shapeDescription?.lowercased() ?? ""
-        // Special case: render RTlabel shapes as text-only entities using specified extents
+        // RS shapes store type directly in element.type, not in shape.shapeDescription
+        let desc = (element.shape?.shapeDescription ?? element.type).lowercased()
+        // Special case: render RTlabel and RSLabel shapes as text-only entities using specified extents
         logger.log("Create Entity - \(desc)")
-        if desc.contains("rtlabel") {
+        if desc.contains("label") && (desc.contains("rt") || desc.contains("rs")) {
             let entity = createRTLabelEntity(for: element, normalization: normalizationContext)
             entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
-            entity.generateCollisionShapes(recursive: true)
-            entity.components.set(InputTargetComponent())
+
+            // Only add interaction components for 3D diagrams
+            if !isGraph2D {
+                entity.generateCollisionShapes(recursive: true)
+                entity.components.set(InputTargetComponent())
+            }
             return entity
         }
 
         let (mesh, material) = element.meshAndMaterial(normalization: normalizationContext)
         let entity = ModelEntity(mesh: mesh, materials: [material])
-        if desc.contains("rtellipse") {
+        // Rotate cylinders (ellipses/circles) to be flat in XY plane
+        if desc.contains("ellipse") || desc.contains("circle") {
             entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
         }
         entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
@@ -989,8 +995,11 @@ class ElementViewModel: ObservableObject {
             entity.addChild(labelEntity)
         }
 
-        entity.generateCollisionShapes(recursive: true)
-        entity.components.set(InputTargetComponent())
+        // Only add interaction components for 3D diagrams
+        if !isGraph2D {
+            entity.generateCollisionShapes(recursive: true)
+            entity.components.set(InputTargetComponent())
+        }
         return entity
     }
 
@@ -1033,7 +1042,59 @@ class ElementViewModel: ObservableObject {
             connectionEntity.orientation = quat
         }
 
+        // Add arrow marker if markerEnd is present
+        if let markerEnd = edge.markerEnd, let markerShape = markerEnd.shape {
+            let arrowEntity = createArrowMarkerEntity(
+                markerShape: markerShape,
+                at: pos2,
+                direction: lineVector,
+                color: materialColor
+            )
+            connectionEntity.addChild(arrowEntity)
+        }
+
         return connectionEntity
+    }
+
+    /// Creates an arrow marker entity for edge endpoints
+    private func createArrowMarkerEntity(
+        markerShape: ShapeDTO,
+        at position: SIMD3<Float>,
+        direction: SIMD3<Float>,
+        color: UIColor
+    ) -> ModelEntity {
+        // Create a small triangle for the arrow head
+        let arrowSize: Float = 0.02
+        var descriptor = MeshDescriptor()
+
+        // Triangle vertices (pointing in +X direction initially)
+        let positions: [SIMD3<Float>] = [
+            SIMD3(0, arrowSize/2, 0),      // Top
+            SIMD3(0, -arrowSize/2, 0),     // Bottom
+            SIMD3(arrowSize, 0, 0)         // Tip
+        ]
+
+        descriptor.positions = .init(positions)
+        descriptor.primitives = .triangles([0, 1, 2])
+
+        let mesh = try! MeshResource.generate(from: [descriptor])
+        let material = SimpleMaterial(color: color, isMetallic: false)
+        let arrowEntity = ModelEntity(mesh: mesh, materials: [material])
+
+        // Position at the end of the line (relative to connection entity center)
+        let lineLength = simd_length(direction)
+        arrowEntity.position = SIMD3<Float>(0, lineLength/2, 0)
+
+        // Orient arrow to point along the line direction
+        if lineLength > 0 {
+            let normalizedDir = direction / lineLength
+            // Arrow needs to point in direction of line (from cylinder orientation)
+            // Since cylinder is along Y, and arrow tip is along X, rotate accordingly
+            let baseQuat = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(0, 0, 1)) // Rotate from X to Y
+            arrowEntity.orientation = baseQuat
+        }
+
+        return arrowEntity
     }
 
     private func createLabelEntity(text: String) -> Entity {
@@ -1042,16 +1103,18 @@ class ElementViewModel: ObservableObject {
         return ModelEntity(mesh: mesh, materials: [material])
     }
 
-    /// Creates a 2D RTlabel entity using the shape.text and shape.extent to size the text container.
+    /// Creates a 2D RTlabel/RSLabel entity using the shape.text or element.text and shape.extent or element.extent to size the text container.
     private func createRTLabelEntity(for element: ElementDTO, normalization: NormalizationContext) -> Entity {
-        guard let rawText = element.shape?.text,
-              !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              rawText.lowercased() != "nil" else {
+        // For RSLabel, text is at element level; for RTLabel, text is in shape
+        let rawText = element.text ?? element.shape?.text
+        guard let text = rawText,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              text.lowercased() != "nil" else {
             return ModelEntity()
         }
-        logger.log("RTlabel - rawText: \(rawText)")
-        // Build text mesh sized to shape.extent, thin and unlit for visibility
-        let extent = element.shape?.extent ?? []
+        logger.log("Label - rawText: \(text)")
+        // Build text mesh sized to shape.extent or element.extent, thin and unlit for visibility
+        let extent = element.extent ?? element.shape?.extent ?? []
         // Normalize extents into [-1…+1], interpreting extent[0]=width, extent[1]=height
         let w = extent.count > 0
             ? Float(extent[0] / normalization.globalRange)
@@ -1060,12 +1123,14 @@ class ElementViewModel: ObservableObject {
             ? Float(extent[1] / normalization.globalRange)
             : 0.05
 
-        let minframe = CGFloat(min(h, w))
-        logger.log("rawText: \(rawText) | w: \(w) | h: \(h) | minframe: \(minframe)")
+        // Use constant font size so all labels appear the same visual size
+        // The extent values represent bounding box, not desired visual size
+        let fontSize: CGFloat = 0.04  // Fixed size for uniform label appearance
+        logger.log("text: \(text) | w: \(w) | h: \(h) | fontSize: \(fontSize)")
         let mesh = MeshResource.generateText(
-            rawText,
-            extrusionDepth: 0.005,
-            font: .systemFont(ofSize: minframe),
+            text,
+            extrusionDepth: 0.001,  // Minimal depth for 2D labels
+            font: .systemFont(ofSize: fontSize),
             containerFrame: .zero,
             alignment: .center,
             lineBreakMode: .byWordWrapping
@@ -1086,11 +1151,19 @@ class ElementViewModel: ObservableObject {
         // Use unlit material so the text remains visible regardless of scene lighting
         let material = UnlitMaterial(color: materialColor)
         let labelEntity = ModelEntity(mesh: mesh, materials: [material])
-        // Orient label into XZ-plane so it faces camera in 2D mode, lift slightly to avoid z-fighting
-        labelEntity.position.y += 0.001
+
+        // Center the text mesh properly
+        // Text meshes are positioned at their baseline, so we need to offset to center them
+        let bounds = labelEntity.visualBounds(relativeTo: nil)
+        // Move the label so its visual center aligns with position (0, 0, 0)
+        // This ensures labels appear centered above their corresponding cylinders
+        labelEntity.position = SIMD3<Float>(
+            -bounds.center.x,  // Center horizontally
+            -bounds.center.y,  // Center vertically
+            0.001              // Slight Z offset to avoid z-fighting
+        )
         // Debug: print world transform and bounds
         debugLog("RTLabel [\(String(describing: element.id))] transform:\n\(labelEntity.transform.matrix)")
-        let bounds = labelEntity.visualBounds(relativeTo: nil)
         debugLog("RTLabel [\(String(describing: element.id))] bounds center: \(bounds.center), extents: \(bounds.extents)")
         return labelEntity
     }

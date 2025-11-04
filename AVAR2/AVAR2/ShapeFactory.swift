@@ -72,12 +72,18 @@ extension ElementDTO {
     }
     
     private func createMesh(normalization: NormalizationContext) -> MeshResource {
-        let desc = shape?.shapeDescription?.lowercased() ?? ""
-        let extent = shape?.extent ?? []
+        // RS shapes store type directly in element.type, not in shape.shapeDescription
+        let desc = (shape?.shapeDescription ?? type).lowercased()
+        // For RS shapes, extent is at element level, not in shape
+        let extent = shape?.extent ?? self.extent ?? []
         let normalized = createNormalizationFunction(extent: extent, normalization: normalization)
 
         if desc.contains("rt") {
             return createRTMesh(desc: desc, normalized: normalized)
+        } else if desc.contains("rs") {
+            return createRSMesh(desc: desc, normalized: normalized)
+        } else if desc.contains("rw") {
+            return create3DMesh(desc: desc, normalized: normalized)
         } else {
             return create3DMesh(desc: desc, normalized: normalized)
         }
@@ -105,6 +111,25 @@ extension ElementDTO {
             return createEmptyMesh()
         }
     }
+
+    private func createRSMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
+        // RS shapes (Roassal) - similar to RT but with slight differences
+        if desc.contains("label") {
+            return createRTLabel(normalized: normalized) // Reuse RT label
+        } else if desc.contains("box") {
+            return createRTBox(normalized: normalized) // Reuse RT box
+        } else if desc.contains("circle") {
+            return createRSCircle(normalized: normalized) // Use specialized RSCircle handler
+        } else if desc.contains("polygon") {
+            return createRSPolygon(normalized: normalized)
+        } else if desc.contains("composite") {
+            // Composite nodes are handled at the decoder level, shouldn't reach here
+            return createEmptyMesh()
+        } else {
+            print("⚠️ Unknown RS shape: '\(desc)' - using fallback")
+            return createEmptyMesh()
+        }
+    }
     
     private func create3DMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
         if desc.contains("cube") || desc.contains("box") {
@@ -124,14 +149,23 @@ extension ElementDTO {
     private func createRTBox(normalized: (Int, Double) -> Float) -> MeshResource {
         let w = normalized(0, 0.1)
         let h = normalized(1, 0.1)
-        let d = normalized(2, 0.01)
+        let d = normalized(2, 0.001)  // Minimal depth for 2D diagrams
         return MeshResource.generateBox(size: SIMD3(w, h, d))
     }
     
     private func createRTEllipse(normalized: (Int, Double) -> Float) -> MeshResource {
-        let h = normalized(0, 0.01)
+        let h = normalized(0, 0.001)  // Minimal depth for 2D diagrams
         let r = normalized(1, Double(h * 2))
         return MeshResource.generateCylinder(height: h, radius: r)
+    }
+
+    private func createRSCircle(normalized: (Int, Double) -> Float) -> MeshResource {
+        // RSCircle extent is [diameter, diameter], not [height, radius]
+        // Use extent[0] as diameter to calculate radius
+        let diameter = normalized(0, 0.05)  // Default to 0.05 if no extent
+        let radius = diameter / 2.0
+        let height: Float = 0.001  // Minimal depth for 2D diagrams
+        return MeshResource.generateCylinder(height: height, radius: radius)
     }
 
     private func createRTLabel(normalized: (Int, Double) -> Float) -> MeshResource {
@@ -140,11 +174,11 @@ extension ElementDTO {
         let w = normalized(0, 0.1)
         let h = normalized(1, 0.05)
 
-        // Try to create 3D text mesh
+        // Try to create 3D text mesh with minimal extrusion depth for 2D
         do {
             let textMesh = MeshResource.generateText(
                 text,
-                extrusionDepth: 0.01,
+                extrusionDepth: 0.001,  // Minimal depth for 2D diagrams
                 font: .systemFont(ofSize: 0.08),
                 containerFrame: .zero,
                 alignment: .center,
@@ -153,7 +187,7 @@ extension ElementDTO {
             return textMesh
         } catch {
             // Fallback to a small box if text generation fails
-            return MeshResource.generateBox(size: SIMD3(w, h, 0.01))
+            return MeshResource.generateBox(size: SIMD3(w, h, 0.001))
         }
     }
 
@@ -181,6 +215,37 @@ extension ElementDTO {
         return MeshResource.generateCone(height: h, radius: r)
     }
     
+    private func createRSPolygon(normalized: (Int, Double) -> Float) -> MeshResource {
+        // RSPolygon is used for arrow markers - create a simple triangle
+        guard let points = shape?.points, points.count >= 3 else {
+            // Fallback to a small triangle if no points specified
+            return createTriangleMesh(size: 0.02)
+        }
+
+        // For now, create a simple triangle mesh
+        // In a full implementation, you would use the points array to create a custom polygon
+        return createTriangleMesh(size: 0.02)
+    }
+
+    private func createTriangleMesh(size: Float) -> MeshResource {
+        // Create a simple triangle for arrow heads
+        var descriptor = MeshDescriptor()
+
+        // Triangle vertices (pointing right)
+        let positions: [SIMD3<Float>] = [
+            SIMD3(0, size/2, 0),      // Top
+            SIMD3(0, -size/2, 0),     // Bottom
+            SIMD3(size, 0, 0)         // Tip (right)
+        ]
+
+        descriptor.positions = .init(positions)
+
+        // Triangle indices
+        descriptor.primitives = .triangles([0, 1, 2])
+
+        return try! MeshResource.generate(from: [descriptor])
+    }
+
     private func createEmptyMesh() -> MeshResource {
         // Fallback cube for unrecognized shapes
         return MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
