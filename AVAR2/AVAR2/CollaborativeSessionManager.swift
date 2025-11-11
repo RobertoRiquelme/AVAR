@@ -37,6 +37,10 @@ import RealityKitContent
 /// - MultipeerConnectivity for devices without FaceTime
 /// - Manual anchor system for older OS versions
 ///
+///
+///
+///
+
 @MainActor
 class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published var isSessionActive = false
@@ -46,6 +50,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published var isHost = false
     @Published var lastError: String? = nil
     @Published var isSharePlayActive = false
+    @Published var pendingAlert: SessionAlert? = nil
     
     private var multipeerSession: MultipeerConnectivityService?
     #if os(iOS)
@@ -259,6 +264,10 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     /// Stop the collaborative session
     func stopSession() {
         print("🤝 Stopping collaborative session")
+    
+        let msg = SessionEndedMessage(byHost: UIDevice.current.name, reason: "Host ended the session", at: Date())
+        broadcast(.sessionEnded(msg))
+
         multipeerSession?.stop()
         
         // Don't pause the ARSession - let the ARView manage it
@@ -390,20 +399,20 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         var finalOrientation = worldOrientation
 
         #if os(visionOS)
-        // Convert device-relative position to anchor-relative for iOS compatibility
-        if let anchor = sharedAnchor {
-            if let devicePos = worldPosition {
-                let anchorInverse = anchor.transform.inverse
-                let devicePosWorld = SIMD4<Float>(devicePos.x, devicePos.y, devicePos.z, 1.0)
-                let anchorRelative = anchorInverse * devicePosWorld
-                finalPosition = SIMD3<Float>(anchorRelative.x, anchorRelative.y, anchorRelative.z)
-            }
+            // Convert device-relative position to anchor-relative for iOS compatibility
+            if let anchor = sharedAnchor {
+                if let devicePos = worldPosition {
+                    let anchorInverse = anchor.transform.inverse
+                    let devicePosWorld = SIMD4<Float>(devicePos.x, devicePos.y, devicePos.z, 1.0)
+                    let anchorRelative = anchorInverse * devicePosWorld
+                    finalPosition = SIMD3<Float>(anchorRelative.x, anchorRelative.y, anchorRelative.z)
+                }
 
-            if let deviceOrient = worldOrientation {
-                let anchorOrientInverse = simd_quatf(anchor.transform).inverse
-                finalOrientation = anchorOrientInverse * deviceOrient
+                if let deviceOrient = worldOrientation {
+                    let anchorOrientInverse = simd_quatf(anchor.transform).inverse
+                    finalOrientation = anchorOrientInverse * deviceOrient
+                }
             }
-        }
         #endif
 
         if let pos = finalPosition {
@@ -474,28 +483,27 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
     
     #if os(iOS)
-    private func startARSession() async {
-        // Don't create a new ARSession - the ARView already has one running
-        // Just enable collaboration data sharing
-        collaborationData = CollaborationData()
-        
-        print("🔧 AR collaboration enabled for \(getCurrentPlatform())")
-        print("ℹ️ Using existing ARSession from ARView - no new session needed")
-    }
-    
+        private func startARSession() async {
+            // Don't create a new ARSession - the ARView already has one running
+            // Just enable collaboration data sharing
+            collaborationData = CollaborationData()
+            
+            print("🔧 AR collaboration enabled for \(getCurrentPlatform())")
+            print("ℹ️ Using existing ARSession from ARView - no new session needed")
+        }
     #else
-    private func startARSession() async {
-        print("⚠️ AR not available on this platform")
-    }
+        private func startARSession() async {
+            print("⚠️ AR not available on this platform")
+        }
     #endif
     
     private func getCurrentPlatform() -> String {
         #if os(visionOS)
-        return "visionOS"
+            return "visionOS"
         #elseif os(iOS)
-        return "iOS"
+            return "iOS"
         #else
-        return "macOS"
+            return "macOS"
         #endif
     }
 
@@ -520,27 +528,27 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
     private func resendStateToSharePlay() {
         #if canImport(GroupActivities)
-        guard sharePlayCoordinator?.isActive == true else { return }
-        if let anchor = sharedAnchor,
-           let data = try? JSONEncoder().encode(SharedSpaceEnvelope.anchor(makeSharedAnchorMessage(from: anchor))) {
-            sendToSharePlay(data)
-        }
-        for diagram in sharedDiagrams {
-            if let data = try? JSONEncoder().encode(SharedSpaceEnvelope.diagram(diagram)) {
+            guard sharePlayCoordinator?.isActive == true else { return }
+            if let anchor = sharedAnchor,
+               let data = try? JSONEncoder().encode(SharedSpaceEnvelope.anchor(makeSharedAnchorMessage(from: anchor))) {
                 sendToSharePlay(data)
             }
-        }
+            for diagram in sharedDiagrams {
+                if let data = try? JSONEncoder().encode(SharedSpaceEnvelope.diagram(diagram)) {
+                    sendToSharePlay(data)
+                }
+            }
         #endif
     }
 
-#if canImport(GroupActivities)
-    private func sendToSharePlay(_ data: Data) {
-        guard sharePlayCoordinator?.isActive == true else { return }
-        Task { [weak self] in
-            await self?.sharePlayCoordinator?.send(data)
+    #if canImport(GroupActivities)
+        private func sendToSharePlay(_ data: Data) {
+            guard sharePlayCoordinator?.isActive == true else { return }
+            Task { [weak self] in
+                await self?.sharePlayCoordinator?.send(data)
+            }
         }
-    }
-#endif
+    #endif
 
     private func makeSharedAnchorMessage(from anchor: SharedWorldAnchor) -> SharedAnchorMessage {
         SharedAnchorMessage(anchorId: anchor.id,
@@ -607,13 +615,13 @@ private extension CollaborativeSessionManager {
             print("📡 Received shared anchor '\(anchorMsg.anchorId)' from \(source)")
 
         case .coordinate(let coordinateMsg):
-#if os(visionOS)
-            if #available(visionOS 26.0, *) {
-                sharedSpaceCoordinator?.pushCoordinateData(coordinateMsg)
-            }
-#else
-            print("ℹ️ Ignoring shared coordinate payload (unsupported platform)")
-#endif
+            #if os(visionOS)
+                if #available(visionOS 26.0, *) {
+                    sharedSpaceCoordinator?.pushCoordinateData(coordinateMsg)
+                }
+            #else
+                print("ℹ️ Ignoring shared coordinate payload (unsupported platform)")
+            #endif
 
         case .diagram(let sharedDiagram):
             if !sharedDiagrams.contains(where: { $0.id == sharedDiagram.id }) {
@@ -654,6 +662,14 @@ private extension CollaborativeSessionManager {
             sharedDiagrams = sharedDiagrams
             let after = sharedDiagrams.count
             print("🗑️ Received remove for '\(target)' from \(source). Removed \(before - after); now \(after).")
+            
+        case .arCollaboration(let blob):
+            #if os(iOS)
+                onCollaborationDataReceived?(blob)
+                print("📡 Received ARCollaborationData (\(blob.count) bytes) from \(source)")
+            #else
+                print("ℹ️ Ignoring ARCollaborationData payload on non-iOS platform")
+            #endif
 
         case .elementMoved(let p):
             if let dIndex = sharedDiagrams.firstIndex(where: { $0.filename == p.filename }) {
@@ -685,14 +701,28 @@ private extension CollaborativeSessionManager {
             } else {
                 print("⚠️ Received elementMoved for unknown diagram '\(p.filename)'")
             }
+            
+        case .sessionEnded(let info):
+            // Clear all shared state so AR views will remove content
+            sharedDiagrams.removeAll()
+            sharedDiagrams = sharedDiagrams // force Combine publish
+            sharedAnchor = nil
+            persistSharedAnchor(anchor: nil)
+            isSessionActive = false
+            sessionState = "Session ended by \(info.byHost)"
+            // 🛎️ surface a UI pop-up
+            pendingAlert = SessionAlert(
+                title: "Session Ended",
+                message: "The host (\(info.byHost)) ended the session. All shared diagrams were removed."
+            )
+            print("🛑 Session ended by \(info.byHost) from \(source)")
 
-        case .arCollaboration(let blob):
-#if os(iOS)
-            onCollaborationDataReceived?(blob)
-            print("📡 Received ARCollaborationData (\(blob.count) bytes) from \(source)")
-#else
-            print("ℹ️ Ignoring ARCollaborationData payload on non-iOS platform")
-#endif
+        case .participantLeft(let left):
+            // Keep session, just inform UI
+            pendingAlert = SessionAlert(title: "Participant Left",
+                                        message: "\(left.peerName) left the session.")
+            print("👋 Participant left: \(left.peerName) from \(source)")
+            
         }
     }
 }
@@ -778,6 +808,13 @@ extension CollaborativeSessionManager: @preconcurrency MultipeerConnectivityDele
             
         case .notConnected:
             connectedPeers.removeAll { $0 == peer }
+            
+            let msg = ParticipantLeftMessage(peerName: peer.displayName, at: Date())
+            broadcast(.participantLeft(msg))
+            // Optional: local pop-up too
+            pendingAlert = SessionAlert(title: "Participant Left",
+                                            message: "\(peer.displayName) left the session.")
+            
             if connectedPeers.isEmpty {
                 sessionState = isHost ? "Hosting - Waiting for peers" : "Searching for hosts..."
             } else {
@@ -960,6 +997,24 @@ struct SharedCoordinateSpaceMessage: Codable {
     let recipientIdentifiers: [UUID]
 }
 
+struct SessionEndedMessage: Codable {
+    let byHost: String
+    let reason: String?
+    let at: Date
+}
+
+struct ParticipantLeftMessage: Codable {
+    let peerName: String
+    let at: Date
+}
+
+struct SessionAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+
 enum SharedSpaceEnvelope: Codable {
     case anchor(SharedAnchorMessage)
     case coordinate(SharedCoordinateSpaceMessage)
@@ -967,7 +1022,9 @@ enum SharedSpaceEnvelope: Codable {
     case transform(UpdateDiagramTransformMessage)
     case remove(RemoveDiagramMessage)
     case arCollaboration(Data)
-    case elementMoved(ElementPositionMessage)   // 🆕
+    case elementMoved(ElementPositionMessage)
+    case sessionEnded(SessionEndedMessage)
+    case participantLeft(ParticipantLeftMessage)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -981,7 +1038,9 @@ enum SharedSpaceEnvelope: Codable {
         case transform
         case remove
         case arCollaboration
-        case elementMoved    // 🆕
+        case elementMoved
+        case sessionEnded
+        case participantLeft
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1005,9 +1064,15 @@ enum SharedSpaceEnvelope: Codable {
         case .arCollaboration(let data):
             try container.encode(EnvelopeType.arCollaboration, forKey: .type)
             try container.encode(data, forKey: .payload)
-        case .elementMoved(let msg):                               // 🆕
+        case .elementMoved(let msg):
             try container.encode(EnvelopeType.elementMoved, forKey: .type)
             try container.encode(msg, forKey: .payload)
+        case .sessionEnded(let m):
+            try container.encode(EnvelopeType.sessionEnded, forKey: .type)
+            try container.encode(m, forKey: .payload)
+        case .participantLeft(let m):
+            try container.encode(EnvelopeType.participantLeft, forKey: .type)
+            try container.encode(m, forKey: .payload)
         }
     }
 
@@ -1016,11 +1081,11 @@ enum SharedSpaceEnvelope: Codable {
         let envelopeType = try container.decode(EnvelopeType.self, forKey: .type)
         switch envelopeType {
         case .anchor:
-            let message = try container.decode(SharedAnchorMessage.self, forKey: .payload)
-            self = .anchor(message)
+            let msg = try container.decode(SharedAnchorMessage.self, forKey: .payload)
+            self = .anchor(msg)
         case .coordinate:
-            let message = try container.decode(SharedCoordinateSpaceMessage.self, forKey: .payload)
-            self = .coordinate(message)
+            let msg = try container.decode(SharedCoordinateSpaceMessage.self, forKey: .payload)
+            self = .coordinate(msg)
         case .diagram:
             let diagram = try container.decode(SharedDiagram.self, forKey: .payload)
             self = .diagram(diagram)
@@ -1034,8 +1099,15 @@ enum SharedSpaceEnvelope: Codable {
             let data = try container.decode(Data.self, forKey: .payload)
             self = .arCollaboration(data)
         case .elementMoved:
-            let msg = try container.decode(ElementPositionMessage.self, forKey: .payload)   // 🆕
+            let msg = try container.decode(ElementPositionMessage.self, forKey: .payload)
             self = .elementMoved(msg)
+        case .sessionEnded:
+            let msg = try container.decode(SessionEndedMessage.self, forKey: .payload)
+            self = .sessionEnded(msg)
+        case .participantLeft:
+            let msg = try container.decode(ParticipantLeftMessage.self, forKey: .payload)
+            self = .participantLeft(msg)
+        
         }
     }
 }

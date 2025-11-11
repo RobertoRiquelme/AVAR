@@ -91,7 +91,7 @@ struct PlatformApp: App {
 
 #if os(visionOS)
 struct VisionOSMainView: View {
-    let collaborativeSession: CollaborativeSessionManager
+    @ObservedObject var collaborativeSession: CollaborativeSessionManager
     @ObservedObject var sharedState: VisionOSAppState
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
@@ -695,6 +695,9 @@ struct VisionOSMainView: View {
                     }
                 }
             }
+            .alert(item: $collaborativeSession.pendingAlert) { a in
+                Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
+            }
         }
     
     private func validateJSON(_ text: String) {
@@ -726,7 +729,7 @@ private extension VisionOSMainView {
 
 struct VisionOSImmersiveView: View {
     @ObservedObject var sharedState: VisionOSAppState
-    let collaborativeSession: CollaborativeSessionManager
+    @ObservedObject var collaborativeSession: CollaborativeSessionManager
     let immersionStyle: ImmersionStyle
     @State private var showBackgroundOverlay = false
     @State private var savedPlaneViz: Bool? = nil
