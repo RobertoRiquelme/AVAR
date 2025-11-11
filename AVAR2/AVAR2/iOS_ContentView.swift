@@ -133,6 +133,10 @@ struct iOS_ContentView: View {
         .onReceive(collaborativeSession.$sharedAnchor) { anchor in
             arViewModel.handleSharedAnchorUpdate(anchor)
         }
+        .alert(item: $collaborativeSession.pendingAlert) { a in
+            Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
+        }
+
     }
 }
 
