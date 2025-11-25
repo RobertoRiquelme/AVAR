@@ -359,28 +359,40 @@ class ElementViewModel: ObservableObject {
         entityMap.removeAll()
         lineEntities.removeAll()
         let hoverEffectComponent = HoverEffectComponent()
-        
+
         debugLog("🔄 Creating and positioning \(self.elements.count) elements")
         var validElements = 0
-        
-        for element in self.elements {
+
+        // Sort elements by area (largest first) for TreeMap-style rendering
+        // This ensures smaller elements are rendered on top of larger ones
+        let sortedElements = self.elements.sorted { elem1, elem2 in
+            let area1 = calculateElementArea(elem1)
+            let area2 = calculateElementArea(elem2)
+            return area1 > area2  // Largest first
+        }
+
+        // Calculate Z increment per element for layered depth
+        let zIncrement: Float = 0.001
+        var currentZOffset: Float = 0
+
+        for element in sortedElements {
             // Skip edge/line elements - they don't need visual representation, only connection info
             if element.type.lowercased() == "edge" || element.shape?.shapeDescription?.lowercased() == "line" {
                 debugLog("🔗 Skipping edge/line element \(element.id ?? "unknown") - used for connections only")
                 continue
             }
-            
-            guard let coords = element.position else { 
+
+            guard let coords = element.position else {
                 logger.warning("⚠️ Element \(element.id ?? "unknown") has no position - skipping")
-                continue 
+                continue
             }
-            
+
             // Skip camera elements - they don't need visual representation
             if element.type.lowercased() == "camera" {
                 debugLog("📷 Skipping camera element \(element.id ?? "unknown")")
                 continue
             }
-            
+
             let entity = createEntity(for: element)
             var localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
 
@@ -390,6 +402,11 @@ class ElementViewModel: ObservableObject {
             if hasNoPaint {
                 localPos.z -= 0.003
             }
+
+            // Apply incremental Z offset for TreeMap-style layering
+            // Larger elements (processed first) get smaller Z, smaller elements get larger Z
+            localPos.z += currentZOffset
+            currentZOffset += zIncrement
 
             debugLog("📍 Element \(element.id ?? "unknown") positioned at \(localPos)")
 
@@ -401,8 +418,22 @@ class ElementViewModel: ObservableObject {
             debugLog("🗝️ Stored entity with key: '\(elementIdKey)' for element ID: \(element.id ?? "nil")")
             validElements += 1
         }
-        
+
         logger.info("✅ Successfully created \(validElements) out of \(self.elements.count) elements")
+    }
+
+    /// Calculate the area of an element from its extent
+    private func calculateElementArea(_ element: ElementDTO) -> Double {
+        // Try shape.extent first (RT elements)
+        if let extent = element.shape?.extent, extent.count >= 2 {
+            return extent[0] * extent[1]
+        }
+        // Try direct extent (RS elements)
+        if let extent = element.extent, extent.count >= 2 {
+            return extent[0] * extent[1]
+        }
+        // Default to 0 for elements without extent
+        return 0
     }
     
     private func calculateElementPosition(coords: [Double], normalizationContext: NormalizationContext) -> SIMD3<Float> {

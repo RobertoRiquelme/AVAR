@@ -749,8 +749,43 @@ struct VisionOSImmersiveView: View {
             }
         }
         .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
-            let shared = Set(diagrams.map { $0.filename })
-            sharedState.activeFiles.removeAll { !shared.contains($0) }
+            let sharedFilenames = Set(diagrams.map { $0.filename })
+            let currentFilenames = Set(sharedState.activeFiles)
+
+            // Remove diagrams that are no longer shared
+            sharedState.activeFiles.removeAll { !sharedFilenames.contains($0) }
+
+            // Add new shared diagrams that aren't already active
+            // Only add if we're not the host (host adds diagrams via Add Diagram button)
+            if !collaborativeSession.isHost {
+                for diagram in diagrams {
+                    if !currentFilenames.contains(diagram.filename) {
+                        // Save the diagram elements to a temporary file so ContentView can load them
+                        Task { @MainActor in
+                            do {
+                                let encoder = JSONEncoder()
+                                encoder.outputFormatting = .prettyPrinted
+                                // Create a simple dictionary that ScriptOutput can decode
+                                let diagramData: [String: Any] = ["elements": diagram.elements.map { element -> [String: Any] in
+                                    // Re-encode each element through JSONEncoder/JSONSerialization
+                                    let elementData = try! encoder.encode(element)
+                                    return try! JSONSerialization.jsonObject(with: elementData) as! [String: Any]
+                                }]
+                                let data = try JSONSerialization.data(withJSONObject: diagramData, options: .prettyPrinted)
+                                let tempURL = try DiagramStorage.fileURL(for: diagram.filename, withExtension: "txt")
+                                try data.write(to: tempURL)
+
+                                print("📥 Client: Adding shared diagram '\(diagram.filename)' with \(diagram.elements.count) elements")
+                                if !sharedState.activeFiles.contains(diagram.filename) {
+                                    sharedState.activeFiles.append(diagram.filename)
+                                }
+                            } catch {
+                                print("❌ Failed to save shared diagram '\(diagram.filename)': \(error)")
+                            }
+                        }
+                    }
+                }
+            }
         }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
