@@ -1191,36 +1191,56 @@ class ElementViewModel: ObservableObject {
         return containerEntity
     }
 
-    /// Creates an arrow head entity at the end of a line
+    /// Creates an arrow head entity at the end of a line as a small triangle
     private func createArrowHead(
         at position: SIMD3<Float>,
         direction: SIMD3<Float>,
         color: UIColor,
         markerEnd: MarkerDTO?
     ) -> ModelEntity {
-        // Determine arrow size from markerEnd or use default
+        // Determine arrow size from markerEnd or use default (smaller size)
         let arrowSize: Float
         if let extent = markerEnd?.shape?.extent, extent.count >= 2 {
-            // Use extent from marker shape, normalized
+            // Use extent from marker shape, normalized, scaled down
             let normContext = normalizationContext!
-            arrowSize = Float(extent[0] / normContext.globalRange * 2) * 0.5
+            arrowSize = Float(extent[0] / normContext.globalRange * 2) * 0.15
         } else {
-            arrowSize = 0.015
+            arrowSize = 0.004  // Much smaller default size
         }
 
-        // Create a cone for the arrow head
-        let mesh = MeshResource.generateCone(height: arrowSize * 2, radius: arrowSize)
+        // Create a triangle mesh for the arrow head (pointing in +Y direction initially)
+        // Triangle is flat in XY plane with small Z offset to appear in front
+        var descriptor = MeshDescriptor()
+        let arrowLength = arrowSize * 1.5
+        let trianglePositions: [SIMD3<Float>] = [
+            SIMD3(-arrowSize, 0, 0.002),           // Left base (slight Z offset to appear in front)
+            SIMD3(arrowSize, 0, 0.002),            // Right base
+            SIMD3(0, arrowLength, 0.002)           // Tip (pointing up in +Y)
+        ]
+        descriptor.positions = .init(trianglePositions)
+        descriptor.primitives = .triangles([0, 1, 2])
+
+        let mesh: MeshResource
+        do {
+            mesh = try MeshResource.generate(from: [descriptor])
+        } catch {
+            // Fallback to a small box if triangle generation fails
+            mesh = MeshResource.generateBox(size: SIMD3<Float>(arrowSize, arrowSize, 0.001))
+        }
+
         let material = SimpleMaterial(color: color, isMetallic: false)
         let arrowEntity = ModelEntity(mesh: mesh, materials: [material])
 
-        // Position at the endpoint
-        arrowEntity.position = position
+        // Position at the endpoint, slightly offset forward along Z to appear in front
+        var adjustedPosition = position
+        adjustedPosition.z += 0.003  // Small Z offset to render in front of other elements
+        arrowEntity.position = adjustedPosition
 
         // Orient arrow to point along the line direction
         let length = simd_length(direction)
         if length > 0 {
             let normalizedDir = direction / length
-            // Cone points up by default (Y axis), rotate to point along direction
+            // Triangle points up by default (Y axis), rotate to point along direction
             let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: normalizedDir)
             arrowEntity.orientation = quat
         }
