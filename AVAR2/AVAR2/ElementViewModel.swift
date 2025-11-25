@@ -382,9 +382,17 @@ class ElementViewModel: ObservableObject {
             }
             
             let entity = createEntity(for: element)
-            let localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
+            var localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
+
+            // Push back elements that have borderColor but no fill color (noPaint/hollow)
+            // to avoid z-fighting with other elements
+            let hasNoPaint = element.color == nil && element.borderColor != nil
+            if hasNoPaint {
+                localPos.z -= 0.003
+            }
+
             debugLog("📍 Element \(element.id ?? "unknown") positioned at \(localPos)")
-            
+
             entity.position = localPos
             entity.components.set(hoverEffectComponent)
             container.addChild(entity)
