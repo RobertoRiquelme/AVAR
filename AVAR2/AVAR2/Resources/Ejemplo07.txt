@@ -1,0 +1,399 @@
+{
+	"nodes" : [
+		{
+			"extent" : [
+				81.0,
+				81.0
+			],
+			"position" : [
+				0.0,
+				0.0
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"borderWidth" : 1,
+			"id" : 338788864,
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				161.0,
+				161.0
+			],
+			"position" : [
+				0.0,
+				0.0
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"borderWidth" : 1,
+			"id" : 1049319936,
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				241.0,
+				241.0
+			],
+			"position" : [
+				0.0,
+				0.0
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"borderWidth" : 1,
+			"id" : 786866944,
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				321.0,
+				321.0
+			],
+			"position" : [
+				0.0,
+				0.0
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"borderWidth" : 1,
+			"id" : 672456960,
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				401.0,
+				401.0
+			],
+			"position" : [
+				0.0,
+				0.0
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"color" : [
+				0.898,
+				0.922,
+				0.965,
+				1.0
+			],
+			"borderWidth" : 1,
+			"id" : 853849088,
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				86.307,
+				16.341
+			],
+			"position" : [
+				0.0,
+				-213.171
+			],
+			"fontName" : "Source Sans Pro",
+			"fontSize" : 10,
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			],
+			"id" : 86177792,
+			"type" : "RSLabel",
+			"text" : "processing cost"
+		},
+		{
+			"extent" : [
+				124.613,
+				16.341
+			],
+			"position" : [
+				257.273,
+				-71.519
+			],
+			"fontName" : "Source Sans Pro",
+			"fontSize" : 10,
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			],
+			"id" : 988591360,
+			"type" : "RSLabel",
+			"text" : "mechanical properties"
+		},
+		{
+			"extent" : [
+				97.867,
+				16.341
+			],
+			"position" : [
+				169.429,
+				174.019
+			],
+			"fontName" : "Source Sans Pro",
+			"fontSize" : 10,
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			],
+			"id" : 178036480,
+			"type" : "RSLabel",
+			"text" : "chemical stability"
+		},
+		{
+			"extent" : [
+				91.56,
+				16.341
+			],
+			"position" : [
+				-166.276,
+				174.019
+			],
+			"fontName" : "Source Sans Pro",
+			"fontSize" : 10,
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			],
+			"id" : 816817664,
+			"type" : "RSLabel",
+			"text" : "thermal stability"
+		},
+		{
+			"extent" : [
+				99.933,
+				16.341
+			],
+			"position" : [
+				-244.933,
+				-71.519
+			],
+			"fontName" : "Source Sans Pro",
+			"fontSize" : 10,
+			"color" : [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			],
+			"id" : 469292544,
+			"type" : "RSLabel",
+			"text" : "device integration"
+		},
+		{
+			"extent" : [
+				304.338,
+				126.525
+			],
+			"position" : [
+				38.042,
+				1.459
+			],
+			"points" : [
+				[
+					-38.042,
+					-41.459
+				],
+				[
+					152.169,
+					-63.262
+				],
+				[
+					8.981,
+					63.262
+				],
+				[
+					-85.065,
+					63.262
+				],
+				[
+					-152.169,
+					-38.541000000000004
+				]
+			],
+			"color" : [
+				0.121,
+				0.466,
+				0.706,
+				0.4
+			],
+			"id" : 768509696,
+			"type" : "RSPolygon"
+		}
+	],
+	"edges" : [
+		{
+			"points" : [
+				[
+					0.0,
+					0.0
+				],
+				[
+					0.0,
+					-200.0
+				]
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"from" : 742473984,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"to" : 742473984,
+			"borderWidth" : 1,
+			"id" : 306093312,
+			"type" : "RSLine"
+		},
+		{
+			"points" : [
+				[
+					0.0,
+					0.0
+				],
+				[
+					190.211,
+					-61.803000000000004
+				]
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"from" : 742473984,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"to" : 742473984,
+			"borderWidth" : 1,
+			"id" : 215635968,
+			"type" : "RSLine"
+		},
+		{
+			"points" : [
+				[
+					0.0,
+					0.0
+				],
+				[
+					117.557,
+					161.803
+				]
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"from" : 742473984,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"to" : 742473984,
+			"borderWidth" : 1,
+			"id" : 319091712,
+			"type" : "RSLine"
+		},
+		{
+			"points" : [
+				[
+					0.0,
+					0.0
+				],
+				[
+					-117.557,
+					161.803
+				]
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"from" : 742473984,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"to" : 742473984,
+			"borderWidth" : 1,
+			"id" : 710154496,
+			"type" : "RSLine"
+		},
+		{
+			"points" : [
+				[
+					0.0,
+					0.0
+				],
+				[
+					-190.211,
+					-61.803000000000004
+				]
+			],
+			"borderColor" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"from" : 742473984,
+			"color" : [
+				1.0,
+				1.0,
+				1.0,
+				1.0
+			],
+			"to" : 742473984,
+			"borderWidth" : 1,
+			"id" : 930274048,
+			"type" : "RSLine"
+		}
+	],
+	"id" : 187654912,
+	"type" : "RSCanvas"
+}

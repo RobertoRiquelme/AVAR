@@ -115,8 +115,8 @@ struct DiagramSceneBuilder {
         let buttonContainer = Entity()
         buttonContainer.name = "closeButton"
 
-        let buttonRadius: Float = 0.02
-        let buttonThickness: Float = 0.008
+        let buttonRadius: Float = Constants.CloseButton.radius
+        let buttonThickness: Float = Constants.CloseButton.thickness
         let buttonMesh = MeshResource.generateCylinder(height: buttonThickness, radius: buttonRadius)
         let buttonMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.8), isMetallic: false)
         let buttonEntity = ModelEntity(mesh: buttonMesh, materials: [buttonMaterial])
@@ -147,11 +147,11 @@ struct DiagramSceneBuilder {
 
     private func positionCloseButton(_ buttonContainer: Entity, bgWidth: Float, bgHeight: Float, bgDepth: Float, buttonRadius: Float) {
         let halfH = bgHeight / 2
-        let handleWidth: Float = bgWidth * 0.65
-        let handleHeight: Float = 0.018
-        let handleMargin: Float = 0.015
+        let handleWidth: Float = bgWidth * Constants.GrabHandle.widthMultiplier
+        let handleHeight: Float = Constants.GrabHandle.height
+        let handleMargin: Float = Constants.GrabHandle.margin
         let handlePosY = -halfH - handleHeight / 2 - handleMargin
-        let spacing: Float = 0.015
+        let spacing: Float = Constants.CloseButton.spacing
         let closePosX = -handleWidth / 2 - buttonRadius - spacing
         let closePosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
         buttonContainer.position = [closePosX, handlePosY, closePosZ]
@@ -159,14 +159,14 @@ struct DiagramSceneBuilder {
 
     private func createGrabHandle(bgWidth: Float, bgHeight: Float, bgDepth: Float) -> Entity {
         let halfH = bgHeight / 2
-        let handleWidth: Float = bgWidth * 0.65
-        let handleHeight: Float = 0.018
-        let handleThickness: Float = 0.008
-        let handleMargin: Float = 0.015
+        let handleWidth: Float = bgWidth * Constants.GrabHandle.widthMultiplier
+        let handleHeight: Float = Constants.GrabHandle.height
+        let handleThickness: Float = Constants.GrabHandle.thickness
+        let handleMargin: Float = Constants.GrabHandle.margin
         let handleContainer = Entity()
         handleContainer.name = "grabHandle"
 
-        let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness], cornerRadius: handleHeight * 0.4)
+        let handleMesh = MeshResource.generateBox(size: [handleWidth, handleHeight, handleThickness], cornerRadius: handleHeight * Constants.GrabHandle.cornerRadiusMultiplier)
         let handleMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)
         let handleEntity = ModelEntity(mesh: handleMesh, materials: [handleMaterial])
         handleContainer.addChild(handleEntity)
@@ -195,10 +195,10 @@ struct DiagramSceneBuilder {
         zoomHandleContainer.name = "zoomHandle"
 
         // Native visionOS zoom handle dimensions - wider for better usability
-        let handleThickness: Float = 0.008
-        let handleLength: Float = 0.08
-        let handleWidth: Float = 0.02
-        let cornerRadius: Float = handleWidth * 0.3
+        let handleThickness: Float = Constants.ZoomHandle.thickness
+        let handleLength: Float = Constants.ZoomHandle.length
+        let handleWidth: Float = Constants.ZoomHandle.width
+        let cornerRadius: Float = handleWidth * Constants.ZoomHandle.cornerRadiusMultiplier
 
         let horizontalMesh = MeshResource.generateBox(size: [handleLength, handleWidth, handleThickness], cornerRadius: cornerRadius)
         let horizontalMaterial = SimpleMaterial(color: .white.withAlphaComponent(0.7), isMetallic: false)
@@ -228,7 +228,7 @@ struct DiagramSceneBuilder {
 
         let halfW = bgWidth / 2
         let halfH = bgHeight / 2
-        let margin: Float = 0.02
+        let margin: Float = Constants.ZoomHandle.margin
         let zoomPosZ = isGraph2D ? Float(0.01) : (bgDepth / 2 + 0.01)
         zoomHandleContainer.position = [halfW - margin, -halfH + margin, zoomPosZ]
 

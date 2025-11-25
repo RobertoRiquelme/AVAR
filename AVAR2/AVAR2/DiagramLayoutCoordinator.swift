@@ -26,7 +26,7 @@ struct DiagramLayoutCoordinator {
     private let skipBehindUser: Bool
     private let maxSearchRadius: Int
 
-    init(spacing: Float = 0.9, skipBehindUser: Bool = true, maxSearchRadius: Int = 20) {
+    init(spacing: Float = Constants.defaultGridSpacing, skipBehindUser: Bool = true, maxSearchRadius: Int = Constants.maxLayoutSearchRadius) {
         self.spacing = spacing
         self.skipBehindUser = skipBehindUser
         self.maxSearchRadius = maxSearchRadius

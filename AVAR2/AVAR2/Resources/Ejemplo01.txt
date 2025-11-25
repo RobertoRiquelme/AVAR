@@ -1,0 +1,1546 @@
+{
+	"elements" : [
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-7,
+				-6,
+				0
+			],
+			"id" : 342427648,
+			"model" : "SequenceableCollection"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-5,
+				-6,
+				0
+			],
+			"id" : 1001465088,
+			"model" : "FLCompiledMethodClassMock"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWCylinder",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-3,
+				-6,
+				0
+			],
+			"id" : 724676352,
+			"model" : "MyCompiledMethodForTesting"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-1,
+				-6,
+				0
+			],
+			"id" : 184358400,
+			"model" : "LGitExternalUInt8Array"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				1,
+				-6,
+				0
+			],
+			"id" : 770500096,
+			"model" : "LGitExternalStringArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				3,
+				-6,
+				0
+			],
+			"id" : 471136000,
+			"model" : "LGitExternalCommitArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				5,
+				-6,
+				0
+			],
+			"id" : 614575360,
+			"model" : "FFITypeArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				7,
+				-6,
+				0
+			],
+			"id" : 847890432,
+			"model" : "WideSymbol"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-7,
+				-4,
+				0
+			],
+			"id" : 870777856,
+			"model" : "ByteSymbol"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-5,
+				-4,
+				0
+			],
+			"id" : 64784640,
+			"model" : "CompiledMethod"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-3,
+				-4,
+				0
+			],
+			"id" : 65268480,
+			"model" : "CompiledBlock"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-1,
+				-4,
+				0
+			],
+			"id" : 679361024,
+			"model" : "WDGFActorHandle"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				1,
+				-4,
+				0
+			],
+			"id" : 927949312,
+			"model" : "SymbolTableSemaphore"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				3,
+				-4,
+				0
+			],
+			"id" : 1020254976,
+			"model" : "LGitExternalArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				5,
+				-4,
+				0
+			],
+			"id" : 846227712,
+			"model" : "CairoGlyphsArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				7,
+				-4,
+				0
+			],
+			"id" : 841116672,
+			"model" : "FFIArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-7,
+				-2,
+				0
+			],
+			"id" : 840826880,
+			"model" : "SparseLargeArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-5,
+				-2,
+				0
+			],
+			"id" : 263646464,
+			"model" : "PointArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-3,
+				-2,
+				0
+			],
+			"id" : 851388160,
+			"model" : "WideString"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-1,
+				-2,
+				0
+			],
+			"id" : 599678464,
+			"model" : "Symbol"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				1,
+				-2,
+				0
+			],
+			"id" : 659217920,
+			"model" : "ByteString"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				3,
+				-2,
+				0
+			],
+			"id" : 609861376,
+			"model" : "SocketAddress"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				5,
+				-2,
+				0
+			],
+			"id" : 4728064,
+			"model" : "ExternalAddress"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				7,
+				-2,
+				0
+			],
+			"id" : 10096640,
+			"model" : "CompiledCode"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-7,
+				0,
+				0
+			],
+			"id" : 47053824,
+			"model" : "Cubic"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-5,
+				0,
+				0
+			],
+			"id" : 562057472,
+			"model" : "WeakActionSequence"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-3,
+				0,
+				0
+			],
+			"id" : 797139712,
+			"model" : "WeakArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-1,
+				0,
+				0
+			],
+			"id" : 452821504,
+			"model" : "RSGroup"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				1,
+				0,
+				0
+			],
+			"id" : 966744576,
+			"model" : "WeakOrderedCollection"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				3,
+				0,
+				0
+			],
+			"id" : 217228032,
+			"model" : "SortedCollection"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				5,
+				0,
+				0
+			],
+			"id" : 233365760,
+			"model" : "ObjectFinalizerCollection"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				7,
+				0,
+				0
+			],
+			"id" : 875607040,
+			"model" : "FreeTypeCacheLinkedList"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-7,
+				2,
+				0
+			],
+			"id" : 699856896,
+			"model" : "Stack"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-5,
+				2,
+				0
+			],
+			"id" : 729330944,
+			"model" : "Semaphore"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-3,
+				2,
+				0
+			],
+			"id" : 32546560,
+			"model" : "Text"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-1,
+				2,
+				0
+			],
+			"id" : 477865472,
+			"model" : "ShortIntegerArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				1,
+				2,
+				0
+			],
+			"id" : 973919744,
+			"model" : "FFIExternalArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				3,
+				2,
+				0
+			],
+			"id" : 551192320,
+			"model" : "Bitmap"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				5,
+				2,
+				0
+			],
+			"id" : 722640128,
+			"model" : "ColorArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				7,
+				2,
+				0
+			],
+			"id" : 321280000,
+			"model" : "DoubleByteArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-7,
+				4,
+				0
+			],
+			"id" : 983102464,
+			"model" : "WordArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-5,
+				4,
+				0
+			],
+			"id" : 266344704,
+			"model" : "SparseLargeTable"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-3,
+				4,
+				0
+			],
+			"id" : 29809408,
+			"model" : "IntegerArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWCylinder",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-1,
+				4,
+				0
+			],
+			"id" : 645450240,
+			"model" : "Float64Array"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				1,
+				4,
+				0
+			],
+			"id" : 72569344,
+			"model" : "Float32Array"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				3,
+				4,
+				0
+			],
+			"id" : 978414336,
+			"model" : "DoubleWordArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				5,
+				4,
+				0
+			],
+			"id" : 931485952,
+			"model" : "String"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				7,
+				4,
+				0
+			],
+			"id" : 331021312,
+			"model" : "ByteArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-7,
+				6,
+				0
+			],
+			"id" : 422834176,
+			"model" : "Array"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-5,
+				6,
+				0
+			],
+			"id" : 553024768,
+			"model" : "RunArray"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-3,
+				6,
+				0
+			],
+			"id" : 382080768,
+			"model" : "ProcessList"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				-1,
+				6,
+				0
+			],
+			"id" : 657780224,
+			"model" : "OrderedCollection"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				1,
+				6,
+				0
+			],
+			"id" : 70438400,
+			"model" : "LinkedList"
+		},
+		{
+			"shape" : {
+				"color" : [
+					1.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				3,
+				6,
+				0
+			],
+			"id" : 597118720,
+			"model" : "Interval"
+		},
+		{
+			"shape" : {
+				"color" : [
+					0.0,
+					1.0,
+					0.0,
+					1.0
+				],
+				"shapeDescription" : "RWBox",
+				"extent" : [
+					1,
+					1,
+					1
+				]
+			},
+			"extent" : [
+				1,
+				1,
+				1
+			],
+			"position" : [
+				5,
+				6,
+				0
+			],
+			"id" : 587273472,
+			"model" : "ArrayedCollection"
+		}
+	],
+	"id" : 462431232,
+	"type" : "RWView"
+}

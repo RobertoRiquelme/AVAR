@@ -1,0 +1,7207 @@
+{
+	"nodes" : [
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.0,
+				0.0
+			],
+			"extent" : [
+				200.0,
+				200.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "Morph",
+			"id" : 765344256
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.458,
+				82.351
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "BorderedMorph",
+			"id" : 791634432
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.148,
+				75.19500000000001
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PasteUpMorph",
+			"id" : 267377408
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.148,
+				75.19500000000001
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "WorldMorph",
+			"id" : 206596352
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-33.388,
+				75.19500000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensWorldMorph",
+			"id" : 859991040
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.907000000000004,
+				75.19500000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "OSWindowWorldMorph",
+			"id" : 234749952
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.527,
+				75.19500000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "OSWindowWorldMorphWithModel",
+			"id" : 517401856
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.287,
+				75.19500000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FormSGWorldMorph",
+			"id" : 815736576
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.287,
+				75.435
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FormSGAthensWorldMorph",
+			"id" : 551443968
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.287,
+				74.95400000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FormSGCanvasWorldMorph",
+			"id" : 657120768
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.148,
+				75.19500000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FormSGOSWindowGenericRendererWorldMorph",
+			"id" : 796507904
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.426,
+				75.19500000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FormSGAGPURendererWorldMorph",
+			"id" : 573056256
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.223,
+				75.19500000000001
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AlignmentMorph",
+			"id" : 968495104
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.223,
+				76.158
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DockingBarMorph",
+			"id" : 648936448
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.945,
+				76.158
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenubarMorph",
+			"id" : 681595136
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.501,
+				76.158
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ToolDockingBarMorph",
+			"id" : 895705856
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.223,
+				74.232
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenuMorph",
+			"id" : 270369280
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.223,
+				73.911
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DockingBarMenuMorph",
+			"id" : 25123328
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.988,
+				74.318
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "EmbeddedMenuMorph",
+			"id" : 269656832
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.988,
+				74.318
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubSegmentIconMenuMorph",
+			"id" : 935911680
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.458,
+				74.318
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenubarMenuMorph",
+			"id" : 626045952
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.667,
+				75.19500000000001
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenuTitleMorph",
+			"id" : 362215424
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.778,
+				75.19500000000001
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableButtonMorph",
+			"id" : 714650880
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-41.067,
+				74.94500000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ControlButtonMorph",
+			"id" : 265330432
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.718,
+				75.549
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableToggleButtonMorph",
+			"id" : 161195520
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.718,
+				75.549
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpToolbarToggleButtonMorph",
+			"id" : 166516224
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.718,
+				74.94500000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TaskbarItemMorph",
+			"id" : 469403392
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.544000000000004,
+				75.247
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPluggableButtonMorph",
+			"id" : 485661952
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.893,
+				75.247
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpToolbarButtonMorph",
+			"id" : 1011243008
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.779,
+				83.086
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CalendarMorph",
+			"id" : 779678720
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-41.741,
+				88.34700000000001
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "EllipseMorph",
+			"id" : 117446912
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.982,
+				88.34700000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CircleMorph",
+			"id" : 396811008
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.982,
+				88.34700000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CircleMorphCounter",
+			"id" : 194562560
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.501,
+				88.34700000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "HandleMorph",
+			"id" : 473125376
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.501,
+				88.34700000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "NewHandleMorph",
+			"id" : 762407680
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-32.629,
+				88.34700000000001
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FadingMorph",
+			"id" : 828725504
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-31.11,
+				80.456
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FastDraggingFrameMorph",
+			"id" : 886766592
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-32.629,
+				77.825
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "IconicListItemMorph",
+			"id" : 353628160
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-32.629,
+				77.825
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabLabelItemMorph",
+			"id" : 269909248
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-41.741,
+				77.825
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "IdentifierChooserMorph",
+			"id" : 883300096
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.26,
+				80.456
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ModelMorph",
+			"id" : 72674816
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.133,
+				80.621
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CheckboxMorph",
+			"id" : 605212160
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.133,
+				80.621
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TickSelectionCheckboxMorph",
+			"id" : 246894336
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.854,
+				79.371
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ColorPresenterMorph",
+			"id" : 618730752
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.854,
+				79.371
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ColorChooserMorph",
+			"id" : 894345216
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.576,
+				79.371
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ComposableMorph",
+			"id" : 1026026496
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.576,
+				79.163
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DiffChangeMorph",
+			"id" : 136044800
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.576,
+				79.163
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PSMCMergePatchMorph",
+			"id" : 512643840
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.576,
+				79.163
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "IceTipMergePatchMorph",
+			"id" : 303043072
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.423,
+				79.427
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DiffMorph",
+			"id" : 491473408
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.347,
+				79.427
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MergeDiffMorph",
+			"id" : 973878016
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.5,
+				79.427
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "UnifiedDiffChangesMorph",
+			"id" : 925225216
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.729,
+				79.427
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PSMCMergeMorph",
+			"id" : 333530112
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.729,
+				79.427
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "IceTipMergeMorph",
+			"id" : 712304640
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.298,
+				80.621
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DropListMorph",
+			"id" : 558908672
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.298,
+				80.413
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "EditableDropListMorph",
+			"id" : 488607488
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.298,
+				80.413
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SearchMorph",
+			"id" : 51000832
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.145,
+				80.677
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpDropListMorph",
+			"id" : 329041408
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.45,
+				80.677
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MorphDropListMorph",
+			"id" : 430970624
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.937,
+				81.246
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "GroupboxMorph",
+			"id" : 938708224
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.493,
+				81.246
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "IncrementalSliderMorph",
+			"id" : 382920704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.493,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ScrollPane",
+			"id" : 817554432
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.493,
+				79.788
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MorphTreeMorph",
+			"id" : 1039378688
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.493,
+				79.7
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LazyMorphTreeMorph",
+			"id" : 135908096
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.429,
+				79.812
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PaginatedMorphTreeMorph",
+			"id" : 360929792
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.558,
+				79.812
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TickSelectionListMorph",
+			"id" : 583483904
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.341,
+				80.052
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableListMorph",
+			"id" : 132315904
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.265,
+				80.052
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableMorphListMorph",
+			"id" : 118114560
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.265,
+				80.052
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableIconListMorph",
+			"id" : 878939136
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.417,
+				80.052
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableMultiColumnListMorph",
+			"id" : 867819520
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.646,
+				80.052
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SimpleHierarchicalListMorph",
+			"id" : 809897216
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.57,
+				80.052
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TreeListMorph",
+			"id" : 121440000
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.722,
+				80.052
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableTreeMorph",
+			"id" : 935034368
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.937,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SliderMorph",
+			"id" : 915062272
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.756,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableSliderMorph",
+			"id" : 249880320
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.756,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "BracketSliderMorph",
+			"id" : 338298112
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.666000000000004,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AColorSelectorMorph",
+			"id" : 315830272
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.847,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "HColorSelectorMorph",
+			"id" : 657579008
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.117000000000004,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ScrollBarMorph",
+			"id" : 981954816
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.117000000000004,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "GeneralScrollBarMorph",
+			"id" : 306791168
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-44.117000000000004,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubScrollBar",
+			"id" : 133341696
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.215,
+				81.246
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SystemWindow",
+			"id" : 178731520
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.035000000000004,
+				81.246
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CollapsedMorph",
+			"id" : 687194880
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.396,
+				81.246
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "StandardWindow",
+			"id" : 521322752
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.396,
+				81.142
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DialogWindowMorph",
+			"id" : 140628992
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.435,
+				81.108
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ColorSelectorDialogWindow",
+			"id" : 249747456
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.387,
+				81.191
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MessageDialogWindow",
+			"id" : 251122944
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.4,
+				81.203
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AlertDialogWindow",
+			"id" : 821985024
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.375,
+				81.203
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ChooseDropListDialogWindow",
+			"id" : 342410752
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.375,
+				81.181
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ErrorDialogWindow",
+			"id" : 719107584
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.4,
+				81.181
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LongMessageDialogWindow",
+			"id" : 5613312
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.4,
+				81.181
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AboutDialogWindow",
+			"id" : 931429632
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.388,
+				81.203
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ProceedDialogWindow",
+			"id" : 458192896
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.388,
+				81.203
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "QuestionDialogWindow",
+			"id" : 1049416704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.384,
+				81.203
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CustomQuestionDialogWindow",
+			"id" : 265763072
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.391,
+				81.203
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "QuestionWithoutCancelDialogWindow",
+			"id" : 991738624
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.388,
+				81.181
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TextEditorDialogWindow",
+			"id" : 459139584
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.388,
+				81.181
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TextEntryDialogWindow",
+			"id" : 854274560
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.388,
+				81.181
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PasswordDialogWindow",
+			"id" : 793021184
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.381,
+				81.19200000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DenyDialogWindow",
+			"id" : 1027553536
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.394,
+				81.19200000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ListDialogWindow",
+			"id" : 31202304
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.387,
+				81.108
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ModelDependentDialogWindow",
+			"id" : 435146752
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.375,
+				81.108
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableDialogWindow",
+			"id" : 258317568
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.399,
+				81.108
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PopupChoiceDialogWindow",
+			"id" : 409204480
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.393,
+				81.108
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PopupChoiceDialogWindowWithMessage",
+			"id" : 185732608
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.405,
+				81.108
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PopupChoiceOrRequestDialogWindow",
+			"id" : 244493824
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.363,
+				81.149
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubFindReplaceDialogWindow",
+			"id" : 159488
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.411,
+				81.149
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpDialogWindowMorph",
+			"id" : 537064704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.319,
+				81.274
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpWindow",
+			"id" : 575127552
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.319,
+				81.274
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpTickingSpecWindow",
+			"id" : 348900352
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.472,
+				81.274
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensTigerWindow",
+			"id" : 266535168
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.215,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabGroupMorph",
+			"id" : 9712384
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.215,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpNotebookMorph",
+			"id" : 29700608
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.215,
+				79.996
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyNotebookMorph",
+			"id" : 965945856
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.854,
+				80.621
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabSelectorMorph",
+			"id" : 751784704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.854,
+				80.621
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpNotebookTabSelectorMorph",
+			"id" : 529510656
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-43.576,
+				80.621
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ExampleBuilderMorph",
+			"id" : 315778048
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.704,
+				88.34700000000001
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PanelMorph",
+			"id" : 853592064
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.376,
+				89.493
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PlainGroupboxMorph",
+			"id" : 59729152
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.722,
+				88.36
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SeparatorMorph",
+			"id" : 997027584
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.376,
+				87.227
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabBarMorph",
+			"id" : 230118912
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.03,
+				87.227
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabLabelMorph",
+			"id" : 1068279296
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.683,
+				88.36
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabManagerMorph",
+			"id" : 535508736
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.356,
+				88.926
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpNotebookPanelMorph",
+			"id" : 195390720
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.049,
+				88.926
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPanelMorphWithSplitters",
+			"id" : 431753216
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.049,
+				87.794
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyBrowserMorph",
+			"id" : 133088256
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.885,
+				87.794
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyFullBrowserMorph",
+			"id" : 212519168
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.212,
+				87.794
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyQueryBrowserMorph",
+			"id" : 548383488
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.356,
+				87.794
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyStatusBarMorph",
+			"id" : 757627392
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.703,
+				88.926
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyToolbarMorph",
+			"id" : 1017061888
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.703,
+				87.794
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ExpanderMorph",
+			"id" : 865475328
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.376,
+				88.36
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ExpanderTitleMorph",
+			"id" : 67381504
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.03,
+				88.36
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "OverflowRowMorph",
+			"id" : 759475200
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.666000000000004,
+				88.34700000000001
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PolygonMorph",
+			"id" : 934658048
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.907000000000004,
+				88.34700000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "BalloonMorph",
+			"id" : 1031089408
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.907000000000004,
+				88.34700000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SimpleBalloonMorph",
+			"id" : 404416256
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-36.426,
+				88.34700000000001
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LineMorph",
+			"id" : 240688640
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-32.629,
+				83.086
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ProgressBarMorph",
+			"id" : 472555008
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-32.629,
+				83.086
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpIndeterminatedProgressBarMorph",
+			"id" : 839909120
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.666000000000004,
+				77.825
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SelectionMorph",
+			"id" : 946595072
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.704,
+				77.825
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SimpleButtonMorph",
+			"id" : 866930688
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.704,
+				78.788
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "IconicButtonMorph",
+			"id" : 905296896
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.704,
+				76.862
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenubarSeparatorMorph",
+			"id" : 405704960
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.148,
+				77.825
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TreeColumnButtonMorph",
+			"id" : 426713856
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.26,
+				77.825
+			],
+			"extent" : [
+				1.112,
+				1.112
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SimpleSwitchMorph",
+			"id" : 260555264
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-41.741,
+				83.086
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SystemProgressMorph",
+			"id" : 437197312
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.223,
+				85.717
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TextMorph",
+			"id" : 362341120
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.223,
+				85.717
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "GrowlMorph",
+			"id" : 681353472
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.148,
+				85.717
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ThumbnailMorph",
+			"id" : 53670912
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.148,
+				80.456
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "KMCatcherMorph",
+			"id" : 107919360
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-40.223,
+				80.456
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DiffMapMorph",
+			"id" : 253162752
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.185,
+				85.717
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyBrowserToolMorph",
+			"id" : 745299712
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.973,
+				85.034
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyTextEditorToolMorph",
+			"id" : 1056302592
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.973,
+				85.336
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyClassCreationToolMorph",
+			"id" : 34379264
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.973,
+				84.732
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyClassEditorToolMorph",
+			"id" : 141608704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.886,
+				84.732
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyClassDefinitionEditorToolMorph",
+			"id" : 609639680
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.06,
+				84.732
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyRichTextClassCommentEditorToolMorph",
+			"id" : 572037120
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.799,
+				85.034
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyMethodEditorToolMorph",
+			"id" : 1021359104
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.712,
+				85.034
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyMethodCodeEditorToolMorph",
+			"id" : 74340608
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.712,
+				85.034
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyTestSetUpEditorToolMorph",
+			"id" : 684890880
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.886,
+				85.034
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyMethodCreationToolMorph",
+			"id" : 451086848
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.148,
+				85.034
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyPackageRichTextCommentEditorToolMorph",
+			"id" : 803410432
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.021,
+				86.684
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyMethodDiffToolMorph",
+			"id" : 618113792
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.021,
+				85.034
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DABrowserToolMorph",
+			"id" : 190388480
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-36.544000000000004,
+				85.85900000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RSMapBrowserToolMorph",
+			"id" : 110967808
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.497,
+				85.85900000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RSAbstractUMLCalypso",
+			"id" : 1024176128
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.259,
+				85.85900000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RSUMLClassCalypso",
+			"id" : 175422720
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.259,
+				85.85900000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RSBaselineCalypso",
+			"id" : 912381696
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.735,
+				85.85900000000001
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RSUMLPackageCalypso",
+			"id" : 294596096
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.185,
+				80.456
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CavVisualPlaceHolderMorph",
+			"id" : 257068544
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-35.666000000000004,
+				83.086
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TreeNavigationBarMorph",
+			"id" : 890081024
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-34.907000000000004,
+				83.086
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TreeChunkPagerMorph",
+			"id" : 224711936
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-36.426,
+				83.086
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TreePagerMorph",
+			"id" : 385933312
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.704,
+				83.086
+			],
+			"extent" : [
+				3.037,
+				3.037
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AGPUMorph",
+			"id" : 984591360
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.945,
+				83.086
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AGPUSampleImmediateRendererCommon",
+			"id" : 594157824
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.945,
+				83.568
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AGPUSampleImmediateRenderer1",
+			"id" : 215618304
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.945,
+				82.605
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AGPUSampleImmediateRenderer2",
+			"id" : 20599296
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.667,
+				83.086
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AGPUSampleImmediateRenderer3",
+			"id" : 471534080
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-38.222,
+				83.086
+			],
+			"extent" : [
+				1.0,
+				1.0
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AGPUSampleImmediateRenderer4",
+			"id" : 861041408
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-39.463,
+				83.086
+			],
+			"extent" : [
+				1.5190000000000001,
+				1.5190000000000001
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AGPUSampleStateTracker1",
+			"id" : 708415744
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				82.351
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "HandMorph",
+			"id" : 696484864
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				82.351
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TransformMorph",
+			"id" : 965519360
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				76.922
+			],
+			"extent" : [
+				7.948,
+				7.948
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TransformationMorph",
+			"id" : 26117376
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				41.739000000000004,
+				83.805
+			],
+			"extent" : [
+				7.948,
+				7.948
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MorphTreeTransformMorph",
+			"id" : 872107776
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				33.791000000000004,
+				83.805
+			],
+			"extent" : [
+				7.948,
+				7.948
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TransformWithLayoutMorph",
+			"id" : 941913600
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.571,
+				49.778
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AbstractResizerMorph",
+			"id" : 570197504
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				62.282000000000004,
+				46.289
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CornerGripMorph",
+			"id" : 166090496
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				62.282000000000004,
+				48.008
+			],
+			"extent" : [
+				1.984,
+				1.984
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "BottomLeftGripMorph",
+			"id" : 831999232
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				62.282000000000004,
+				44.57
+			],
+			"extent" : [
+				1.984,
+				1.984
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "BottomRightGripMorph",
+			"id" : 73738240
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				63.274,
+				46.289
+			],
+			"extent" : [
+				1.984,
+				1.984
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TopLeftGripMorph",
+			"id" : 224568320
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				61.289,
+				46.289
+			],
+			"extent" : [
+				1.984,
+				1.984
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TopRightGripMorph",
+			"id" : 119662848
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				51.438,
+				46.289
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "EdgeGripMorph",
+			"id" : 59083520
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				52.794000000000004,
+				46.289
+			],
+			"extent" : [
+				2.711,
+				2.711
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "WindowEdgeGripMorph",
+			"id" : 881695232
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				50.083,
+				46.289
+			],
+			"extent" : [
+				2.711,
+				2.711
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPaginatorEdgeGripMorph",
+			"id" : 1018626560
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.86,
+				55.679
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTColumnResizerMorph",
+			"id" : 319372032
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.86,
+				46.289
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MorphTreeResizerMorph",
+			"id" : 54397184
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				59.571,
+				50.984
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ProportionalSplitterMorph",
+			"id" : 501599232
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				59.571,
+				50.984
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DiffJoinMorph",
+			"id" : 435265536
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				54.149,
+				50.984
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPanedResizerMorph",
+			"id" : 107236608
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				55.505,
+				50.984
+			],
+			"extent" : [
+				2.711,
+				2.711
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPanedResizerHorizontalMorph",
+			"id" : 590923520
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				52.794000000000004,
+				50.984
+			],
+			"extent" : [
+				2.711,
+				2.711
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPanedResizerVerticalMorph",
+			"id" : 615890432
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				75.377,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AnimatedImageMorph",
+			"id" : 403340800
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				84.78,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "BracketMorph",
+			"id" : 419110656
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				65.974,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTSelectableMorph",
+			"id" : 250463488
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				70.675,
+				-31.653000000000002
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTCellMorph",
+			"id" : 474312704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				70.675,
+				-34.367
+			],
+			"extent" : [
+				3.974,
+				3.974
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTHeaderColumnCellMorph",
+			"id" : 318348288
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				72.662,
+				-30.926000000000002
+			],
+			"extent" : [
+				3.974,
+				3.974
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTIndentedCellMorph",
+			"id" : 26587392
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				72.662,
+				-30.926000000000002
+			],
+			"extent" : [
+				3.974,
+				3.974
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpHeaderCellMorph",
+			"id" : 181732096
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				68.688,
+				-30.926000000000002
+			],
+			"extent" : [
+				3.974,
+				3.974
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyItemCellMorph",
+			"id" : 652009984
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				68.688,
+				-30.926000000000002
+			],
+			"extent" : [
+				3.974,
+				3.974
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyMainItemCellMorph",
+			"id" : 800520704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				61.273,
+				-31.653000000000002
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTTableRowMorph",
+			"id" : 368837376
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				61.273,
+				-31.653000000000002
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTTableHeaderRowMorph",
+			"id" : 342262016
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				-80.512
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTTableContainerMorph",
+			"id" : 365171712
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				-80.512
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTTableContainerRowNotHomogeneousMorph",
+			"id" : 1010472960
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				-80.512
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTTableMorph",
+			"id" : 720770304
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				-74.551
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTEasyListMorph",
+			"id" : 35274496
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				-86.473
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FTPluggableIconListMorphAdaptor",
+			"id" : 155387392
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				3.596,
+				-80.512
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpFTTableMorph",
+			"id" : 259814912
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-3.2880000000000003,
+				-80.512
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MicRichTextTable",
+			"id" : 877389568
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.458,
+				-80.512
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FullscreenMorph",
+			"id" : 594033920
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-56.263,
+				-47.939
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "GeneralScrollPaneMorph",
+			"id" : 279033856
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-51.562,
+				-47.939
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubTextScrollPane",
+			"id" : 695505920
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-60.965,
+				-47.939
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MillerScrollPaneMorph",
+			"id" : 616921344
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-84.47200000000001,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "GroupWindowMorph",
+			"id" : 550009600
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-84.47200000000001,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyGroupWindowMorph",
+			"id" : 170404352
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-65.666,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "HSVAColorSelectorMorph",
+			"id" : 320532992
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-46.86,
+				66.06400000000001
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "HSVColorSelectorMorph",
+			"id" : 237685504
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-9.249,
+				66.06400000000001
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "HaloMorph",
+			"id" : 464713984
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				47.168,
+				66.06400000000001
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ImageMorph",
+			"id" : 52321280
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				51.870000000000005,
+				66.06400000000001
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AlphaImageMorph",
+			"id" : 1046974464
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				42.467,
+				66.06400000000001
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ThreePhaseButtonMorph",
+			"id" : 21224704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				44.817,
+				66.06400000000001
+			],
+			"extent" : [
+				4.7010000000000005,
+				4.7010000000000005
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "CheckboxButtonMorph",
+			"id" : 245348096
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				44.817,
+				66.06400000000001
+			],
+			"extent" : [
+				4.7010000000000005,
+				4.7010000000000005
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TickSelectionCheckboxButtonMorph",
+			"id" : 399265280
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				40.116,
+				66.06400000000001
+			],
+			"extent" : [
+				4.7010000000000005,
+				4.7010000000000005
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableThreePhaseButtonMorph",
+			"id" : 642936320
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				65.974,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ImagePreviewMorph",
+			"id" : 769175296
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				75.377,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "JobProgressBarMorph",
+			"id" : 755414272
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.571,
+				-47.939
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "JobProgressMorph",
+			"id" : 326762496
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				47.168,
+				-64.226
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LazyListMorph",
+			"id" : 785615872
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				51.870000000000005,
+				-64.226
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LazyMorphListMorph",
+			"id" : 45170944
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				42.467,
+				-64.226
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MulticolumnLazyListMorph",
+			"id" : 56619776
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				9.557,
+				-64.226
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenuLineMorph",
+			"id" : 275739136
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				9.557,
+				-64.226
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DockingBarMenuLineMorph",
+			"id" : 81979904
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-46.86,
+				-64.226
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MorphTreeNodeMorph",
+			"id" : 227906304
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-42.159,
+				-64.226
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LazyMorphTreeNodeMorph",
+			"id" : 388198656
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-51.562,
+				-64.226
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TickSelectionListNodeMorph",
+			"id" : 401908736
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-65.666,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MorphicWindowManager",
+			"id" : 1048086528
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-75.069,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MultistateButtonMorph",
+			"id" : 458073344
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-70.368,
+				-15.367
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabActionButtonMorph",
+			"id" : 113848064
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-79.77,
+				-15.367
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyNotebookPageActionButtonMorph",
+			"id" : 38901248
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-56.263,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubAbstractTextArea",
+			"id" : 982279680
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-51.562,
+				17.206
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubEditingArea",
+			"id" : 396457728
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-60.965,
+				17.206
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubTextFieldArea",
+			"id" : 701050112
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-60.965,
+				17.206
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpRubTextFieldArea",
+			"id" : 382617600
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-28.055,
+				66.06400000000001
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubCursor",
+			"id" : 18252800
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				9.557,
+				66.06400000000001
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubScrolledTextExtra",
+			"id" : 760809728
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				14.258000000000001,
+				66.06400000000001
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubScrolledTextExtraSurface",
+			"id" : 815491840
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				14.258000000000001,
+				69.045
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubAdornmentDisplayer",
+			"id" : 733133312
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				14.258000000000001,
+				63.084
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubCodeSizeFeedback",
+			"id" : 588177920
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				15.979000000000001,
+				66.06400000000001
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubColumnDisplayer",
+			"id" : 641489664
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				12.537,
+				66.06400000000001
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubGhostTextDisplayer",
+			"id" : 79161600
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				4.855,
+				66.06400000000001
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubScrolledTextSideRuler",
+			"id" : 105311232
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				2.416,
+				63.952
+			],
+			"extent" : [
+				2.949,
+				2.949
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubAnnotationDisplayer",
+			"id" : 443383808
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				5.364,
+				69.059
+			],
+			"extent" : [
+				2.949,
+				2.949
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubDropListButtonRuler",
+			"id" : 185822464
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				5.364,
+				63.952
+			],
+			"extent" : [
+				2.949,
+				2.949
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubLineNumberDisplayer",
+			"id" : 680961792
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				6.839,
+				66.505
+			],
+			"extent" : [
+				2.949,
+				2.949
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubTextSegmentIconDisplayer",
+			"id" : 986897920
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				3.89,
+				66.505
+			],
+			"extent" : [
+				2.949,
+				2.949
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpMorphicLineMarkDisplayer",
+			"id" : 707419648
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				66.06400000000001
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubScrolledTextMorph",
+			"id" : 61226752
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				72.026
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubPluggableTextMorph",
+			"id" : 397387008
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				60.103
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubTextFieldMorph",
+			"id" : 211718144
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				30.083000000000002,
+				60.103
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubPluggableTextFieldMorph",
+			"id" : 1044216832
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				26.642,
+				60.103
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpRubTextFieldMorph",
+			"id" : 918343936
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				31.804000000000002,
+				66.06400000000001
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpRubScrolledTextMorph",
+			"id" : 645587712
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				24.921,
+				66.06400000000001
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MicScrolledTextMorph",
+			"id" : 233964032
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.571,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubSegmentMorph",
+			"id" : 194959872
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.571,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubTextSegmentMorph",
+			"id" : 706683648
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				62.282000000000004,
+				13.717
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubHighlightSegmentMorph",
+			"id" : 577790208
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				51.438,
+				13.717
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubHoverHighlightSegmentMorph",
+			"id" : 1389568
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.86,
+				23.107
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubPlainSegmentMorph",
+			"id" : 809924608
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.86,
+				23.107
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubPrimarySelectionMorph",
+			"id" : 580203776
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.86,
+				13.717
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubTextBackgroundColorSegmentMorph",
+			"id" : 839393024
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				59.571,
+				18.412
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubUnderlinedSegmentMorph",
+			"id" : 860890624
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				54.149,
+				18.412
+			],
+			"extent" : [
+				5.422,
+				5.422
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyCriticalTextSegmentMorph",
+			"id" : 321672704
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				65.974,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubTextSegmentIconBox",
+			"id" : 65472256
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				47.168,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SVColorSelectorMorph",
+			"id" : 884612352
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				-64.226
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "StringMorph",
+			"id" : 652924928
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				-58.264
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "EmbossedStringMorph",
+			"id" : 71857152
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				-70.187
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "IndentingListItemMorph",
+			"id" : 819763456
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				31.804000000000002,
+				-64.226
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LabelMorph",
+			"id" : 587094784
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				31.804000000000002,
+				-64.226
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "FuzzyLabelMorph",
+			"id" : 690833920
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				24.921,
+				-64.226
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenuItemMorph",
+			"id" : 479384064
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				26.642,
+				-64.226
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DockingBarMenuItemMorph",
+			"id" : 725478144
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				26.642,
+				-64.226
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenubarItemMorph",
+			"id" : 776788224
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				23.2,
+				-64.226
+			],
+			"extent" : [
+				3.442,
+				3.442
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ToggleMenuItemMorph",
+			"id" : 929004544
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				23.2,
+				-63.135
+			],
+			"extent" : [
+				1.26,
+				1.26
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DockingBarToggleMenuItemMorph",
+			"id" : 503541760
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				23.2,
+				-65.31700000000001
+			],
+			"extent" : [
+				1.26,
+				1.26
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RubSegmentIconMenuItemMorph",
+			"id" : 869465344
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				23.830000000000002,
+				-64.226
+			],
+			"extent" : [
+				1.26,
+				1.26
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "UpdatingMenuItemMorph",
+			"id" : 555587328
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				22.57,
+				-64.226
+			],
+			"extent" : [
+				1.26,
+				1.26
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpToggleMenuItemMorph",
+			"id" : 499740160
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-9.249,
+				-64.226
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SystemProgressItemMorph",
+			"id" : 328355328
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-28.055,
+				-64.226
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabBuildingIconMorph",
+			"id" : 711184128
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-46.86,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TabMorph",
+			"id" : 1055429888
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-46.86,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "LockableTabMorph",
+			"id" : 397615104
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-65.666,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TaskListMorph",
+			"id" : 825715712
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-46.86,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TaskbarMorph",
+			"id" : 767058176
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-46.86,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TaskbarMorphForManager",
+			"id" : 606458624
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.458,
+				49.778
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TransferMorph",
+			"id" : 795120128
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.458,
+				49.778
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpTransferMorph",
+			"id" : 871025152
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				49.778
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpAthensMorph",
+			"id" : 999863040
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				49.778
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpMorphicFrameLayoutMorph",
+			"id" : 642601216
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				47.168,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpMorphicToolbarMenuButtonMorph",
+			"id" : 505791488
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.571,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpNotebookPageMorph",
+			"id" : 27551744
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				56.571,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyNotebookPageMorph",
+			"id" : 281855232
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				-47.939
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPaginatorMorph",
+			"id" : 869732096
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				-47.939
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPaginatorPageMorph",
+			"id" : 742307328
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.458,
+				-47.939
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPaginatorSelectionMorph",
+			"id" : 157042176
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-56.263,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPopoverDeleteListenerMorph",
+			"id" : 152868608
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.458,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpPopoverMorph",
+			"id" : 876285184
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-18.652,
+				49.778
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpSpinnerMorph",
+			"id" : 284649472
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				18.96,
+				49.778
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "SpToolbarMorph",
+			"id" : 587883520
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MenuCapturingMorph",
+			"id" : 1062217984
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				47.168,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MorphHandlingMiddleButton",
+			"id" : 670124800
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				18.96,
+				-47.939
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "KeyPrinterMorph",
+			"id" : 311941632
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-18.652,
+				-47.939
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "NECDetailMorph",
+			"id" : 799457792
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-46.86,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "NECMenuMorph",
+			"id" : 758086400
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-28.055,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensSceneView",
+			"id" : 141674752
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-28.055,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensInteractiveScene",
+			"id" : 644353024
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensWrapMorph",
+			"id" : 959012864
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensWrapWorldMorph",
+			"id" : 193105152
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				37.765,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensDemoMorph",
+			"id" : 674531072
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "AthensFlakeDemo",
+			"id" : 279969280
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-28.055,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ReflectivityCodeMorph",
+			"id" : 311049728
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-37.458,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ReflectivitySourceCodeAgroupation",
+			"id" : 839999232
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-9.249,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "DelaySchedulerBackgroundWorkerMorph",
+			"id" : 313623808
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				9.557,
+				33.492
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "MockMorph",
+			"id" : 79147008
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				28.362000000000002,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "TestInWorldMorph",
+			"id" : 935418880
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				9.557,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyActivityAnimationIconMorph",
+			"id" : 933490944
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-9.249,
+				-31.653000000000002
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyBrowserToolbarItemMorph",
+			"id" : 744538880
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-9.249,
+				-37.082
+			],
+			"extent" : [
+				7.948,
+				7.948
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyBrowserButtonMorph",
+			"id" : 80159232
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-5.275,
+				-30.198
+			],
+			"extent" : [
+				7.948,
+				7.948
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyBrowserModeSwitchMorph",
+			"id" : 767998464
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-13.223,
+				-30.198
+			],
+			"extent" : [
+				7.948,
+				7.948
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyScopeCompoBoxMorph",
+			"id" : 302138112
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-28.055,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyQueryViewMorph",
+			"id" : 314196224
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-18.652,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyStatusBarItemMorph",
+			"id" : 36066304
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-18.652,
+				23.167
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyToolContextNavigatorMorph",
+			"id" : 580016128
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-18.652,
+				11.244
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyProtocolEditorMorph",
+			"id" : 905204992
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-15.21,
+				17.206
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyEditCommentSwitchMorph",
+			"id" : 1010171648
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-22.094,
+				17.206
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClySyntaxHelpMorph",
+			"id" : 1025328640
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				18.96,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyTextMorphToolMorph",
+			"id" : 219952640
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				18.96,
+				23.167
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyCursorPositionLabelMorph",
+			"id" : 927082240
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				18.96,
+				11.244
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyTextLineNumbersSwitchMorph",
+			"id" : 407633152
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				22.401,
+				17.206
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyTextWrapModeSwitchMorph",
+			"id" : 619968512
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				15.518,
+				17.206
+			],
+			"extent" : [
+				6.883,
+				6.883
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyFormatAsReadSwitchMorph",
+			"id" : 224154624
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				18.96,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyToolbarSeparatorMorph",
+			"id" : 682866944
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-18.652,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyMethodVisibilityMorph",
+			"id" : 796146432
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				17.206
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "ClyCritiqueMenuItemMorph",
+			"id" : 938633728
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				0.154,
+				-15.367
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "RSAthensMorph",
+			"id" : 206221824
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				9.557,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "PluggableTabButtonMorph",
+			"id" : 1007749888
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-9.249,
+				0.919
+			],
+			"extent" : [
+				18.806,
+				18.806
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "WDAbstractRenderingSceneStateMorph",
+			"id" : 52869376
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-4.548,
+				0.919
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "WDRenderingSceneStateMorph",
+			"id" : 593533952
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-13.950000000000001,
+				0.919
+			],
+			"extent" : [
+				9.403,
+				9.403
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "WDSceneMorph",
+			"id" : 467619840
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-11.6,
+				0.919
+			],
+			"extent" : [
+				4.7010000000000005,
+				4.7010000000000005
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "WDInteractiveSceneMorph",
+			"id" : 572660992
+		},
+		{
+			"type" : "RSCircle",
+			"position" : [
+				-16.301000000000002,
+				0.919
+			],
+			"extent" : [
+				4.7010000000000005,
+				4.7010000000000005
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"borderWidth" : 1,
+			"model" : "WDGFWorldMorph",
+			"id" : 769357568
+		}
+	],
+	"edges" : [ ],
+	"id" : 969140992,
+	"type" : "RSCanvas"
+}

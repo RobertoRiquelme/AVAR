@@ -10,6 +10,37 @@ import SwiftUI
 import simd
 import OSLog
 
+private let shapeFactoryLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ShapeFactory")
+
+/// Thread-safe cache for reusable mesh resources
+final class MeshCache: @unchecked Sendable {
+    static let shared = MeshCache()
+
+    private var cache: [String: MeshResource] = [:]
+    private let lock = NSLock()
+
+    private init() {}
+
+    func mesh(for key: String, generator: () -> MeshResource?) -> MeshResource? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let cached = cache[key] {
+            return cached
+        }
+
+        guard let newMesh = generator() else { return nil }
+        cache[key] = newMesh
+        return newMesh
+    }
+
+    func clearCache() {
+        lock.lock()
+        defer { lock.unlock() }
+        cache.removeAll()
+    }
+}
+
 /// Context for normalizing positions and extents based on the overall data range.
 struct NormalizationContext {
     /// True if the source JSON was 2D ("RTelements") rather than full 3D.
@@ -61,31 +92,52 @@ extension ElementDTO {
     }
     
     private func createMaterial() -> SimpleMaterial {
-        let rgba = self.color ?? self.shape?.color ?? [0.2, 0.4, 1.0, 1.0]
+        // Check for noPaint (null color or fully transparent)
+        let rgba = self.color ?? self.shape?.color
+
+        // If no color specified, use a semi-transparent default to allow borders to show
+        guard let components = rgba else {
+            return SimpleMaterial(color: UIColor(white: 0.5, alpha: 0.1), roughness: 0.5, isMetallic: false)
+        }
+
+        // Check if it's effectively transparent (noPaint equivalent)
+        let alpha = components.count > 3 ? components[3] : 1.0
+        if alpha < 0.01 {
+            // Near-zero alpha means noPaint - use minimal fill
+            return SimpleMaterial(color: UIColor(white: 0.5, alpha: 0.05), roughness: 0.5, isMetallic: false)
+        }
+
         let uiColor = UIColor(
-            red: CGFloat(rgba[0]),
-            green: CGFloat(rgba[1]),
-            blue: CGFloat(rgba[2]),
-            alpha: rgba.count > 3 ? CGFloat(rgba[3]) : 1.0
+            red: CGFloat(components[0]),
+            green: CGFloat(components[1]),
+            blue: CGFloat(components[2]),
+            alpha: CGFloat(alpha)
         )
         return SimpleMaterial(color: uiColor, roughness: 0.5, isMetallic: false)
     }
     
     private func createMesh(normalization: NormalizationContext) -> MeshResource {
         // RS shapes store type directly in element.type, not in shape.shapeDescription
-        let desc = (shape?.shapeDescription ?? type).lowercased()
+        // Check element.type first, then fall back to shape.shapeDescription
+        let elementType = type.lowercased()
+        let shapeDesc = (shape?.shapeDescription ?? "").lowercased()
+        let desc = shapeDesc.isEmpty ? elementType : shapeDesc
+
         // For RS shapes, extent is at element level, not in shape
         let extent = shape?.extent ?? self.extent ?? []
         let normalized = createNormalizationFunction(extent: extent, normalization: normalization)
 
-        if desc.contains("rt") {
-            return createRTMesh(desc: desc, normalized: normalized)
-        } else if desc.contains("rs") {
-            return createRSMesh(desc: desc, normalized: normalized)
-        } else if desc.contains("rw") {
-            return create3DMesh(desc: desc, normalized: normalized)
+        // Determine which mesh creator to use based on prefix
+        if elementType.hasPrefix("rt") || desc.hasPrefix("rt") {
+            return createRTMesh(desc: desc.isEmpty ? elementType : desc, normalized: normalized)
+        } else if elementType.hasPrefix("rs") {
+            // RS shapes - use elementType directly for shape detection
+            return createRSMesh(desc: elementType, normalized: normalized)
+        } else if elementType.hasPrefix("rw") || desc.hasPrefix("rw") {
+            return create3DMesh(desc: desc.isEmpty ? elementType : desc, normalized: normalized)
         } else {
-            return create3DMesh(desc: desc, normalized: normalized)
+            // Default to 3D mesh for unknown types
+            return create3DMesh(desc: desc.isEmpty ? elementType : desc, normalized: normalized)
         }
     }
     
@@ -113,22 +165,45 @@ extension ElementDTO {
     }
 
     private func createRSMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
-        // RS shapes (Roassal) - similar to RT but with slight differences
+        // RS shapes (Roassal) - type is directly in element.type like "RSCircle", "RSBox", etc.
         if desc.contains("label") {
-            return createRTLabel(normalized: normalized) // Reuse RT label
+            return createRTLabel(normalized: normalized)
         } else if desc.contains("box") {
-            return createRTBox(normalized: normalized) // Reuse RT box
+            return createRSBox(normalized: normalized)
         } else if desc.contains("circle") {
-            return createRSCircle(normalized: normalized) // Use specialized RSCircle handler
+            return createRSCircle(normalized: normalized)
+        } else if desc.contains("ellipse") {
+            return createRSEllipse(normalized: normalized)
         } else if desc.contains("polygon") {
             return createRSPolygon(normalized: normalized)
+        } else if desc.contains("polyline") || desc.contains("line") || desc.contains("bezier") {
+            // Lines are handled separately, return empty mesh (edges are drawn differently)
+            return createEmptyMesh()
         } else if desc.contains("composite") {
-            // Composite nodes are handled at the decoder level, shouldn't reach here
+            // Composite nodes are handled at the decoder level
             return createEmptyMesh()
         } else {
-            print("⚠️ Unknown RS shape: '\(desc)' - using fallback")
-            return createEmptyMesh()
+            shapeFactoryLogger.warning("Unknown RS shape: '\(desc)' - using fallback box")
+            return createRSBox(normalized: normalized)
         }
+    }
+
+    private func createRSBox(normalized: (Int, Double) -> Float) -> MeshResource {
+        // RSBox extent is [width, height]
+        let w = max(0.001, normalized(0, 0.05))
+        let h = max(0.001, normalized(1, 0.05))
+        let d: Float = 0.001  // Minimal depth for 2D diagrams
+        return MeshResource.generateBox(size: SIMD3(w, h, d))
+    }
+
+    private func createRSEllipse(normalized: (Int, Double) -> Float) -> MeshResource {
+        // RSEllipse extent is [width, height] - create a cylinder rotated to face forward
+        let w = max(0.01, normalized(0, 0.05))
+        let h = max(0.01, normalized(1, 0.05))
+        // Use average of width and height as radius, with minimum threshold
+        let radius = max(0.005, (w + h) / 4.0)
+        let depth: Float = 0.002
+        return MeshResource.generateCylinder(height: depth, radius: radius)
     }
     
     private func create3DMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
@@ -163,8 +238,8 @@ extension ElementDTO {
         // RSCircle extent is [diameter, diameter], not [height, radius]
         // Use extent[0] as diameter to calculate radius
         let diameter = normalized(0, 0.05)  // Default to 0.05 if no extent
-        let radius = diameter / 2.0
-        let height: Float = 0.001  // Minimal depth for 2D diagrams
+        let radius = max(0.005, diameter / 2.0)  // Minimum radius for visibility
+        let height: Float = 0.002  // Minimal depth for 2D diagrams
         return MeshResource.generateCylinder(height: height, radius: radius)
     }
 
@@ -195,24 +270,24 @@ extension ElementDTO {
         let w = max(0.01, normalized(0, 0.1))
         let h = max(0.01, normalized(1, 0.1))
         let d = max(0.01, normalized(2, 0.1))
-        return MeshResource.generateBox(size: SIMD3(w, h, d))
+        return cachedBox(size: SIMD3(w, h, d))
     }
 
     private func createSphere(normalized: (Int, Double) -> Float) -> MeshResource {
         let r = max(0.01, normalized(0, 0.05))
-        return MeshResource.generateSphere(radius: r)
+        return cachedSphere(radius: r)
     }
 
     private func createCylinder(normalized: (Int, Double) -> Float) -> MeshResource {
         let r = max(0.01, normalized(0, 0.05))
         let h = max(0.01, normalized(1, Double(r * 2)))
-        return MeshResource.generateCylinder(height: h, radius: r)
+        return cachedCylinder(height: h, radius: r)
     }
 
     private func createCone(normalized: (Int, Double) -> Float) -> MeshResource {
         let r = max(0.01, normalized(0, 0.05))
         let h = max(0.01, normalized(1, Double(r * 2)))
-        return MeshResource.generateCone(height: h, radius: r)
+        return cachedCone(height: h, radius: r)
     }
     
     private func createRSPolygon(normalized: (Int, Double) -> Float) -> MeshResource {
@@ -228,26 +303,70 @@ extension ElementDTO {
     }
 
     private func createTriangleMesh(size: Float) -> MeshResource {
-        // Create a simple triangle for arrow heads
-        var descriptor = MeshDescriptor()
+        let cacheKey = "triangle_\(size)"
+        if let cached = MeshCache.shared.mesh(for: cacheKey, generator: {
+            // Create a simple triangle for arrow heads
+            var descriptor = MeshDescriptor()
 
-        // Triangle vertices (pointing right)
-        let positions: [SIMD3<Float>] = [
-            SIMD3(0, size/2, 0),      // Top
-            SIMD3(0, -size/2, 0),     // Bottom
-            SIMD3(size, 0, 0)         // Tip (right)
-        ]
+            // Triangle vertices (pointing right)
+            let positions: [SIMD3<Float>] = [
+                SIMD3(0, size/2, 0),      // Top
+                SIMD3(0, -size/2, 0),     // Bottom
+                SIMD3(size, 0, 0)         // Tip (right)
+            ]
 
-        descriptor.positions = .init(positions)
+            descriptor.positions = .init(positions)
 
-        // Triangle indices
-        descriptor.primitives = .triangles([0, 1, 2])
+            // Triangle indices
+            descriptor.primitives = .triangles([0, 1, 2])
 
-        return try! MeshResource.generate(from: [descriptor])
+            do {
+                return try MeshResource.generate(from: [descriptor])
+            } catch {
+                shapeFactoryLogger.error("Failed to generate triangle mesh: \(error.localizedDescription)")
+                return nil
+            }
+        }) {
+            return cached
+        }
+        // Fallback if cache generation failed
+        return createEmptyMesh()
     }
 
     private func createEmptyMesh() -> MeshResource {
-        // Fallback cube for unrecognized shapes
-        return MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
+        let cacheKey = "fallback_box_0.1"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
+        }) ?? MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
+    }
+
+    // MARK: - Cached Mesh Generation Helpers
+
+    private func cachedBox(size: SIMD3<Float>) -> MeshResource {
+        let cacheKey = "box_\(size.x)_\(size.y)_\(size.z)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateBox(size: size)
+        }) ?? MeshResource.generateBox(size: size)
+    }
+
+    private func cachedSphere(radius: Float) -> MeshResource {
+        let cacheKey = "sphere_\(radius)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateSphere(radius: radius)
+        }) ?? MeshResource.generateSphere(radius: radius)
+    }
+
+    private func cachedCylinder(height: Float, radius: Float) -> MeshResource {
+        let cacheKey = "cylinder_\(height)_\(radius)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateCylinder(height: height, radius: radius)
+        }) ?? MeshResource.generateCylinder(height: height, radius: radius)
+    }
+
+    private func cachedCone(height: Float, radius: Float) -> MeshResource {
+        let cacheKey = "cone_\(height)_\(radius)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateCone(height: height, radius: radius)
+        }) ?? MeshResource.generateCone(height: height, radius: radius)
     }
 }

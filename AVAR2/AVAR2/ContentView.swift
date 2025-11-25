@@ -7,6 +7,9 @@
 
 import SwiftUI
 import RealityKit
+import OSLog
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ContentView")
 
 #if os(visionOS)
 import RealityKitContent
@@ -26,33 +29,20 @@ struct ContentView: View {
 
     var body: some View {
         RealityView { content in
-            print("🎨 RealityView make block called for: \(filename)")
+            logger.debug("RealityView make block called for: \(filename)")
             viewModel.loadElements(in: content, onClose: onClose)
         } update: { content in
-            print("🔄 RealityView update block called for: \(filename)")
+            logger.debug("RealityView update block called for: \(filename)")
             viewModel.updateConnections(in: content)
         }
         .task {
-            print("📋 ContentView task started for: \(filename)")
+            logger.debug("ContentView task started for: \(filename)")
             viewModel.setAppModel(appModel)
-            print("📋 About to load data for: \(filename)")
+            logger.debug("About to load data for: \(filename)")
             await viewModel.loadData(from: filename)
-            print("📋 Data load completed for: \(filename)")
+            logger.debug("Data load completed for: \(filename)")
 
-            // Throttler for collaborative sync (class to allow mutation in closure)
-            class UpdateThrottler {
-                var lastUpdateTime = ContinuousClock.now
-                let updateInterval: Duration = .milliseconds(16) // ~60 updates/sec for low-latency collaboration
-
-                func shouldUpdate() -> Bool {
-                    let now = ContinuousClock.now
-                    if lastUpdateTime.advanced(by: updateInterval) <= now {
-                        lastUpdateTime = now
-                        return true
-                    }
-                    return false
-                }
-            }
+            // Use shared throttler for collaborative sync
             let throttler = UpdateThrottler()
 
             // Set up transform change callback for collaborative sync
@@ -98,13 +88,13 @@ struct ContentView: View {
                         worldOrientation: transform.orientation,
                         worldScale: transform.scale
                     )
-                    print("📍 Shared diagram '\(filename)' at device-relative position: \(transform.position)")
+                    logger.info("Shared diagram '\(filename)' at device-relative position: \(String(describing: transform.position))")
                 } catch {
-                    print("❌ Failed to share diagram on initial load: \(error)")
+                    logger.error("Failed to share diagram on initial load: \(error.localizedDescription)")
                 }
             }
-            
-            print("📋 ContentView task completed for: \(filename)")
+
+            logger.debug("ContentView task completed for: \(filename)")
         }
         .gesture(
             DragGesture(minimumDistance: 5).targetedToAnyEntity()  // Small threshold like native visionOS

@@ -22,6 +22,34 @@ import ARKit
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel")
 private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
 
+/// Throttler for rate-limiting updates (e.g., collaborative sync)
+final class UpdateThrottler: @unchecked Sendable {
+    private var lastUpdateTime = ContinuousClock.now
+    private let updateInterval: Duration
+    private let lock = NSLock()
+
+    init(intervalMs: Int = Constants.collaborativeSyncIntervalMs) {
+        self.updateInterval = .milliseconds(intervalMs)
+    }
+
+    func shouldUpdate() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = ContinuousClock.now
+        if lastUpdateTime.advanced(by: updateInterval) <= now {
+            lastUpdateTime = now
+            return true
+        }
+        return false
+    }
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        lastUpdateTime = ContinuousClock.now
+    }
+}
+
 @MainActor
 class ElementViewModel: ObservableObject {
     @Published private(set) var elements: [ElementDTO] = []
@@ -81,7 +109,7 @@ class ElementViewModel: ObservableObject {
     /// Current surface the diagram is snapped to (if any)
     private var currentSnappedSurface: PlaneAnchor? = nil
     /// Snapping distance threshold
-    private let snapDistance: Float = 1.0  // 1 meter - focused on nearby surfaces
+    private let snapDistance: Float = Constants.snapDistance
 
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
@@ -121,8 +149,8 @@ class ElementViewModel: ObservableObject {
     private var alwaysShowSnapMessage = true
     
     // Enhanced surface detection constants
-    private let snapThreshold: Float = 1.0  // Distance threshold for snapping
-    private let releaseThreshold: Float = 1.0  // Distance threshold for releasing snap
+    private let snapThreshold: Float = Constants.snapThreshold
+    private let releaseThreshold: Float = Constants.releaseThreshold
     
     /// Set the AppModel reference for accessing shared surface anchors
     func setAppModel(_ appModel: AppModel) {
@@ -190,30 +218,27 @@ class ElementViewModel: ObservableObject {
     }
 
     func loadData(from filename: String) async {
-        print("🔍 ElementViewModel.loadData called for: \(filename)")
+        debugLog("ElementViewModel.loadData called for: \(filename)")
         self.filename = filename  // Store filename for position tracking
         rebuildPending = true
-        print("🔍 rebuildPending set to true, sceneContent is: \(sceneContent == nil ? "nil" : "set")")
+        debugLog("rebuildPending set to true, sceneContent is: \(self.sceneContent == nil ? "nil" : "set")")
         do {
-            print("🔍 About to call DiagramDataLoader for: \(filename)")
+            debugLog("About to call DiagramDataLoader for: \(filename)")
             let output = try DiagramDataLoader.loadScriptOutput(from: filename)
             self.elements = output.elements
             self.isGraph2D = output.is2D
             self.normalizationContext = NormalizationContext(elements: output.elements, is2D: output.is2D)
-            logger.log("Loaded \(output.elements.count, privacy: .public) elements (2D: \(output.is2D, privacy: .public)) from \(filename, privacy: .public)")
-            print("✅ Successfully loaded \(output.elements.count) elements")
-            print("🔍 About to call rebuildSceneIfNeeded")
+            logger.info("Loaded \(output.elements.count) elements (2D: \(output.is2D)) from \(filename)")
+            debugLog("About to call rebuildSceneIfNeeded")
             rebuildSceneIfNeeded()
-            print("🔍 rebuildSceneIfNeeded completed")
+            debugLog("rebuildSceneIfNeeded completed")
         } catch let error as DiagramLoadingError {
             let message = error.errorDescription ?? "Failed to load diagram"
             logger.error("\(message, privacy: .public)")
-            print("❌ DiagramLoadingError: \(message)")
             self.loadErrorMessage = message
         } catch {
             let msg = "Failed to load \(filename): \(error.localizedDescription)"
             logger.error("\(msg, privacy: .public)")
-            print("❌ General error: \(msg)")
             self.loadErrorMessage = msg
         }
     }
@@ -222,28 +247,28 @@ class ElementViewModel: ObservableObject {
     /// Creates and positions all element entities in the scene.
     /// - Parameter onClose: Optional callback to invoke when the close button is tapped.
     func loadElements(in content: RealityViewContent, onClose: (() -> Void)? = nil) {
-        print("🎯 loadElements called")
+        debugLog("loadElements called")
         pendingOnClose = onClose
         setupSceneContent(content)
         rebuildPending = true
-        print("🎯 rebuildPending set to true in loadElements")
+        debugLog("rebuildPending set to true in loadElements")
         rebuildSceneIfNeeded()
     }
 #endif
 
     private func rebuildSceneIfNeeded() {
-        print("🏗️ rebuildSceneIfNeeded called")
-        print("🏗️ rebuildPending: \(rebuildPending)")
-        print("🏗️ normalizationContext: \(normalizationContext == nil ? "nil" : "set")")
-        print("🏗️ sceneContent: \(sceneContent == nil ? "nil" : "set")")
+        debugLog("rebuildSceneIfNeeded called")
+        debugLog("rebuildPending: \(self.rebuildPending)")
+        debugLog("normalizationContext: \(self.normalizationContext == nil ? "nil" : "set")")
+        debugLog("sceneContent: \(self.sceneContent == nil ? "nil" : "set")")
         #if os(visionOS)
         guard rebuildPending,
               let normalizationContext = self.normalizationContext,
               let content = self.sceneContent else {
-            print("🏗️ Guard failed - scene rebuild skipped")
+            debugLog("Guard failed - scene rebuild skipped")
             return
         }
-        print("🏗️ All conditions met - proceeding with scene rebuild")
+        debugLog("All conditions met - proceeding with scene rebuild")
         rebuildPending = false
 
         if let existing = rootEntity {
@@ -283,8 +308,8 @@ class ElementViewModel: ObservableObject {
     }
     
     private func setupSceneContent(_ content: RealityViewContent) {
-        print("🎬 setupSceneContent called")
-        print("🎬 rebuildPending: \(rebuildPending)")
+        debugLog("setupSceneContent called")
+        debugLog("rebuildPending: \(self.rebuildPending)")
         self.sceneContent = content
 
         if let existing = rootEntity {
@@ -296,10 +321,10 @@ class ElementViewModel: ObservableObject {
 
         // If data was already loaded but scene wasn't ready, rebuild now
         if rebuildPending {
-            print("🎬 Data was already loaded, triggering rebuildSceneIfNeeded")
+            debugLog("Data was already loaded, triggering rebuildSceneIfNeeded")
             rebuildSceneIfNeeded()
         } else {
-            print("🎬 No rebuild pending")
+            debugLog("No rebuild pending")
         }
     }
     
@@ -565,7 +590,7 @@ class ElementViewModel: ObservableObject {
     }
     
     private func calculateNewPanPosition(gestureOffset: SIMD3<Float>) -> SIMD3<Float> {
-        let sensitivity: Float = 0.0008
+        let sensitivity: Float = Constants.panSensitivity
         let scaledGesture = gestureOffset * sensitivity
         return panStartPosition! + scaledGesture
     }
@@ -664,9 +689,9 @@ class ElementViewModel: ObservableObject {
         let diagonalMovement = distance * direction
         
         // Simple, direct scaling like native visionOS
-        let scaleSensitivity: Float = 0.001
+        let scaleSensitivity: Float = Constants.zoomScaleSensitivity
         let scaleFactor: Float = 1.0 + (diagonalMovement * scaleSensitivity)
-        let newScale = max(0.3, min(2.0, startScale * scaleFactor)) // Tighter bounds for better UX
+        let newScale = max(Constants.minZoomScale, min(Constants.maxZoomScale, startScale * scaleFactor))
         
         // Apply uniform scaling
         container.scale = SIMD3<Float>(repeating: newScale)
@@ -723,7 +748,7 @@ class ElementViewModel: ObservableObject {
         
         // Use horizontal movement for rotation
         let deltaX = currentPos.x - startPos.x
-        let rotationSensitivity: Float = 0.001  // Reduced sensitivity for more precise control
+        let rotationSensitivity: Float = Constants.rotationSensitivity
         let rotationDelta = deltaX * rotationSensitivity
         
         let newAngle = startAngle + rotationDelta
@@ -957,28 +982,41 @@ class ElementViewModel: ObservableObject {
         }
 
         // RS shapes store type directly in element.type, not in shape.shapeDescription
-        let desc = (element.shape?.shapeDescription ?? element.type).lowercased()
+        let elementType = element.type.lowercased()
+        let shapeDesc = (element.shape?.shapeDescription ?? "").lowercased()
+        let desc = shapeDesc.isEmpty ? elementType : shapeDesc
+
+        // Check if this is an RS or RT shape
+        let isRSShape = elementType.hasPrefix("rs")
+        let isRTShape = elementType.hasPrefix("rt")
+        let isCircle = elementType.contains("circle") || desc.contains("circle")
+        let isEllipse = elementType.contains("ellipse") || desc.contains("ellipse")
+        let isLabel = elementType.contains("label") || desc.contains("label")
+
+        // Performance optimization: skip per-element collision shapes for large datasets
+        let skipDetailedCollision = elements.count > 500
+
         // Special case: render RTlabel and RSLabel shapes as text-only entities using specified extents
-        logger.log("Create Entity - \(desc)")
-        if desc.contains("label") && (desc.contains("rt") || desc.contains("rs")) {
+        logger.log("Create Entity - type: \(elementType), desc: \(desc)")
+        if isLabel && (isRTShape || isRSShape) {
             let entity = createRTLabelEntity(for: element, normalization: normalizationContext)
             entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
 
-            // Only add interaction components for 3D diagrams
-            if !isGraph2D {
+            // Only add interaction components for 3D diagrams (skip for large datasets)
+            if !isGraph2D && !skipDetailedCollision {
                 entity.generateCollisionShapes(recursive: true)
                 entity.components.set(InputTargetComponent())
             }
             return entity
         }
 
-        // Special case: RSCircle with borderColor/borderWidth (hollow donut)
-        if desc.contains("circle") && desc.contains("rs") && element.borderColor != nil {
+        // Special case: RSCircle/RSEllipse with borderColor/borderWidth (hollow donut)
+        if (isCircle || isEllipse) && isRSShape && element.borderColor != nil {
             let entity = createHollowCircleEntity(for: element, normalization: normalizationContext)
             entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
 
-            // Only add interaction components for 3D diagrams
-            if !isGraph2D {
+            // Only add interaction components for 3D diagrams (skip for large datasets)
+            if !isGraph2D && !skipDetailedCollision {
                 entity.generateCollisionShapes(recursive: true)
                 entity.components.set(InputTargetComponent())
             }
@@ -988,10 +1026,18 @@ class ElementViewModel: ObservableObject {
         let (mesh, material) = element.meshAndMaterial(normalization: normalizationContext)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         // Rotate cylinders (ellipses/circles) to be flat in XY plane
-        if desc.contains("ellipse") || desc.contains("circle") {
+        if isCircle || isEllipse {
             entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
         }
         entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
+
+        // Add border ring for RSBox/RSCircle/RSEllipse with borderColor
+        if isRSShape && element.borderColor != nil && element.borderWidth != nil {
+            let borderEntity = createBorderEntity(for: element, normalization: normalizationContext)
+            if let border = borderEntity {
+                entity.addChild(border)
+            }
+        }
 
         // Add a label if meaningful for non-RTlabel shapes: skip if shape.text is "nil" or empty
         let rawText = element.shape?.text
@@ -1008,8 +1054,8 @@ class ElementViewModel: ObservableObject {
             entity.addChild(labelEntity)
         }
 
-        // Only add interaction components for 3D diagrams
-        if !isGraph2D {
+        // Only add interaction components for 3D diagrams (skip for performance on large datasets)
+        if !isGraph2D && !skipDetailedCollision {
             entity.generateCollisionShapes(recursive: true)
             entity.components.set(InputTargetComponent())
         }
@@ -1128,7 +1174,78 @@ class ElementViewModel: ObservableObject {
             containerEntity.addChild(segmentEntity)
         }
 
+        // Add arrow marker at the end if this is an RSArrowedLine
+        if edge.type.lowercased().contains("arrowed"), positions.count >= 2 {
+            let lastPos = positions[positions.count - 1]
+            let prevPos = positions[positions.count - 2]
+            let direction = lastPos - prevPos
+            let arrowEntity = createArrowHead(
+                at: lastPos,
+                direction: direction,
+                color: materialColor,
+                markerEnd: edge.markerEnd
+            )
+            containerEntity.addChild(arrowEntity)
+        }
+
         return containerEntity
+    }
+
+    /// Creates an arrow head entity at the end of a line as a small triangle
+    private func createArrowHead(
+        at position: SIMD3<Float>,
+        direction: SIMD3<Float>,
+        color: UIColor,
+        markerEnd: MarkerDTO?
+    ) -> ModelEntity {
+        // Determine arrow size from markerEnd or use default (smaller size)
+        let arrowSize: Float
+        if let extent = markerEnd?.shape?.extent, extent.count >= 2 {
+            // Use extent from marker shape, normalized, scaled down
+            let normContext = normalizationContext!
+            arrowSize = Float(extent[0] / normContext.globalRange * 2) * 0.15
+        } else {
+            arrowSize = 0.004  // Much smaller default size
+        }
+
+        // Create a triangle mesh for the arrow head (pointing in +Y direction initially)
+        // Triangle is flat in XY plane with small Z offset to appear in front
+        var descriptor = MeshDescriptor()
+        let arrowLength = arrowSize * 1.5
+        let trianglePositions: [SIMD3<Float>] = [
+            SIMD3(-arrowSize, 0, 0.002),           // Left base (slight Z offset to appear in front)
+            SIMD3(arrowSize, 0, 0.002),            // Right base
+            SIMD3(0, arrowLength, 0.002)           // Tip (pointing up in +Y)
+        ]
+        descriptor.positions = .init(trianglePositions)
+        descriptor.primitives = .triangles([0, 1, 2])
+
+        let mesh: MeshResource
+        do {
+            mesh = try MeshResource.generate(from: [descriptor])
+        } catch {
+            // Fallback to a small box if triangle generation fails
+            mesh = MeshResource.generateBox(size: SIMD3<Float>(arrowSize, arrowSize, 0.001))
+        }
+
+        let material = SimpleMaterial(color: color, isMetallic: false)
+        let arrowEntity = ModelEntity(mesh: mesh, materials: [material])
+
+        // Position at the endpoint, slightly offset forward along Z to appear in front
+        var adjustedPosition = position
+        adjustedPosition.z += 0.003  // Small Z offset to render in front of other elements
+        arrowEntity.position = adjustedPosition
+
+        // Orient arrow to point along the line direction
+        let length = simd_length(direction)
+        if length > 0 {
+            let normalizedDir = direction / length
+            // Triangle points up by default (Y axis), rotate to point along direction
+            let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: normalizedDir)
+            arrowEntity.orientation = quat
+        }
+
+        return arrowEntity
     }
 
     /// Creates an arrow marker entity for edge endpoints
@@ -1176,6 +1293,64 @@ class ElementViewModel: ObservableObject {
         let mesh = MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: 0.05), containerFrame: .zero, alignment: .center, lineBreakMode: .byWordWrapping)
         let material = SimpleMaterial(color: .white, isMetallic: false)
         return ModelEntity(mesh: mesh, materials: [material])
+    }
+
+    /// Creates a border entity for RS shapes (RSBox, RSCircle, RSEllipse) with borderColor
+    private func createBorderEntity(for element: ElementDTO, normalization: NormalizationContext) -> ModelEntity? {
+        let elementType = element.type.lowercased()
+        let extent = element.extent ?? element.shape?.extent ?? []
+
+        guard extent.count >= 2,
+              let borderRGBA = element.borderColor,
+              let borderWidth = element.borderWidth else {
+            return nil
+        }
+
+        let w = Float(extent[0] / normalization.globalRange * 2)
+        let h = Float(extent[1] / normalization.globalRange * 2)
+        let normalizedBorderWidth = Float(borderWidth / normalization.globalRange * 2)
+
+        let borderColor = UIColor(
+            red: CGFloat(borderRGBA[0]),
+            green: CGFloat(borderRGBA[1]),
+            blue: CGFloat(borderRGBA[2]),
+            alpha: borderRGBA.count > 3 ? CGFloat(borderRGBA[3]) : 1.0
+        )
+        let borderMaterial = SimpleMaterial(color: borderColor, roughness: 0.5, isMetallic: false)
+
+        if elementType.contains("box") {
+            // Create a wireframe border for boxes using 4 thin lines
+            let container = ModelEntity()
+            let halfW = w / 2.0
+            let halfH = h / 2.0
+            let depth: Float = 0.002
+
+            // Top edge
+            let topMesh = MeshResource.generateBox(size: SIMD3(w + normalizedBorderWidth, normalizedBorderWidth, depth))
+            let topEntity = ModelEntity(mesh: topMesh, materials: [borderMaterial])
+            topEntity.position = SIMD3(0, halfH, 0)
+            container.addChild(topEntity)
+
+            // Bottom edge
+            let bottomEntity = ModelEntity(mesh: topMesh, materials: [borderMaterial])
+            bottomEntity.position = SIMD3(0, -halfH, 0)
+            container.addChild(bottomEntity)
+
+            // Left edge
+            let sideMesh = MeshResource.generateBox(size: SIMD3(normalizedBorderWidth, h + normalizedBorderWidth, depth))
+            let leftEntity = ModelEntity(mesh: sideMesh, materials: [borderMaterial])
+            leftEntity.position = SIMD3(-halfW, 0, 0)
+            container.addChild(leftEntity)
+
+            // Right edge
+            let rightEntity = ModelEntity(mesh: sideMesh, materials: [borderMaterial])
+            rightEntity.position = SIMD3(halfW, 0, 0)
+            container.addChild(rightEntity)
+
+            return container
+        }
+
+        return nil
     }
 
     /// Creates a 2D RTlabel/RSLabel entity using the shape.text or element.text and shape.extent or element.extent to size the text container.

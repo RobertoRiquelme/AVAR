@@ -1,0 +1,41 @@
+Ejemplo 3
+-No se muestran bordes.
+-No aparecen flechas.
+-Al cargar 300 nodos, los enlaces desaparecen momentáneamente al hacer drag.
+-Con 3000 elementos, la aplicación no carga la visualización.
+-Las visualizaciones ya cargadas reciben el foco con la mirada, pero no reaccionan a interacciones.
+-La aplicación no se puede cerrar con “Quit app”; solo es posible cerrarla utilizando la “X” en la ventana.
+
+Ejemplo 5
+-Se muestra con un color de fondo que compite visualmente con las barras en profundidad.
+
+Ejemplo 6
+-También aparece con un color de fondo, pero en este caso no compite con la profundidad.
+
+Ejemplo 7
+-Se visualiza un cubo en el centro (que no debería existir).
+-No se muestran los círculos concéntricos ni las secciones circulares.
+-En lugar de la región coloreada, se ven líneas que delimitan un área, pero que parecen estar en una posición incorrecta.
+
+Ejemplo 8
+-Se muestra con un color de fondo.
+
+Ejemplo 11
+-Solo se muestran los labels (los cuadrados no aparecen).
+
+El texto diagonal no se visualiza; solo el texto horizontal.
+
+Ejemplo 13
+-Se ven cubos en lugar de círculos.
+-No se respeta el tamaño correspondiente del círculo.
+
+Ejemplo 14
+-Se ven cubos en lugar de círculos.
+-Se toma la posición inicial sin aplicar el layout resultante.
+-El círculo con la cruz para cerrar la visualización queda dentro de un cubo, por lo que no es posible cerrarla.
+
+Ejemplo 15
+
+-Se ven cubos en lugar de círculos.
+-No se considera el tamaño del círculo.
+-Aparecen dos cubos en el centro que no están presentes en la visualización en Pharo.

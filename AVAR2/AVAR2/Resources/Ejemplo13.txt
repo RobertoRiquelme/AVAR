@@ -1,0 +1,1301 @@
+{
+	"nodes" : [
+		{
+			"extent" : [
+				55.667,
+				55.667
+			],
+			"position" : [
+				-40.163000000000004,
+				98.57900000000001
+			],
+			"color" : [
+				0.534,
+				0.466,
+				0.0,
+				0.498
+			],
+			"id" : 729196800,
+			"model" : "RSAbstractLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				75.571,
+				75.571
+			],
+			"position" : [
+				-40.106,
+				-70.039
+			],
+			"color" : [
+				0.743,
+				0.257,
+				0.0,
+				0.498
+			],
+			"id" : 999213824,
+			"model" : "RSBoundingShape",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				12.238,
+				12.238
+			],
+			"position" : [
+				-84.743,
+				136.284
+			],
+			"color" : [
+				0.076,
+				0.924,
+				0.0,
+				0.498
+			],
+			"id" : 467032576,
+			"model" : "RSAbstractControlPointsLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				11.333,
+				11.333
+			],
+			"position" : [
+				8.099,
+				138.841
+			],
+			"color" : [
+				0.066,
+				0.934,
+				0.0,
+				0.498
+			],
+			"id" : 367804928,
+			"model" : "RSAbstractDualLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				8.619,
+				8.619
+			],
+			"position" : [
+				-66.443,
+				-99.696
+			],
+			"color" : [
+				0.038,
+				0.962,
+				0.0,
+				0.498
+			],
+			"id" : 168164096,
+			"model" : "RSBitmap",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				5.905,
+				5.905
+			],
+			"position" : [
+				3.491,
+				-121.93
+			],
+			"color" : [
+				0.01,
+				0.99,
+				0.0,
+				0.498
+			],
+			"id" : 249514240,
+			"model" : "RSBox",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				5.0,
+				5.0
+			],
+			"position" : [
+				-101.47,
+				-107.178
+			],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				0.498
+			],
+			"id" : 626428928,
+			"model" : "RSCircularShape",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				35.762,
+				35.762
+			],
+			"position" : [
+				39.337,
+				-58.762
+			],
+			"color" : [
+				0.324,
+				0.676,
+				0.0,
+				0.498
+			],
+			"id" : 356442112,
+			"model" : "RSComposite",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				45.714,
+				45.714
+			],
+			"position" : [
+				-87.377,
+				-51.985
+			],
+			"color" : [
+				0.428,
+				0.5720000000000001,
+				0.0,
+				0.498
+			],
+			"id" : 319360256,
+			"model" : "RSLabel",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				21.286,
+				21.286
+			],
+			"position" : [
+				-5.073,
+				-76.898
+			],
+			"color" : [
+				0.171,
+				0.8290000000000001,
+				0.0,
+				0.498
+			],
+			"id" : 930219776,
+			"model" : "RSPieSlice",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				17.667,
+				17.667
+			],
+			"position" : [
+				-37.391,
+				-120.348
+			],
+			"color" : [
+				0.133,
+				0.867,
+				0.0,
+				0.498
+			],
+			"id" : 525237760,
+			"model" : "RSPolygon",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				11.333,
+				11.333
+			],
+			"position" : [
+				-43.888,
+				-33.205
+			],
+			"color" : [
+				0.066,
+				0.934,
+				0.0,
+				0.498
+			],
+			"id" : 443530752,
+			"model" : "RSSVGPath",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				7.714,
+				7.714
+			],
+			"position" : [
+				-123.535,
+				168.737
+			],
+			"color" : [
+				0.028,
+				0.972,
+				0.0,
+				0.498
+			],
+			"id" : 508026624,
+			"model" : "RSBezier",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				6.8100000000000005,
+				6.8100000000000005
+			],
+			"position" : [
+				-122.048,
+				117.21900000000001
+			],
+			"color" : [
+				0.019,
+				0.981,
+				0.0,
+				0.498
+			],
+			"id" : 12518656,
+			"model" : "RSPolyline",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				5.0,
+				5.0
+			],
+			"position" : [
+				20.846,
+				187.148
+			],
+			"color" : [
+				0.0,
+				1.0,
+				0.0,
+				0.498
+			],
+			"id" : 1023815680,
+			"model" : "RSLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				8.619,
+				8.619
+			],
+			"position" : [
+				61.046,
+				141.318
+			],
+			"color" : [
+				0.038,
+				0.962,
+				0.0,
+				0.498
+			],
+			"id" : 561437696,
+			"model" : "RSSVGPathLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				19.476,
+				19.476
+			],
+			"position" : [
+				40.679,
+				-164.483
+			],
+			"color" : [
+				0.152,
+				0.848,
+				0.0,
+				0.498
+			],
+			"id" : 42627328,
+			"model" : "RSSankeyBox",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				7.714,
+				7.714
+			],
+			"position" : [
+				-152.337,
+				-122.172
+			],
+			"color" : [
+				0.028,
+				0.972,
+				0.0,
+				0.498
+			],
+			"id" : 255738624,
+			"model" : "RSCircle",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				5.905,
+				5.905
+			],
+			"position" : [
+				-120.186,
+				-157.212
+			],
+			"color" : [
+				0.01,
+				0.99,
+				0.0,
+				0.498
+			],
+			"id" : 12952064,
+			"model" : "RSEllipse",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				18.571,
+				18.571
+			],
+			"position" : [
+				110.178,
+				-53.484
+			],
+			"color" : [
+				0.14300000000000002,
+				0.857,
+				0.0,
+				0.498
+			],
+			"id" : 793524736,
+			"model" : "RSAbstractBandPlotShape",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				9.524000000000001,
+				9.524000000000001
+			],
+			"position" : [
+				-167.43200000000002,
+				174.774
+			],
+			"color" : [
+				0.048,
+				0.9520000000000001,
+				0.0,
+				0.498
+			],
+			"id" : 899203840,
+			"model" : "RSSankeyLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				5.905,
+				5.905
+			],
+			"position" : [
+				44.508,
+				224.79500000000002
+			],
+			"color" : [
+				0.01,
+				0.99,
+				0.0,
+				0.498
+			],
+			"id" : 6799616,
+			"model" : "RSArrowedLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				6.8100000000000005,
+				6.8100000000000005
+			],
+			"position" : [
+				108.011,
+				147.798
+			],
+			"color" : [
+				0.019,
+				0.981,
+				0.0,
+				0.498
+			],
+			"id" : 466932736,
+			"model" : "RSBimetricLine",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				8.619,
+				8.619
+			],
+			"position" : [
+				153.832,
+				-26.553
+			],
+			"color" : [
+				0.038,
+				0.962,
+				0.0,
+				0.498
+			],
+			"id" : 837277696,
+			"model" : "RSBarPlotShape",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				50.238,
+				50.238
+			],
+			"position" : [
+				119.032,
+				-11.654
+			],
+			"color" : [
+				0.47600000000000003,
+				0.524,
+				0.0,
+				0.498
+			],
+			"id" : 742053120,
+			"model" : "RSBoxPlotShape",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				26.714000000000002,
+				26.714000000000002
+			],
+			"position" : [
+				154.43200000000002,
+				-68.989
+			],
+			"color" : [
+				0.229,
+				0.771,
+				0.0,
+				0.498
+			],
+			"id" : 179535616,
+			"model" : "RSViolinPlotShape",
+			"type" : "RSEllipse"
+		},
+		{
+			"extent" : [
+				100.0,
+				100.0
+			],
+			"position" : [
+				-44.160000000000004,
+				13.926
+			],
+			"color" : [
+				1.0,
+				0.0,
+				0.0,
+				0.498
+			],
+			"id" : 242992640,
+			"model" : "RSShape",
+			"type" : "RSEllipse"
+		}
+	],
+	"edges" : [
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-44.160000000000004,
+					13.926
+				],
+				[
+					-40.163000000000004,
+					98.57900000000001
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 242992640,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 729196800,
+			"borderWidth" : 1,
+			"model" : "RSShape->RSAbstractLine",
+			"id" : 541177344
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-44.160000000000004,
+					13.926
+				],
+				[
+					-40.106,
+					-70.039
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 242992640,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 999213824,
+			"borderWidth" : 1,
+			"model" : "RSShape->RSBoundingShape",
+			"id" : 976791296
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.163000000000004,
+					98.57900000000001
+				],
+				[
+					-84.743,
+					136.284
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 729196800,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 467032576,
+			"borderWidth" : 1,
+			"model" : "RSAbstractLine->RSAbstractControlPointsLine",
+			"id" : 496598272
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.163000000000004,
+					98.57900000000001
+				],
+				[
+					8.099,
+					138.841
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 729196800,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 367804928,
+			"borderWidth" : 1,
+			"model" : "RSAbstractLine->RSAbstractDualLine",
+			"id" : 134379520
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					-66.443,
+					-99.696
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 168164096,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSBitmap",
+			"id" : 441570304
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					3.491,
+					-121.93
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 249514240,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSBox",
+			"id" : 844773632
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					-101.47,
+					-107.178
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 626428928,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSCircularShape",
+			"id" : 26327808
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					39.337,
+					-58.762
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 356442112,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSComposite",
+			"id" : 112257536
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					-87.377,
+					-51.985
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 319360256,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSLabel",
+			"id" : 152056320
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					-5.073,
+					-76.898
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 930219776,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSPieSlice",
+			"id" : 107449088
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					-37.391,
+					-120.348
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 525237760,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSPolygon",
+			"id" : 940849408
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-40.106,
+					-70.039
+				],
+				[
+					-43.888,
+					-33.205
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 999213824,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 443530752,
+			"borderWidth" : 1,
+			"model" : "RSBoundingShape->RSSVGPath",
+			"id" : 936320000
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-84.743,
+					136.284
+				],
+				[
+					-123.535,
+					168.737
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 467032576,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 508026624,
+			"borderWidth" : 1,
+			"model" : "RSAbstractControlPointsLine->RSBezier",
+			"id" : 1047842816
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-84.743,
+					136.284
+				],
+				[
+					-122.048,
+					117.21900000000001
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 467032576,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 12518656,
+			"borderWidth" : 1,
+			"model" : "RSAbstractControlPointsLine->RSPolyline",
+			"id" : 656973056
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					8.099,
+					138.841
+				],
+				[
+					20.846,
+					187.148
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 367804928,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 1023815680,
+			"borderWidth" : 1,
+			"model" : "RSAbstractDualLine->RSLine",
+			"id" : 463009536
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					8.099,
+					138.841
+				],
+				[
+					61.046,
+					141.318
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 367804928,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 561437696,
+			"borderWidth" : 1,
+			"model" : "RSAbstractDualLine->RSSVGPathLine",
+			"id" : 396692992
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					3.491,
+					-121.93
+				],
+				[
+					40.679,
+					-164.483
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 249514240,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 42627328,
+			"borderWidth" : 1,
+			"model" : "RSBox->RSSankeyBox",
+			"id" : 360164864
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-101.47,
+					-107.178
+				],
+				[
+					-152.337,
+					-122.172
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 626428928,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 255738624,
+			"borderWidth" : 1,
+			"model" : "RSCircularShape->RSCircle",
+			"id" : 610627328
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-101.47,
+					-107.178
+				],
+				[
+					-120.186,
+					-157.212
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 626428928,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 12952064,
+			"borderWidth" : 1,
+			"model" : "RSCircularShape->RSEllipse",
+			"id" : 1066923264
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					39.337,
+					-58.762
+				],
+				[
+					110.178,
+					-53.484
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 356442112,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 793524736,
+			"borderWidth" : 1,
+			"model" : "RSComposite->RSAbstractBandPlotShape",
+			"id" : 293257216
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					-123.535,
+					168.737
+				],
+				[
+					-167.43200000000002,
+					174.774
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 508026624,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 899203840,
+			"borderWidth" : 1,
+			"model" : "RSBezier->RSSankeyLine",
+			"id" : 303090688
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					20.846,
+					187.148
+				],
+				[
+					44.508,
+					224.79500000000002
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 1023815680,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 6799616,
+			"borderWidth" : 1,
+			"model" : "RSLine->RSArrowedLine",
+			"id" : 216400128
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					61.046,
+					141.318
+				],
+				[
+					108.011,
+					147.798
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 561437696,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 466932736,
+			"borderWidth" : 1,
+			"model" : "RSSVGPathLine->RSBimetricLine",
+			"id" : 277426944
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					110.178,
+					-53.484
+				],
+				[
+					153.832,
+					-26.553
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 793524736,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 837277696,
+			"borderWidth" : 1,
+			"model" : "RSAbstractBandPlotShape->RSBarPlotShape",
+			"id" : 530067968
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					110.178,
+					-53.484
+				],
+				[
+					119.032,
+					-11.654
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 793524736,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 742053120,
+			"borderWidth" : 1,
+			"model" : "RSAbstractBandPlotShape->RSBoxPlotShape",
+			"id" : 20457984
+		},
+		{
+			"type" : "RSLine",
+			"points" : [
+				[
+					110.178,
+					-53.484
+				],
+				[
+					154.43200000000002,
+					-68.989
+				]
+			],
+			"borderColor" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"from" : 793524736,
+			"color" : [
+				0.5,
+				0.5,
+				0.5,
+				1.0
+			],
+			"to" : 179535616,
+			"borderWidth" : 1,
+			"model" : "RSAbstractBandPlotShape->RSViolinPlotShape",
+			"id" : 242373376
+		}
+	],
+	"id" : 159376384,
+	"type" : "RSCanvas"
+}
