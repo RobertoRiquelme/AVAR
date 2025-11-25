@@ -982,28 +982,41 @@ class ElementViewModel: ObservableObject {
         }
 
         // RS shapes store type directly in element.type, not in shape.shapeDescription
-        let desc = (element.shape?.shapeDescription ?? element.type).lowercased()
+        let elementType = element.type.lowercased()
+        let shapeDesc = (element.shape?.shapeDescription ?? "").lowercased()
+        let desc = shapeDesc.isEmpty ? elementType : shapeDesc
+
+        // Check if this is an RS or RT shape
+        let isRSShape = elementType.hasPrefix("rs")
+        let isRTShape = elementType.hasPrefix("rt")
+        let isCircle = elementType.contains("circle") || desc.contains("circle")
+        let isEllipse = elementType.contains("ellipse") || desc.contains("ellipse")
+        let isLabel = elementType.contains("label") || desc.contains("label")
+
+        // Performance optimization: skip per-element collision shapes for large datasets
+        let skipDetailedCollision = elements.count > 500
+
         // Special case: render RTlabel and RSLabel shapes as text-only entities using specified extents
-        logger.log("Create Entity - \(desc)")
-        if desc.contains("label") && (desc.contains("rt") || desc.contains("rs")) {
+        logger.log("Create Entity - type: \(elementType), desc: \(desc)")
+        if isLabel && (isRTShape || isRSShape) {
             let entity = createRTLabelEntity(for: element, normalization: normalizationContext)
             entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
 
-            // Only add interaction components for 3D diagrams
-            if !isGraph2D {
+            // Only add interaction components for 3D diagrams (skip for large datasets)
+            if !isGraph2D && !skipDetailedCollision {
                 entity.generateCollisionShapes(recursive: true)
                 entity.components.set(InputTargetComponent())
             }
             return entity
         }
 
-        // Special case: RSCircle with borderColor/borderWidth (hollow donut)
-        if desc.contains("circle") && desc.contains("rs") && element.borderColor != nil {
+        // Special case: RSCircle/RSEllipse with borderColor/borderWidth (hollow donut)
+        if (isCircle || isEllipse) && isRSShape && element.borderColor != nil {
             let entity = createHollowCircleEntity(for: element, normalization: normalizationContext)
             entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
 
-            // Only add interaction components for 3D diagrams
-            if !isGraph2D {
+            // Only add interaction components for 3D diagrams (skip for large datasets)
+            if !isGraph2D && !skipDetailedCollision {
                 entity.generateCollisionShapes(recursive: true)
                 entity.components.set(InputTargetComponent())
             }
@@ -1013,10 +1026,18 @@ class ElementViewModel: ObservableObject {
         let (mesh, material) = element.meshAndMaterial(normalization: normalizationContext)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         // Rotate cylinders (ellipses/circles) to be flat in XY plane
-        if desc.contains("ellipse") || desc.contains("circle") {
+        if isCircle || isEllipse {
             entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
         }
         entity.name = element.id != nil ? "element_\(element.id!)" : "element_\(UUID().uuidString.prefix(8))"
+
+        // Add border ring for RSBox/RSCircle/RSEllipse with borderColor
+        if isRSShape && element.borderColor != nil && element.borderWidth != nil {
+            let borderEntity = createBorderEntity(for: element, normalization: normalizationContext)
+            if let border = borderEntity {
+                entity.addChild(border)
+            }
+        }
 
         // Add a label if meaningful for non-RTlabel shapes: skip if shape.text is "nil" or empty
         let rawText = element.shape?.text
@@ -1033,8 +1054,8 @@ class ElementViewModel: ObservableObject {
             entity.addChild(labelEntity)
         }
 
-        // Only add interaction components for 3D diagrams
-        if !isGraph2D {
+        // Only add interaction components for 3D diagrams (skip for performance on large datasets)
+        if !isGraph2D && !skipDetailedCollision {
             entity.generateCollisionShapes(recursive: true)
             entity.components.set(InputTargetComponent())
         }
@@ -1153,7 +1174,58 @@ class ElementViewModel: ObservableObject {
             containerEntity.addChild(segmentEntity)
         }
 
+        // Add arrow marker at the end if this is an RSArrowedLine
+        if edge.type.lowercased().contains("arrowed"), positions.count >= 2 {
+            let lastPos = positions[positions.count - 1]
+            let prevPos = positions[positions.count - 2]
+            let direction = lastPos - prevPos
+            let arrowEntity = createArrowHead(
+                at: lastPos,
+                direction: direction,
+                color: materialColor,
+                markerEnd: edge.markerEnd
+            )
+            containerEntity.addChild(arrowEntity)
+        }
+
         return containerEntity
+    }
+
+    /// Creates an arrow head entity at the end of a line
+    private func createArrowHead(
+        at position: SIMD3<Float>,
+        direction: SIMD3<Float>,
+        color: UIColor,
+        markerEnd: MarkerDTO?
+    ) -> ModelEntity {
+        // Determine arrow size from markerEnd or use default
+        let arrowSize: Float
+        if let extent = markerEnd?.shape?.extent, extent.count >= 2 {
+            // Use extent from marker shape, normalized
+            let normContext = normalizationContext!
+            arrowSize = Float(extent[0] / normContext.globalRange * 2) * 0.5
+        } else {
+            arrowSize = 0.015
+        }
+
+        // Create a cone for the arrow head
+        let mesh = MeshResource.generateCone(height: arrowSize * 2, radius: arrowSize)
+        let material = SimpleMaterial(color: color, isMetallic: false)
+        let arrowEntity = ModelEntity(mesh: mesh, materials: [material])
+
+        // Position at the endpoint
+        arrowEntity.position = position
+
+        // Orient arrow to point along the line direction
+        let length = simd_length(direction)
+        if length > 0 {
+            let normalizedDir = direction / length
+            // Cone points up by default (Y axis), rotate to point along direction
+            let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: normalizedDir)
+            arrowEntity.orientation = quat
+        }
+
+        return arrowEntity
     }
 
     /// Creates an arrow marker entity for edge endpoints
@@ -1201,6 +1273,64 @@ class ElementViewModel: ObservableObject {
         let mesh = MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: 0.05), containerFrame: .zero, alignment: .center, lineBreakMode: .byWordWrapping)
         let material = SimpleMaterial(color: .white, isMetallic: false)
         return ModelEntity(mesh: mesh, materials: [material])
+    }
+
+    /// Creates a border entity for RS shapes (RSBox, RSCircle, RSEllipse) with borderColor
+    private func createBorderEntity(for element: ElementDTO, normalization: NormalizationContext) -> ModelEntity? {
+        let elementType = element.type.lowercased()
+        let extent = element.extent ?? element.shape?.extent ?? []
+
+        guard extent.count >= 2,
+              let borderRGBA = element.borderColor,
+              let borderWidth = element.borderWidth else {
+            return nil
+        }
+
+        let w = Float(extent[0] / normalization.globalRange * 2)
+        let h = Float(extent[1] / normalization.globalRange * 2)
+        let normalizedBorderWidth = Float(borderWidth / normalization.globalRange * 2)
+
+        let borderColor = UIColor(
+            red: CGFloat(borderRGBA[0]),
+            green: CGFloat(borderRGBA[1]),
+            blue: CGFloat(borderRGBA[2]),
+            alpha: borderRGBA.count > 3 ? CGFloat(borderRGBA[3]) : 1.0
+        )
+        let borderMaterial = SimpleMaterial(color: borderColor, roughness: 0.5, isMetallic: false)
+
+        if elementType.contains("box") {
+            // Create a wireframe border for boxes using 4 thin lines
+            let container = ModelEntity()
+            let halfW = w / 2.0
+            let halfH = h / 2.0
+            let depth: Float = 0.002
+
+            // Top edge
+            let topMesh = MeshResource.generateBox(size: SIMD3(w + normalizedBorderWidth, normalizedBorderWidth, depth))
+            let topEntity = ModelEntity(mesh: topMesh, materials: [borderMaterial])
+            topEntity.position = SIMD3(0, halfH, 0)
+            container.addChild(topEntity)
+
+            // Bottom edge
+            let bottomEntity = ModelEntity(mesh: topMesh, materials: [borderMaterial])
+            bottomEntity.position = SIMD3(0, -halfH, 0)
+            container.addChild(bottomEntity)
+
+            // Left edge
+            let sideMesh = MeshResource.generateBox(size: SIMD3(normalizedBorderWidth, h + normalizedBorderWidth, depth))
+            let leftEntity = ModelEntity(mesh: sideMesh, materials: [borderMaterial])
+            leftEntity.position = SIMD3(-halfW, 0, 0)
+            container.addChild(leftEntity)
+
+            // Right edge
+            let rightEntity = ModelEntity(mesh: sideMesh, materials: [borderMaterial])
+            rightEntity.position = SIMD3(halfW, 0, 0)
+            container.addChild(rightEntity)
+
+            return container
+        }
+
+        return nil
     }
 
     /// Creates a 2D RTlabel/RSLabel entity using the shape.text or element.text and shape.extent or element.extent to size the text container.
