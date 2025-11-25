@@ -2,6 +2,9 @@
 import SwiftUI
 import RealityKit
 import ARKit
+import OSLog
+
+private let arLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "iOS_AR")
 
 struct iOS_ContentView: View {
     @StateObject private var arViewModel = ARViewModel()
@@ -172,22 +175,19 @@ class ARViewModel: NSObject, ObservableObject {
         self.arView = arView
         self.arSession = arView.session
         self.arSession?.delegate = self
-        
+
         // Configure AR session for world tracking
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]
         configuration.isCollaborationEnabled = true
         configuration.environmentTexturing = .automatic
-        // Add session delegate to monitor state changes
-        arView.session.delegate = self
 
         arView.session.run(configuration)
-        
+
         // Enable coaching overlay
         arView.debugOptions = []
-        
-        print("📱 AR session configured for iOS with collaboration enabled")
-        print("📱 ARSession delegate set to monitor session state")
+
+        arLogger.info("AR session configured for iOS with collaboration enabled")
     }
 
     func attachCollaborativeSession(_ session: CollaborativeSessionManager) {
@@ -720,36 +720,33 @@ extension Array {
 // MARK: - ARSessionDelegate
 extension ARViewModel: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
-        print("📱 ❌ ARSession failed with error: \(error)")
+        arLogger.error("ARSession failed with error: \(error.localizedDescription)")
     }
-    
+
     nonisolated func sessionWasInterrupted(_ session: ARSession) {
-        print("📱 🔴 ARSession was interrupted - camera frozen")
+        arLogger.warning("ARSession was interrupted - camera frozen")
     }
     
     nonisolated func sessionInterruptionEnded(_ session: ARSession) {
-        print("📱 🟢 ARSession interruption ended - camera should resume")
-        
-        // Automatically restart the session with the same configuration
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            Task { @MainActor in
-                self.restartARSession()
-            }
+        arLogger.info("ARSession interruption ended - camera should resume")
+
+        // Automatically restart the session with the same configuration after a brief delay
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            self.restartARSession()
         }
     }
     
     nonisolated func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
-        print("📱 ARCamera tracking state changed: \(camera.trackingState)")
-        
         switch camera.trackingState {
         case .normal:
-            print("📱 ✅ Camera tracking normally")
+            arLogger.debug("Camera tracking normally")
         case .limited(let reason):
-            print("📱 ⚠️ Camera tracking limited: \(reason)")
+            arLogger.warning("Camera tracking limited: \(String(describing: reason))")
         case .notAvailable:
-            print("📱 ❌ Camera tracking not available")
+            arLogger.error("Camera tracking not available")
         @unknown default:
-            print("📱 ❓ Unknown camera tracking state")
+            arLogger.warning("Unknown camera tracking state")
         }
     }
 

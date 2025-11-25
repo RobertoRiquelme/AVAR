@@ -10,6 +10,37 @@ import SwiftUI
 import simd
 import OSLog
 
+private let shapeFactoryLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ShapeFactory")
+
+/// Thread-safe cache for reusable mesh resources
+final class MeshCache: @unchecked Sendable {
+    static let shared = MeshCache()
+
+    private var cache: [String: MeshResource] = [:]
+    private let lock = NSLock()
+
+    private init() {}
+
+    func mesh(for key: String, generator: () -> MeshResource?) -> MeshResource? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let cached = cache[key] {
+            return cached
+        }
+
+        guard let newMesh = generator() else { return nil }
+        cache[key] = newMesh
+        return newMesh
+    }
+
+    func clearCache() {
+        lock.lock()
+        defer { lock.unlock() }
+        cache.removeAll()
+    }
+}
+
 /// Context for normalizing positions and extents based on the overall data range.
 struct NormalizationContext {
     /// True if the source JSON was 2D ("RTelements") rather than full 3D.
@@ -195,24 +226,24 @@ extension ElementDTO {
         let w = max(0.01, normalized(0, 0.1))
         let h = max(0.01, normalized(1, 0.1))
         let d = max(0.01, normalized(2, 0.1))
-        return MeshResource.generateBox(size: SIMD3(w, h, d))
+        return cachedBox(size: SIMD3(w, h, d))
     }
 
     private func createSphere(normalized: (Int, Double) -> Float) -> MeshResource {
         let r = max(0.01, normalized(0, 0.05))
-        return MeshResource.generateSphere(radius: r)
+        return cachedSphere(radius: r)
     }
 
     private func createCylinder(normalized: (Int, Double) -> Float) -> MeshResource {
         let r = max(0.01, normalized(0, 0.05))
         let h = max(0.01, normalized(1, Double(r * 2)))
-        return MeshResource.generateCylinder(height: h, radius: r)
+        return cachedCylinder(height: h, radius: r)
     }
 
     private func createCone(normalized: (Int, Double) -> Float) -> MeshResource {
         let r = max(0.01, normalized(0, 0.05))
         let h = max(0.01, normalized(1, Double(r * 2)))
-        return MeshResource.generateCone(height: h, radius: r)
+        return cachedCone(height: h, radius: r)
     }
     
     private func createRSPolygon(normalized: (Int, Double) -> Float) -> MeshResource {
@@ -228,26 +259,70 @@ extension ElementDTO {
     }
 
     private func createTriangleMesh(size: Float) -> MeshResource {
-        // Create a simple triangle for arrow heads
-        var descriptor = MeshDescriptor()
+        let cacheKey = "triangle_\(size)"
+        if let cached = MeshCache.shared.mesh(for: cacheKey, generator: {
+            // Create a simple triangle for arrow heads
+            var descriptor = MeshDescriptor()
 
-        // Triangle vertices (pointing right)
-        let positions: [SIMD3<Float>] = [
-            SIMD3(0, size/2, 0),      // Top
-            SIMD3(0, -size/2, 0),     // Bottom
-            SIMD3(size, 0, 0)         // Tip (right)
-        ]
+            // Triangle vertices (pointing right)
+            let positions: [SIMD3<Float>] = [
+                SIMD3(0, size/2, 0),      // Top
+                SIMD3(0, -size/2, 0),     // Bottom
+                SIMD3(size, 0, 0)         // Tip (right)
+            ]
 
-        descriptor.positions = .init(positions)
+            descriptor.positions = .init(positions)
 
-        // Triangle indices
-        descriptor.primitives = .triangles([0, 1, 2])
+            // Triangle indices
+            descriptor.primitives = .triangles([0, 1, 2])
 
-        return try! MeshResource.generate(from: [descriptor])
+            do {
+                return try MeshResource.generate(from: [descriptor])
+            } catch {
+                shapeFactoryLogger.error("Failed to generate triangle mesh: \(error.localizedDescription)")
+                return nil
+            }
+        }) {
+            return cached
+        }
+        // Fallback if cache generation failed
+        return createEmptyMesh()
     }
 
     private func createEmptyMesh() -> MeshResource {
-        // Fallback cube for unrecognized shapes
-        return MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
+        let cacheKey = "fallback_box_0.1"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
+        }) ?? MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
+    }
+
+    // MARK: - Cached Mesh Generation Helpers
+
+    private func cachedBox(size: SIMD3<Float>) -> MeshResource {
+        let cacheKey = "box_\(size.x)_\(size.y)_\(size.z)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateBox(size: size)
+        }) ?? MeshResource.generateBox(size: size)
+    }
+
+    private func cachedSphere(radius: Float) -> MeshResource {
+        let cacheKey = "sphere_\(radius)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateSphere(radius: radius)
+        }) ?? MeshResource.generateSphere(radius: radius)
+    }
+
+    private func cachedCylinder(height: Float, radius: Float) -> MeshResource {
+        let cacheKey = "cylinder_\(height)_\(radius)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateCylinder(height: height, radius: radius)
+        }) ?? MeshResource.generateCylinder(height: height, radius: radius)
+    }
+
+    private func cachedCone(height: Float, radius: Float) -> MeshResource {
+        let cacheKey = "cone_\(height)_\(radius)"
+        return MeshCache.shared.mesh(for: cacheKey, generator: {
+            MeshResource.generateCone(height: height, radius: radius)
+        }) ?? MeshResource.generateCone(height: height, radius: radius)
     }
 }

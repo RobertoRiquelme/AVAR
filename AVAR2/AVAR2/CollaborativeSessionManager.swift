@@ -3,6 +3,7 @@ import RealityKit
 import MultipeerConnectivity
 import Combine
 import simd
+import OSLog
 #if canImport(GroupActivities)
 import GroupActivities
 #endif
@@ -14,6 +15,8 @@ import ARKit
 #if os(visionOS)
 import RealityKitContent
 #endif
+
+private let collabLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "CollaborativeSession")
 
 /// Manages RealityKit collaborative sessions for multi-device diagram viewing
 ///
@@ -508,22 +511,37 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
 
     private func broadcast(_ envelope: SharedSpaceEnvelope, to peers: [MCPeerID]? = nil) {
-        guard let data = try? JSONEncoder().encode(envelope) else {
-            print("❌ Failed to encode SharedSpaceEnvelope \(envelope)")
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(envelope)
+        } catch {
+            collabLogger.error("Failed to encode SharedSpaceEnvelope: \(error.localizedDescription)")
+            lastError = "Failed to encode message: \(error.localizedDescription)"
             return
         }
+
+        var sendSucceeded = false
+
         if let peers = peers {
             if !peers.isEmpty {
                 multipeerSession?.sendData(data, to: peers)
+                sendSucceeded = true
             }
         } else if !connectedPeers.isEmpty {
             multipeerSession?.sendData(data, to: connectedPeers)
+            sendSucceeded = true
         }
+
         #if canImport(GroupActivities)
-        if peers == nil {
+        if peers == nil && sharePlayCoordinator?.isActive == true {
             sendToSharePlay(data)
+            sendSucceeded = true
         }
         #endif
+
+        if !sendSucceeded && peers == nil {
+            collabLogger.debug("No peers connected - message not sent")
+        }
     }
 
     private func resendStateToSharePlay() {

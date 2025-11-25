@@ -22,6 +22,34 @@ import ARKit
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel")
 private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
 
+/// Throttler for rate-limiting updates (e.g., collaborative sync)
+final class UpdateThrottler: @unchecked Sendable {
+    private var lastUpdateTime = ContinuousClock.now
+    private let updateInterval: Duration
+    private let lock = NSLock()
+
+    init(intervalMs: Int = Constants.collaborativeSyncIntervalMs) {
+        self.updateInterval = .milliseconds(intervalMs)
+    }
+
+    func shouldUpdate() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = ContinuousClock.now
+        if lastUpdateTime.advanced(by: updateInterval) <= now {
+            lastUpdateTime = now
+            return true
+        }
+        return false
+    }
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        lastUpdateTime = ContinuousClock.now
+    }
+}
+
 @MainActor
 class ElementViewModel: ObservableObject {
     @Published private(set) var elements: [ElementDTO] = []
@@ -81,7 +109,7 @@ class ElementViewModel: ObservableObject {
     /// Current surface the diagram is snapped to (if any)
     private var currentSnappedSurface: PlaneAnchor? = nil
     /// Snapping distance threshold
-    private let snapDistance: Float = 1.0  // 1 meter - focused on nearby surfaces
+    private let snapDistance: Float = Constants.snapDistance
 
     private var selectedEntity: Entity?
     /// Tracks which entity is currently being dragged
@@ -121,8 +149,8 @@ class ElementViewModel: ObservableObject {
     private var alwaysShowSnapMessage = true
     
     // Enhanced surface detection constants
-    private let snapThreshold: Float = 1.0  // Distance threshold for snapping
-    private let releaseThreshold: Float = 1.0  // Distance threshold for releasing snap
+    private let snapThreshold: Float = Constants.snapThreshold
+    private let releaseThreshold: Float = Constants.releaseThreshold
     
     /// Set the AppModel reference for accessing shared surface anchors
     func setAppModel(_ appModel: AppModel) {
@@ -190,30 +218,27 @@ class ElementViewModel: ObservableObject {
     }
 
     func loadData(from filename: String) async {
-        print("🔍 ElementViewModel.loadData called for: \(filename)")
+        debugLog("ElementViewModel.loadData called for: \(filename)")
         self.filename = filename  // Store filename for position tracking
         rebuildPending = true
-        print("🔍 rebuildPending set to true, sceneContent is: \(sceneContent == nil ? "nil" : "set")")
+        debugLog("rebuildPending set to true, sceneContent is: \(self.sceneContent == nil ? "nil" : "set")")
         do {
-            print("🔍 About to call DiagramDataLoader for: \(filename)")
+            debugLog("About to call DiagramDataLoader for: \(filename)")
             let output = try DiagramDataLoader.loadScriptOutput(from: filename)
             self.elements = output.elements
             self.isGraph2D = output.is2D
             self.normalizationContext = NormalizationContext(elements: output.elements, is2D: output.is2D)
-            logger.log("Loaded \(output.elements.count, privacy: .public) elements (2D: \(output.is2D, privacy: .public)) from \(filename, privacy: .public)")
-            print("✅ Successfully loaded \(output.elements.count) elements")
-            print("🔍 About to call rebuildSceneIfNeeded")
+            logger.info("Loaded \(output.elements.count) elements (2D: \(output.is2D)) from \(filename)")
+            debugLog("About to call rebuildSceneIfNeeded")
             rebuildSceneIfNeeded()
-            print("🔍 rebuildSceneIfNeeded completed")
+            debugLog("rebuildSceneIfNeeded completed")
         } catch let error as DiagramLoadingError {
             let message = error.errorDescription ?? "Failed to load diagram"
             logger.error("\(message, privacy: .public)")
-            print("❌ DiagramLoadingError: \(message)")
             self.loadErrorMessage = message
         } catch {
             let msg = "Failed to load \(filename): \(error.localizedDescription)"
             logger.error("\(msg, privacy: .public)")
-            print("❌ General error: \(msg)")
             self.loadErrorMessage = msg
         }
     }
@@ -222,28 +247,28 @@ class ElementViewModel: ObservableObject {
     /// Creates and positions all element entities in the scene.
     /// - Parameter onClose: Optional callback to invoke when the close button is tapped.
     func loadElements(in content: RealityViewContent, onClose: (() -> Void)? = nil) {
-        print("🎯 loadElements called")
+        debugLog("loadElements called")
         pendingOnClose = onClose
         setupSceneContent(content)
         rebuildPending = true
-        print("🎯 rebuildPending set to true in loadElements")
+        debugLog("rebuildPending set to true in loadElements")
         rebuildSceneIfNeeded()
     }
 #endif
 
     private func rebuildSceneIfNeeded() {
-        print("🏗️ rebuildSceneIfNeeded called")
-        print("🏗️ rebuildPending: \(rebuildPending)")
-        print("🏗️ normalizationContext: \(normalizationContext == nil ? "nil" : "set")")
-        print("🏗️ sceneContent: \(sceneContent == nil ? "nil" : "set")")
+        debugLog("rebuildSceneIfNeeded called")
+        debugLog("rebuildPending: \(self.rebuildPending)")
+        debugLog("normalizationContext: \(self.normalizationContext == nil ? "nil" : "set")")
+        debugLog("sceneContent: \(self.sceneContent == nil ? "nil" : "set")")
         #if os(visionOS)
         guard rebuildPending,
               let normalizationContext = self.normalizationContext,
               let content = self.sceneContent else {
-            print("🏗️ Guard failed - scene rebuild skipped")
+            debugLog("Guard failed - scene rebuild skipped")
             return
         }
-        print("🏗️ All conditions met - proceeding with scene rebuild")
+        debugLog("All conditions met - proceeding with scene rebuild")
         rebuildPending = false
 
         if let existing = rootEntity {
@@ -283,8 +308,8 @@ class ElementViewModel: ObservableObject {
     }
     
     private func setupSceneContent(_ content: RealityViewContent) {
-        print("🎬 setupSceneContent called")
-        print("🎬 rebuildPending: \(rebuildPending)")
+        debugLog("setupSceneContent called")
+        debugLog("rebuildPending: \(self.rebuildPending)")
         self.sceneContent = content
 
         if let existing = rootEntity {
@@ -296,10 +321,10 @@ class ElementViewModel: ObservableObject {
 
         // If data was already loaded but scene wasn't ready, rebuild now
         if rebuildPending {
-            print("🎬 Data was already loaded, triggering rebuildSceneIfNeeded")
+            debugLog("Data was already loaded, triggering rebuildSceneIfNeeded")
             rebuildSceneIfNeeded()
         } else {
-            print("🎬 No rebuild pending")
+            debugLog("No rebuild pending")
         }
     }
     
@@ -565,7 +590,7 @@ class ElementViewModel: ObservableObject {
     }
     
     private func calculateNewPanPosition(gestureOffset: SIMD3<Float>) -> SIMD3<Float> {
-        let sensitivity: Float = 0.0008
+        let sensitivity: Float = Constants.panSensitivity
         let scaledGesture = gestureOffset * sensitivity
         return panStartPosition! + scaledGesture
     }
@@ -664,9 +689,9 @@ class ElementViewModel: ObservableObject {
         let diagonalMovement = distance * direction
         
         // Simple, direct scaling like native visionOS
-        let scaleSensitivity: Float = 0.001
+        let scaleSensitivity: Float = Constants.zoomScaleSensitivity
         let scaleFactor: Float = 1.0 + (diagonalMovement * scaleSensitivity)
-        let newScale = max(0.3, min(2.0, startScale * scaleFactor)) // Tighter bounds for better UX
+        let newScale = max(Constants.minZoomScale, min(Constants.maxZoomScale, startScale * scaleFactor))
         
         // Apply uniform scaling
         container.scale = SIMD3<Float>(repeating: newScale)
@@ -723,7 +748,7 @@ class ElementViewModel: ObservableObject {
         
         // Use horizontal movement for rotation
         let deltaX = currentPos.x - startPos.x
-        let rotationSensitivity: Float = 0.001  // Reduced sensitivity for more precise control
+        let rotationSensitivity: Float = Constants.rotationSensitivity
         let rotationDelta = deltaX * rotationSensitivity
         
         let newAngle = startAngle + rotationDelta

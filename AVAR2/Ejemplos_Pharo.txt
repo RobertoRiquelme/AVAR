@@ -1,0 +1,332 @@
+Metacello new
+	baseline: 'AVAR2025';
+	repository: 'github://tinchodias/AVAR2025';
+	load
+	
+AVAR reset.
+
+"EJEMPLO 1"
+view := RWView new.
+
+	SequenceableCollection withAllSubclassesDo: [ :each |
+		| shape |
+		shape := each hasComment
+			ifTrue: [ RWBox new ]
+			ifFalse: [ RWCylinder new ].
+		shape color: (each hasSubclasses
+			ifTrue: [ Color green ]
+			ifFalse: [ Color red ]).
+		view add:
+			(RWElement new
+				model: each;
+				shape: shape;
+				yourself) ].
+
+	RWXYGridLayout on: view elements.
+
+  view openAVAR.
+
+"EJEMPLO 2"
+shapes := (1 to: 20) collect: [ :value |
+    | g p |
+    g := RSGroup new.
+    g add: (RSLabel new text: value).
+    g add: (RSCircle new size: 30 atRandom).
+    p := g second position.
+    g first position:
+        p x @ (p y - (g second height/2)-(g first height / 2) ).
+    g asShape
+] as: RSGroup.
+
+c := RSCanvas new.
+c addAll: shapes.
+shapes doWithIndex: [ :shape :index |
+    shape position: 30 * index @ (index % 10)  ].
+c newBox
+    color: Color purple translucent;
+    fromRectangle: shapes encompassingRectangle.
+
+c zoomToFit.
+c openAVAR.
+c open.
+
+"EJEMPLO 3"
+canvas := RSCanvas new.
+
+color := RSColorPalette diverging rdylbu3.
+shapes := (1 to: 3) collect: [ :i |
+    RSBox new
+        size: 10;
+        model: i;
+        withBorder;
+        color: (color scale: i) ;
+        yourself ].
+
+RSLineBuilder arrowedLine
+    withBorderAttachPoint;
+    canvas: canvas;
+    shapes: shapes;
+    connectFrom: [ :n | n // 2 ].
+canvas addAll: shapes.
+
+RSClusterTreeLayout on: shapes.
+canvas zoomToFit.
+
+canvas openAVAR.
+canvas open.
+
+"EJEMPLO 4"
+canvas := RSCanvas new.
+
+color := RSColorPalette diverging brbg11.
+shapes := (1 to: 10) collect: [ :i |
+    RSCircle new
+        size: 10;
+        model: i;
+        noPaint;
+        borderColor: (color scale: i);
+        borderWidth: i;
+        yourself ].
+
+RSLineBuilder orthoVertical
+    withBorderAttachPoint;
+    canvas: canvas;
+    shapes: shapes;
+    connectFrom: [ :n | n // 2 ].
+canvas addAll: shapes.
+
+RSClusterTreeLayout on: shapes.
+canvas zoomToFit.
+
+canvas openAVAR.
+canvas open
+
+"EJEMPLO 5"
+| c p p2 x y size |
+	x := 0.0 to: 2 count: 10.
+	y := (x raisedTo: 2) - 2.
+	c := RSCompositeChart new.
+	p := RSBarPlot new x: x y: y.
+	size := 6.
+	p barSize: size.
+	p barOffset: size / 2.
+	p2 := RSBarPlot new x: x y: y + 0.5.
+	p2 barSize: size.
+	p2 barOffset: size / -2.
+	c add: p.
+	c add: p2.
+	c horizontalTick doNotUseNiceLabel;
+			 numberOfTicks: x size - 1;
+			 asFloat: 5;
+			 useVerticalLabel.
+
+	c build.
+	p bars @ RSPopup.
+
+	p2 bars
+		when: RSMouseEnter
+		do: [ :evt |
+			| color |
+			color := Color random.
+			p2 bars do: [ :shape | shape color: color ].
+			evt signalUpdate ]
+		for: self.
+	c canvas openAVAR.
+	c canvas open
+	
+"EJEMPLO 6"
+	values := RSHistogramExample new randomValues.
+	c := RSCompositeChart new.
+	p := RSLinePlot new x:(1 to: values size) y: values.
+	c add: p.
+	c horizontalTick doNotUseNiceLabel.
+	c build.
+	c canvas openAVAR .
+	c canvas open
+
+"EJEMPLO7"
+	kiviat := RSKiviat new.
+	kiviat addRow: #(1 5 2 2 3).
+	kiviat axisNames: #('processing cost' 'mechanical properties' 'chemical stability'
+           'thermal stability' 'device integration').
+	kiviat build.
+	kiviat canvas openAVAR .
+	kiviat canvas open
+	
+"EJEMPLO 8"
+x := -3.14 to: 3.14 by: 0.01.
+	p := RSLinePlot new.
+	p x: x y: x sin * 0.22 + 0.5.
+	
+	p addDecoration: RSYMarkerDecoration new average.
+	p addDecoration: RSYMarkerDecoration new min.
+	p addDecoration: RSYMarkerDecoration new max.
+	p addDecoration: RSXMarkerDecoration new max.
+	p addDecoration: RSXMarkerDecoration new min.
+	p addDecoration: (RSXMarkerDecoration new value: 0).
+	p verticalTick asFloat.
+	p build.
+	p canvas openAVAR .
+	p canvas open
+	
+"EJEMPLO 9"
+| b |
+	b := RSCircularTreeMap new.
+	b explore: Morph using: #subclasses.
+	b build.
+	b canvas openAVAR .
+	b canvas open
+	
+"EJEMPLO 10"
+| b palette canvas |
+	canvas := RSCanvas new.
+	canvas @ (RSCanvasController new
+		in: [ :interaction | interaction configuration maxScale: 30 ];
+		yourself).
+	b := RSCircularTreeMap new.
+	b container: canvas.
+	b baseRadius: 500.
+	b explore: Morph using: #subclasses.
+	b leafWeight: [ :cls | cls linesOfCode + 1 ].
+	b build.
+	palette := NSScale ordinal rangeFrom: #('012642' '3d88b6' 'cbe5ef').
+	b shapes do: [ :shape | | paint color |
+		shape border: (RSBorder new
+			color: Color black;
+			width: 2 - (shape depth*0.4) ).
+		color := palette scale: shape depth.
+		paint := RadialGradientPaint fromArray: { 0->color muchLighter. 0.95 -> color }.
+		paint center: 0@0; focalPoint: 0@0; radius: shape radius.
+		shape paint: paint.
+		shape isSLeaf ifTrue: [ | label |
+			label := RSLabel new
+				fontFamily: 'Impact';
+				color: Color white;
+				bold;
+				border: (RSBorder new color: Color black; width: 0.7);
+				text: shape model asString;
+				position: shape position;
+				yourself.
+			label width > shape width ifTrue: [
+				label scaleBy: (shape width / label width) * 0.9
+				 ].
+			canvas add: label.
+		] ].
+	b shapes @ RSPopup new.
+	canvas openAVAR .
+	canvas open
+	
+"EJEMPLO 11"
+dsm := RSDSM new.
+	dsm objects: RSShape withAllSubclasses.
+	dsm setShouldFeedY.
+	dsm dependency: #dependentClasses.
+	dsm shape popup.
+	dsm build.
+	dsm canvas openAVAR .
+	dsm canvas open
+	
+"EJEMPLO 12"
+c := RSCanvas new.
+	shapes := Collection withAllSubclasses collect: [ :cls |
+		RSEllipse new
+			model: cls;
+			draggable;
+			size: 5;
+			yourself
+		 ].
+
+	c addAll: shapes.
+	RSNormalizer color
+		from: (Color gray alpha: 0.5);
+		to: (Color red alpha: 0.5);
+		shapes: shapes;
+		normalize: #numberOfMethods.
+	RSNormalizer size
+		shapes: shapes;
+		normalize: #numberOfMethods.
+	eb := RSLineBuilder line.
+	eb canvas: c.
+	eb connectFrom: #superclass.
+	RSTreeLayout on: shapes.
+	shapes do: [ :e | e translateBy: 0 @ 0 ].
+	c @ RSCanvasController.
+	canvas openAVAR .
+	canvas open
+	
+"EJEMPLO 13"
+c := RSCanvas new.
+	shapes := RSShape withAllSubclasses collect: [ :cls |
+		RSEllipse new
+			popup;
+			draggable;
+			model: cls;
+			size: 5;
+			yourself ].
+	c addAll: shapes.
+	RSNormalizer size
+		shapes: c nodes;
+		normalize: #numberOfMethods.
+	RSNormalizer color
+		from: (Color green alpha: 0.5);
+		to: (Color red alpha: 0.5);
+		shapes: c nodes;
+		normalize: #numberOfMethods.
+	eb := RSLineBuilder line.
+	eb
+		canvas: c;
+		moveBehind;
+		connectFrom: #superclass.
+	RSForceBasedLayout new
+		doNotUseProgressBar;
+		charge: -350;
+		on: c nodes.
+	c @ RSCanvasController.
+	c zoomToFit.
+	c openAVAR.
+	c open
+	
+"EJEMPLO 14"
+	| c |
+	c := RSCanvas new.
+	c addAll: ((1 to: 100) collect: [:i | RSEllipse new size: 10; model: i]).
+
+	RSLineBuilder line
+		canvas: c;
+		connectFrom: [ :v | v // 2 ].
+	c @ RSForceLayoutSteppingInteraction.
+	c openAVAR.
+	c open
+	
+"EJEMPLO 15"
+	c := RSCanvas new.
+
+	classes := (Object withAllSubclasses first: 300)
+		flatCollect: #withAllSuperclasses.
+	classes := classes asSet
+		collect: [:cls | RSEllipse new draggable; popup; model: cls; yourself]
+		as: RSGroup.
+	c addAll: classes.
+	RSLineBuilder line
+		color: Color gray;
+		canvas: c;
+		shapes: classes;
+		connectFrom: #superclass.
+	RSNormalizer size
+		shapes: classes;
+		to: 20;
+		normalize: #numberOfMethods.
+	RSNormalizer color
+		shapes: classes;
+		normalize: #numberOfMethods.
+	RSClusterTreeLayout on: classes.
+	RSMultiBezierEdgeBuilder multiBezier
+		borderColor: (Color blue alpha: 0.3);
+		canvas: c;
+		shapes: classes;
+		withBorderAttachPoint;
+		following: #superclass;
+		connectToAll: #dependentClasses.
+	c @ RSCanvasController.
+	c openAVAR.
+	c open

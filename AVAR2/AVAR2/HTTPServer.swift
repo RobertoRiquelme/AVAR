@@ -1,9 +1,12 @@
 import Foundation
 import Network
+import OSLog
 
 #if canImport(Darwin)
 import Darwin
 #endif
+
+private let httpLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "HTTPServer")
 
 // MARK: - DateFormatter Extension
 extension DateFormatter {
@@ -12,6 +15,19 @@ extension DateFormatter {
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
+}
+
+/// Authentication configuration for HTTP server
+struct HTTPAuthConfig {
+    let enabled: Bool
+    let token: String
+
+    static var `default`: HTTPAuthConfig {
+        // Generate a random token on first launch, or use environment variable
+        let envToken = ProcessInfo.processInfo.environment["AVAR_HTTP_TOKEN"]
+        let token = envToken ?? UUID().uuidString.prefix(8).lowercased()
+        return HTTPAuthConfig(enabled: envToken != nil, token: String(token))
+    }
 }
 
 // MARK: - Network Utilities
@@ -59,27 +75,63 @@ class HTTPServer: ObservableObject {
     @Published var lastReceivedJSON = ""
     @Published var serverStatus = "Stopped"
     @Published var serverLogs: [String] = []
-    
+    @Published var authToken: String = ""
+
     private var listener: NWListener?
-    private let port: UInt16 = 8081
+    private let port: UInt16 = Constants.httpServerPort
     private let queue = DispatchQueue(label: "HTTPServer")
-    private let maxLogs = 50 // Limit log entries to prevent memory issues
-    
+    private let maxLogs = Constants.maxHttpLogEntries
+    private var authConfig: HTTPAuthConfig
+
     var onJSONReceived: ((ScriptOutput, String) -> Void)?
-    
+
+    init() {
+        self.authConfig = HTTPAuthConfig.default
+        self.authToken = authConfig.token
+    }
+
     /// Add a log entry to both console and UI logs
     private func log(_ message: String) {
-        print(message)
+        httpLogger.debug("\(message)")
         DispatchQueue.main.async {
             let timestamp = DateFormatter.logFormatter.string(from: Date())
             let logEntry = "[\(timestamp)] \(message)"
             self.serverLogs.append(logEntry)
-            
+
             // Limit log size
             if self.serverLogs.count > self.maxLogs {
                 self.serverLogs.removeFirst(self.serverLogs.count - self.maxLogs)
             }
         }
+    }
+
+    /// Enable or disable authentication
+    func setAuthEnabled(_ enabled: Bool) {
+        authConfig = HTTPAuthConfig(enabled: enabled, token: authConfig.token)
+    }
+
+    /// Validate authorization header
+    private func validateAuth(_ request: String) -> Bool {
+        guard authConfig.enabled else { return true }
+
+        // Look for Authorization: Bearer <token> header
+        for line in request.components(separatedBy: "\r\n") {
+            if line.lowercased().hasPrefix("authorization:") {
+                let value = line.split(separator: ":", maxSplits: 1).last?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if value.lowercased().hasPrefix("bearer ") {
+                    let token = String(value.dropFirst(7))
+                    return token == authConfig.token
+                }
+            }
+            // Also accept X-AVAR-Token header for simpler scripts
+            if line.lowercased().hasPrefix("x-avar-token:") {
+                let token = line.split(separator: ":", maxSplits: 1).last?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return token == authConfig.token
+            }
+        }
+        return false
     }
     
     func start() {
@@ -242,7 +294,13 @@ class HTTPServer: ObservableObject {
         let method = components[0]
         let path = components[1]
         
+        // POST requests require authentication if enabled
         if method == "POST" && path == "/avar" {
+            if !validateAuth(request) {
+                log("Unauthorized POST request - invalid or missing token")
+                sendResponse(connection: connection, statusCode: 401, body: "Unauthorized - provide valid token via Authorization: Bearer <token> or X-AVAR-Token header")
+                return
+            }
             handleDiagramPost(request: request, connection: connection)
         } else if method == "GET" && path == "/" {
             handleGetRoot(connection: connection)
@@ -293,6 +351,10 @@ class HTTPServer: ObservableObject {
     }
     
     private func handleGetAvar(connection: NWConnection) {
+        let authNote = authConfig.enabled
+            ? "<p><strong>Authentication:</strong> Required. Add header <code>X-AVAR-Token: \(authConfig.token)</code></p>"
+            : "<p><strong>Authentication:</strong> Disabled (set AVAR_HTTP_TOKEN environment variable to enable)</p>"
+
         let html = """
         <!DOCTYPE html>
         <html>
@@ -303,17 +365,19 @@ class HTTPServer: ObservableObject {
             <h1>AVAR2 Diagram Endpoint</h1>
             <p>Send POST request with JSON diagram data to this endpoint</p>
             <p>Expected format: {"elements": [...]} or {"RTelements": [...]}</p>
+            \(authNote)
             <h2>Example:</h2>
             <pre>
-            curl -X POST http://\(getLocalIPAddress()):8081/avar \\
+            curl -X POST http://\(getLocalIPAddress()):\(port)/avar \\
                 -H "Content-Type: application/json" \\
+                -H "X-AVAR-Token: \(authConfig.token)" \\
                 -d '{"id": "diagram1", "elements": [{"id": "1", "type": "node", "shape": "Box", "position": [0,0,0]}]}'
             </pre>
             <p><strong>Note:</strong> You can now include an "id" field at the root level to update existing diagrams.</p>
         </body>
         </html>
         """
-        
+
         sendResponse(connection: connection, statusCode: 200, body: html, contentType: "text/html")
     }
     
