@@ -363,19 +363,7 @@ class ElementViewModel: ObservableObject {
         debugLog("🔄 Creating and positioning \(self.elements.count) elements")
         var validElements = 0
 
-        // Sort elements by area (largest first) for TreeMap-style rendering
-        // This ensures smaller elements are rendered on top of larger ones
-        let sortedElements = self.elements.sorted { elem1, elem2 in
-            let area1 = calculateElementArea(elem1)
-            let area2 = calculateElementArea(elem2)
-            return area1 > area2  // Largest first
-        }
-
-        // Calculate Z increment per element for layered depth
-        let zIncrement: Float = 0.001
-        var currentZOffset: Float = 0
-
-        for element in sortedElements {
+        for element in self.elements {
             // Skip edge/line elements - they don't need visual representation, only connection info
             if element.type.lowercased() == "edge" || element.shape?.shapeDescription?.lowercased() == "line" {
                 debugLog("🔗 Skipping edge/line element \(element.id ?? "unknown") - used for connections only")
@@ -403,11 +391,6 @@ class ElementViewModel: ObservableObject {
                 localPos.z -= 0.003
             }
 
-            // Apply incremental Z offset for TreeMap-style layering
-            // Larger elements (processed first) get smaller Z, smaller elements get larger Z
-            localPos.z += currentZOffset
-            currentZOffset += zIncrement
-
             debugLog("📍 Element \(element.id ?? "unknown") positioned at \(localPos)")
 
             entity.position = localPos
@@ -420,20 +403,6 @@ class ElementViewModel: ObservableObject {
         }
 
         logger.info("✅ Successfully created \(validElements) out of \(self.elements.count) elements")
-    }
-
-    /// Calculate the area of an element from its extent
-    private func calculateElementArea(_ element: ElementDTO) -> Double {
-        // Try shape.extent first (RT elements)
-        if let extent = element.shape?.extent, extent.count >= 2 {
-            return extent[0] * extent[1]
-        }
-        // Try direct extent (RS elements)
-        if let extent = element.extent, extent.count >= 2 {
-            return extent[0] * extent[1]
-        }
-        // Default to 0 for elements without extent
-        return 0
     }
     
     private func calculateElementPosition(coords: [Double], normalizationContext: NormalizationContext) -> SIMD3<Float> {
