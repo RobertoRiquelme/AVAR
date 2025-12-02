@@ -59,6 +59,12 @@ class ElementViewModel: ObservableObject {
     @Published private(set) var isGraph2D: Bool = false
     /// The filename this view model is displaying
     private var filename: String?
+    /// Shared position from collaborative session (used to place diagram at host's position)
+    private var sharedPosition: SIMD3<Float>?
+    /// Shared orientation from collaborative session
+    private var sharedOrientation: simd_quatf?
+    /// Shared scale from collaborative session
+    private var sharedScale: Float?
     private var normalizationContext: NormalizationContext?
     private var entityMap: [String: Entity] = [:]
     private var lineEntities: [Entity] = []
@@ -228,7 +234,15 @@ class ElementViewModel: ObservableObject {
             self.elements = output.elements
             self.isGraph2D = output.is2D
             self.normalizationContext = NormalizationContext(elements: output.elements, is2D: output.is2D)
-            logger.info("Loaded \(output.elements.count) elements (2D: \(output.is2D)) from \(filename)")
+            // Store shared position from collaborative session (if present)
+            self.sharedPosition = output.sharedPosition
+            self.sharedOrientation = output.sharedOrientation
+            self.sharedScale = output.sharedScale
+            if let pos = output.sharedPosition {
+                logger.info("Loaded \(output.elements.count) elements with shared position: \(pos)")
+            } else {
+                logger.info("Loaded \(output.elements.count) elements (2D: \(output.is2D)) from \(filename)")
+            }
             debugLog("About to call rebuildSceneIfNeeded")
             rebuildSceneIfNeeded()
             debugLog("rebuildSceneIfNeeded completed")
@@ -283,7 +297,10 @@ class ElementViewModel: ObservableObject {
             isGraph2D: isGraph2D,
             spawnScale: spawnScale,
             appModel: appModel,
-            logger: logger
+            logger: logger,
+            sharedPosition: sharedPosition,
+            sharedOrientation: sharedOrientation,
+            sharedScale: sharedScale
         )
 
         let buildResult = sceneBuilder.buildScene(

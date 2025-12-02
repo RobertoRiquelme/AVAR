@@ -60,6 +60,10 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     /// When true, enables spatial personas in SharePlay (users see each other) but disables diagram gestures.
     /// When false, diagram gestures work but no spatial personas are shown.
     @Published var useSpatialPersonas: Bool = false
+
+    /// Tracks whether this device is the SharePlay host (initiated the session with diagrams)
+    /// This is set when SharePlay starts and this device already has diagrams open
+    @Published var isSharePlayHost: Bool = false
     
     private var multipeerSession: MultipeerConnectivityService?
     #if os(iOS)
@@ -120,6 +124,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.isSharePlayActive = false
+                self.isSharePlayHost = false
                 self.sharePlayParticipantCount = 0
                 if self.connectedPeers.isEmpty {
                     self.isSessionActive = false
@@ -146,6 +151,10 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         coordinator.getSpatialPersonasEnabled = { [weak self] in
             self?.useSpatialPersonas ?? false
         }
+        coordinator.setIsSharePlayHost = { [weak self] isHost in
+            self?.isSharePlayHost = isHost
+        }
+        // Note: getHasDiagramsOpen will be set by VisionOSMainView since it has access to activeFiles
         #endif
         sharePlayCoordinator = coordinator
         #endif
@@ -1288,6 +1297,10 @@ final class SharePlayCoordinator {
     var onRequestImmersiveSpace: (() -> Void)?
     /// Returns whether spatial personas should be enabled (set by parent manager)
     var getSpatialPersonasEnabled: (() -> Bool)?
+    /// Called to check if this device has diagrams open (to determine if it's the host)
+    var getHasDiagramsOpen: (() -> Bool)?
+    /// Called to mark this device as the SharePlay host
+    var setIsSharePlayHost: ((Bool) -> Void)?
 
     var isActive: Bool { currentSession != nil }
 
@@ -1357,6 +1370,13 @@ final class SharePlayCoordinator {
         if #available(visionOS 26.0, *) {
             Task { [weak self] in
                 guard let self else { return }
+
+                // Determine if this device is the SharePlay host (has diagrams already open)
+                let hasDiagrams = await MainActor.run { self.getHasDiagramsOpen?() ?? false }
+                await MainActor.run {
+                    self.setIsSharePlayHost?(hasDiagrams)
+                }
+                print("📢 SharePlay session starting - isHost: \(hasDiagrams)")
 
                 // Signal to the UI that SharePlay wants the immersive space open
                 await MainActor.run {

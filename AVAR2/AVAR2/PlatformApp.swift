@@ -629,6 +629,13 @@ struct VisionOSMainView: View {
                     }
                 }
                 print("🔧 HTTP server callback setup complete!")
+
+                // Set up SharePlay callback to check if we have diagrams open
+                #if canImport(GroupActivities)
+                collaborativeSession.sharePlayCoordinator?.getHasDiagramsOpen = { [weak sharedState] in
+                    !(sharedState?.activeFiles.isEmpty ?? true)
+                }
+                #endif
             }
             .task {
                 print("🔧 VisionOSMainView.task called!")
@@ -754,12 +761,27 @@ struct VisionOSMainView: View {
                         let opened = await ensureImmersiveSpaceActive()
                         if opened {
                             print("✅ Immersive space opened for SharePlay")
+                            // Ensure plane visualization is disabled for SharePlay
+                            // (surfaces can be distracting in shared experiences)
+                            if sharedState.appModel.showPlaneVisualization {
+                                print("🔧 Disabling plane visualization for SharePlay")
+                                sharedState.appModel.showPlaneVisualization = false
+                                sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+                            }
                         } else {
                             print("❌ Failed to open immersive space for SharePlay")
                         }
                         // Reset the flag
                         collaborativeSession.sharePlayRequestsImmersiveSpace = false
                     }
+                }
+            }
+            // Also disable plane visualization when SharePlay becomes active
+            .onChange(of: collaborativeSession.isSharePlayActive) { _, isActive in
+                if isActive {
+                    print("🔧 SharePlay became active - ensuring plane visualization is disabled")
+                    sharedState.appModel.showPlaneVisualization = false
+                    sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
                 }
             }
             #endif
@@ -821,43 +843,71 @@ struct VisionOSImmersiveView: View {
             let sharedFilenames = Set(diagrams.map { $0.filename })
             let currentFilenames = Set(sharedState.activeFiles)
 
-            // For non-host (client): sync activeFiles with sharedDiagrams
-            // For host: only remove diagrams that were explicitly removed (handled by onClose)
-            if !collaborativeSession.isHost {
-                // Client: remove diagrams that are no longer in sharedDiagrams
-                sharedState.activeFiles.removeAll { !sharedFilenames.contains($0) }
+            // SharePlay host keeps its local diagrams - they are the source of truth
+            // Only clients (non-hosts) should sync from sharedDiagrams
+            if collaborativeSession.isSharePlayHost {
+                print("📊 SharePlay host: keeping \(currentFilenames.count) local diagrams (source of truth)")
+                return
+            }
 
-                // Client: add new shared diagrams that aren't already active
-                for diagram in diagrams {
-                    if !currentFilenames.contains(diagram.filename) {
-                        // Save the diagram elements to a temporary file so ContentView can load them
-                        Task { @MainActor in
-                            do {
-                                let encoder = JSONEncoder()
-                                encoder.outputFormatting = .prettyPrinted
-                                // Create a simple dictionary that ScriptOutput can decode
-                                let diagramData: [String: Any] = ["elements": diagram.elements.map { element -> [String: Any] in
-                                    // Re-encode each element through JSONEncoder/JSONSerialization
-                                    let elementData = try! encoder.encode(element)
-                                    return try! JSONSerialization.jsonObject(with: elementData) as! [String: Any]
-                                }]
-                                let data = try JSONSerialization.data(withJSONObject: diagramData, options: .prettyPrinted)
-                                let tempURL = try DiagramStorage.fileURL(for: diagram.filename, withExtension: "txt")
-                                try data.write(to: tempURL)
+            // Safety: Don't remove all diagrams if sharedDiagrams is empty
+            // This can happen during view recreation or network delays
+            if sharedFilenames.isEmpty && !currentFilenames.isEmpty {
+                print("⚠️ Client: sharedDiagrams is empty but we have \(currentFilenames.count) local diagrams - skipping removal")
+                return
+            }
 
-                                print("📥 Client: Adding shared diagram '\(diagram.filename)' with \(diagram.elements.count) elements")
-                                if !sharedState.activeFiles.contains(diagram.filename) {
-                                    sharedState.activeFiles.append(diagram.filename)
-                                }
-                            } catch {
-                                print("❌ Failed to save shared diagram '\(diagram.filename)': \(error)")
+            // For client devices: sync activeFiles with sharedDiagrams
+            // Remove diagrams that are no longer shared
+            let diagramsToRemove = currentFilenames.subtracting(sharedFilenames)
+            if !diagramsToRemove.isEmpty {
+                sharedState.activeFiles.removeAll { diagramsToRemove.contains($0) }
+                print("🗑️ Client: removed \(diagramsToRemove.count) diagrams no longer in shared list")
+            }
+
+            // Add new shared diagrams that aren't already active
+            for diagram in diagrams {
+                if !currentFilenames.contains(diagram.filename) {
+                    // Save the diagram elements to a temporary file so ContentView can load them
+                    // Include the shared position so the client places it correctly
+                    Task { @MainActor in
+                        do {
+                            let encoder = JSONEncoder()
+                            encoder.outputFormatting = .prettyPrinted
+
+                            // Build diagram data including position for client to use
+                            var diagramData: [String: Any] = ["elements": diagram.elements.map { element -> [String: Any] in
+                                let elementData = try! encoder.encode(element)
+                                return try! JSONSerialization.jsonObject(with: elementData) as! [String: Any]
+                            }]
+
+                            // Include shared position so client can place diagram correctly
+                            if let pos = diagram.worldPosition {
+                                diagramData["sharedPosition"] = ["x": pos.x, "y": pos.y, "z": pos.z]
                             }
+                            if let orient = diagram.worldOrientation {
+                                diagramData["sharedOrientation"] = [
+                                    "x": orient.imag.x, "y": orient.imag.y, "z": orient.imag.z, "w": orient.real
+                                ]
+                            }
+                            if let scale = diagram.worldScale {
+                                diagramData["sharedScale"] = scale
+                            }
+
+                            let data = try JSONSerialization.data(withJSONObject: diagramData, options: .prettyPrinted)
+                            let tempURL = try DiagramStorage.fileURL(for: diagram.filename, withExtension: "txt")
+                            try data.write(to: tempURL)
+
+                            print("📥 Client: Adding shared diagram '\(diagram.filename)' with \(diagram.elements.count) elements at position: \(diagram.worldPosition?.description ?? "nil")")
+                            if !sharedState.activeFiles.contains(diagram.filename) {
+                                sharedState.activeFiles.append(diagram.filename)
+                            }
+                        } catch {
+                            print("❌ Failed to save shared diagram '\(diagram.filename)': \(error)")
                         }
                     }
                 }
             }
-            // Host: activeFiles is the source of truth, don't remove based on sharedDiagrams
-            // The host's onClose callback handles removal and broadcasts to peers
         }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
@@ -915,10 +965,51 @@ private extension VisionOSMainView {
             }
         }
 
+        // Ensure plane visualization stays disabled when starting share
+        // (Don't change the user's preference, just ensure surfaces aren't shown)
+        let currentVisualization = sharedState.appModel.showPlaneVisualization
+        if currentVisualization {
+            print("⚠️ Plane visualization was enabled, keeping user preference")
+        }
+
+        // Share any existing diagrams that are already loaded
+        // This ensures diagrams loaded before sharing starts are visible to peers
+        await shareExistingDiagrams()
+
         // Activate the SharePlay activity - this will prompt the share menu
         let activity = SharedSpaceActivity()
         _ = try? await activity.activate()
         print("✅ SharePlay activity activated for immersive space sharing")
+    }
+
+    /// Share all currently loaded diagrams with the collaborative session
+    @MainActor
+    func shareExistingDiagrams() async {
+        guard !sharedState.activeFiles.isEmpty else {
+            print("📊 No existing diagrams to share")
+            return
+        }
+
+        print("📊 Sharing \(sharedState.activeFiles.count) existing diagrams...")
+
+        for filename in sharedState.activeFiles {
+            do {
+                let output = try DiagramDataLoader.loadScriptOutput(from: filename)
+                // Get the current position of the diagram from the AppModel if available
+                let position = sharedState.appModel.getDiagramPosition(for: filename)
+
+                collaborativeSession.shareDiagram(
+                    filename: filename,
+                    elements: output.elements,
+                    worldPosition: position,
+                    worldOrientation: nil,
+                    worldScale: nil
+                )
+                print("📤 Shared existing diagram: \(filename)")
+            } catch {
+                print("❌ Failed to share existing diagram \(filename): \(error)")
+            }
+        }
     }
 
     /// Makes sure an immersive space is active. If the user has closed it, we re-open it.
