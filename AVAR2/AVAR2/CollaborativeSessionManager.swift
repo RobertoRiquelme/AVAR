@@ -83,7 +83,8 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     var onSharedAnchorReceived: ((SharedAnchorMessage) -> Void)?
 
     #if canImport(GroupActivities)
-    private var sharePlayCoordinator: SharePlayCoordinator?
+    /// SharePlay coordinator for group immersive space experiences
+    var sharePlayCoordinator: SharePlayCoordinator?
     private var sharePlayParticipantCount = 0
     #endif
 
@@ -1269,6 +1270,11 @@ final class SharePlayCoordinator {
     var onSessionEnded: (() -> Void)?
     var onParticipantsChanged: ((Int) -> Void)?
 
+    /// Called when SharePlay needs to open the immersive space (visionOS)
+    var onRequestOpenImmersiveSpace: (() async -> Bool)?
+    /// Called when SharePlay session ends and immersive space should close (visionOS)
+    var onRequestCloseImmersiveSpace: (() async -> Void)?
+
     var isActive: Bool { currentSession != nil }
 
     private var currentSession: GroupSession<SharedSpaceActivity>?
@@ -1289,18 +1295,10 @@ final class SharePlayCoordinator {
     }
 
     func start() async {
-        do {
-            let activity = SharedSpaceActivity()
-            let result = await activity.prepareForActivation()
-            if result == .activationPreferred {
-                do {
-                    try await activity.activate()
-                } catch {
-                    print("❌ SharePlay activation failed: \(error)")
-                }
-            }
-        } catch {
-            print("❌ SharePlay activation failed: \(error)")
+        let activity = SharedSpaceActivity()
+        let result = await activity.prepareForActivation()
+        if result == .activationPreferred {
+            _ = try? await activity.activate()
         }
     }
 
@@ -1315,6 +1313,17 @@ final class SharePlayCoordinator {
         currentSession?.leave()
         currentSession?.end()
         currentSession = nil
+
+        #if os(visionOS)
+        // Close immersive space when SharePlay ends
+        if let closeSpace = onRequestCloseImmersiveSpace {
+            Task {
+                await closeSpace()
+                print("✅ Immersive space closed after SharePlay ended")
+            }
+        }
+        #endif
+
         onSessionEnded?()
     }
 
@@ -1338,6 +1347,35 @@ final class SharePlayCoordinator {
         currentSession?.end()
         currentSession = session
         messenger = GroupSessionMessenger(session: session)
+
+        // Configure for group immersive space sharing (visionOS 26+)
+        #if os(visionOS)
+        if #available(visionOS 26.0, *) {
+            Task { [weak self] in
+                guard let self else { return }
+
+                // First, open the immersive space before configuring the system coordinator
+                // This ensures the space is ready for the group experience
+                if let openSpace = self.onRequestOpenImmersiveSpace {
+                    let opened = await openSpace()
+                    if opened {
+                        print("✅ Immersive space opened for SharePlay session")
+                    } else {
+                        print("⚠️ Failed to open immersive space for SharePlay")
+                    }
+                }
+
+                // Now configure the system coordinator for group immersive space
+                if let systemCoordinator = await session.systemCoordinator {
+                    var configuration = SystemCoordinator.Configuration()
+                    configuration.supportsGroupImmersiveSpace = true
+                    configuration.spatialTemplatePreference = .sideBySide
+                    systemCoordinator.configuration = configuration
+                    print("✅ Configured supportsGroupImmersiveSpace = true for SharePlay")
+                }
+            }
+        }
+        #endif
 
         messageTask?.cancel()
         messageTask = Task {
@@ -1385,7 +1423,13 @@ struct SharedSpaceActivity: GroupActivity {
     var metadata: GroupActivityMetadata {
         var metadata = GroupActivityMetadata()
         metadata.title = "AVAR2 Shared Space"
+        metadata.subtitle = "Collaborate on 3D diagrams"
         metadata.type = .generic
+        #if os(visionOS)
+        if #available(visionOS 26.0, *) {
+            metadata.supportsContinuationOnTV = false
+        }
+        #endif
         return metadata
     }
 }

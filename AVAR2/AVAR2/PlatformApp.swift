@@ -8,6 +8,9 @@ import RealityKitContent
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(GroupActivities)
+import GroupActivities
+#endif
 
 /// Shared state for visionOS app
 @MainActor
@@ -96,6 +99,9 @@ struct VisionOSMainView: View {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @StateObject private var httpServer = HTTPServer()
+
+    /// Track if SharePlay callbacks have been configured
+    @State private var sharePlayCallbacksConfigured = false
 
     enum InputMode: String {
         case file, json, server
@@ -343,11 +349,33 @@ struct VisionOSMainView: View {
                         showingCollaborativeSession = true
                     }
                     .buttonStyle(.bordered)
-                    
-                    if collaborativeSession.isSessionActive {
-                        Text("●")
-                            .foregroundColor(.green)
-                            .font(.system(size: 12))
+
+                    // Share button for visionOS 26+ immersive space sharing
+                    #if os(visionOS)
+                    if #available(visionOS 26.0, *) {
+                        Button {
+                            Task {
+                                await startSharePlayForImmersiveSpace()
+                            }
+                        } label: {
+                            Label("Share Space", systemImage: "shareplay")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                    }
+                    #endif
+
+                    if collaborativeSession.isSessionActive || collaborativeSession.isSharePlayActive {
+                        HStack(spacing: 4) {
+                            Text("●")
+                                .foregroundColor(.green)
+                                .font(.system(size: 12))
+                            if collaborativeSession.isSharePlayActive {
+                                Text("SharePlay")
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                            }
+                        }
                     }
                 }
 
@@ -449,6 +477,14 @@ struct VisionOSMainView: View {
                             hasEnteredImmersive = false
                             sharedState.activeFiles.removeAll()
                             sharedState.appModel.resetDiagramPositioning()
+
+                            // Also leave SharePlay session if active
+                            #if canImport(GroupActivities)
+                            if collaborativeSession.isSharePlayActive {
+                                collaborativeSession.stopSharePlay()
+                                print("🛑 Left SharePlay session after closing immersive space")
+                            }
+                            #endif
                         }
                     }
                     .font(.title3)
@@ -582,6 +618,15 @@ struct VisionOSMainView: View {
                     }
                 }
                 print("🔧 HTTP server callback setup complete!")
+
+                // Set up SharePlay immersive space callbacks
+                #if canImport(GroupActivities)
+                if !sharePlayCallbacksConfigured {
+                    sharePlayCallbacksConfigured = true
+                    setupSharePlayCallbacks()
+                    print("🔧 SharePlay immersive space callbacks configured")
+                }
+                #endif
             }
             .task {
                 print("🔧 VisionOSMainView.task called!")
@@ -724,6 +769,26 @@ private extension VisionOSMainView {
             print("📡 visionOS broadcast shared anchor \(anchor.id)")
         }
     }
+
+    #if canImport(GroupActivities)
+    /// Configure SharePlay callbacks for opening/closing immersive space
+    func setupSharePlayCallbacks() {
+        // Callback to open immersive space when SharePlay session starts
+        collaborativeSession.sharePlayCoordinator?.onRequestOpenImmersiveSpace = { [self] in
+            return await self.ensureImmersiveSpaceActive()
+        }
+
+        // Callback to close immersive space when SharePlay session ends
+        collaborativeSession.sharePlayCoordinator?.onRequestCloseImmersiveSpace = { [self] in
+            await self.dismissImmersiveSpace()
+            await MainActor.run {
+                self.hasEnteredImmersive = false
+                self.sharedState.activeFiles.removeAll()
+                self.sharedState.appModel.resetDiagramPositioning()
+            }
+        }
+    }
+    #endif
 }
 #endif
 
@@ -749,15 +814,19 @@ struct VisionOSImmersiveView: View {
             }
         }
         .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
+            // Only sync diagrams when SharePlay is active
+            guard collaborativeSession.isSharePlayActive else { return }
+
             let sharedFilenames = Set(diagrams.map { $0.filename })
             let currentFilenames = Set(sharedState.activeFiles)
 
-            // Remove diagrams that are no longer shared
-            sharedState.activeFiles.removeAll { !sharedFilenames.contains($0) }
-
-            // Add new shared diagrams that aren't already active
-            // Only add if we're not the host (host adds diagrams via Add Diagram button)
+            // For non-host (client): sync activeFiles with sharedDiagrams
+            // For host: only remove diagrams that were explicitly removed (handled by onClose)
             if !collaborativeSession.isHost {
+                // Client: remove diagrams that are no longer in sharedDiagrams
+                sharedState.activeFiles.removeAll { !sharedFilenames.contains($0) }
+
+                // Client: add new shared diagrams that aren't already active
                 for diagram in diagrams {
                     if !currentFilenames.contains(diagram.filename) {
                         // Save the diagram elements to a temporary file so ContentView can load them
@@ -786,6 +855,8 @@ struct VisionOSImmersiveView: View {
                     }
                 }
             }
+            // Host: activeFiles is the source of truth, don't remove based on sharedDiagrams
+            // The host's onClose callback handles removal and broadcasts to peers
         }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
@@ -830,6 +901,25 @@ struct VisionOSImmersiveView: View {
 
 #if os(visionOS)
 private extension VisionOSMainView {
+    /// Starts SharePlay for sharing the immersive space with nearby people (visionOS 26+)
+    @available(visionOS 26.0, *)
+    @MainActor
+    func startSharePlayForImmersiveSpace() async {
+        // Ensure immersive space is open first
+        if !hasEnteredImmersive {
+            let opened = await ensureImmersiveSpaceActive()
+            if !opened {
+                print("❌ Cannot start SharePlay: failed to open immersive space")
+                return
+            }
+        }
+
+        // Activate the SharePlay activity - this will prompt the share menu
+        let activity = SharedSpaceActivity()
+        _ = try? await activity.activate()
+        print("✅ SharePlay activity activated for immersive space sharing")
+    }
+
     /// Makes sure an immersive space is active. If the user has closed it, we re-open it.
     @MainActor
     func ensureImmersiveSpaceActive() async -> Bool {

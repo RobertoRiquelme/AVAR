@@ -16,7 +16,8 @@
       "Bash(xcrun simctl install:*)",
       "Bash(xcrun simctl launch:*)",
       "Bash(find:*)",
-      "Bash(xcrun simctl list:*)"
+      "Bash(xcrun simctl list:*)",
+      "WebSearch"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
