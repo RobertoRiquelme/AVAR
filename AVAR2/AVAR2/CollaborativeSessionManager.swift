@@ -54,6 +54,12 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published var lastError: String? = nil
     @Published var isSharePlayActive = false
     @Published var pendingAlert: SessionAlert? = nil
+    /// Published when SharePlay requests the immersive space to be opened
+    @Published var sharePlayRequestsImmersiveSpace = false
+
+    /// When true, enables spatial personas in SharePlay (users see each other) but disables diagram gestures.
+    /// When false, diagram gestures work but no spatial personas are shown.
+    @Published var useSpatialPersonas: Bool = false
     
     private var multipeerSession: MultipeerConnectivityService?
     #if os(iOS)
@@ -132,6 +138,15 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                 }
             }
         }
+        #if os(visionOS)
+        coordinator.onRequestImmersiveSpace = { [weak self] in
+            guard let self else { return }
+            self.sharePlayRequestsImmersiveSpace = true
+        }
+        coordinator.getSpatialPersonasEnabled = { [weak self] in
+            self?.useSpatialPersonas ?? false
+        }
+        #endif
         sharePlayCoordinator = coordinator
         #endif
 
@@ -1269,11 +1284,10 @@ final class SharePlayCoordinator {
     var onSessionJoined: (() -> Void)?
     var onSessionEnded: (() -> Void)?
     var onParticipantsChanged: ((Int) -> Void)?
-
-    /// Called when SharePlay needs to open the immersive space (visionOS)
-    var onRequestOpenImmersiveSpace: (() async -> Bool)?
-    /// Called when SharePlay session ends and immersive space should close (visionOS)
-    var onRequestCloseImmersiveSpace: (() async -> Void)?
+    /// Called when SharePlay needs the immersive space to be opened (visionOS)
+    var onRequestImmersiveSpace: (() -> Void)?
+    /// Returns whether spatial personas should be enabled (set by parent manager)
+    var getSpatialPersonasEnabled: (() -> Bool)?
 
     var isActive: Bool { currentSession != nil }
 
@@ -1314,16 +1328,6 @@ final class SharePlayCoordinator {
         currentSession?.end()
         currentSession = nil
 
-        #if os(visionOS)
-        // Close immersive space when SharePlay ends
-        if let closeSpace = onRequestCloseImmersiveSpace {
-            Task {
-                await closeSpace()
-                print("✅ Immersive space closed after SharePlay ended")
-            }
-        }
-        #endif
-
         onSessionEnded?()
     }
 
@@ -1354,24 +1358,28 @@ final class SharePlayCoordinator {
             Task { [weak self] in
                 guard let self else { return }
 
-                // First, open the immersive space before configuring the system coordinator
-                // This ensures the space is ready for the group experience
-                if let openSpace = self.onRequestOpenImmersiveSpace {
-                    let opened = await openSpace()
-                    if opened {
-                        print("✅ Immersive space opened for SharePlay session")
-                    } else {
-                        print("⚠️ Failed to open immersive space for SharePlay")
-                    }
+                // Signal to the UI that SharePlay wants the immersive space open
+                await MainActor.run {
+                    self.onRequestImmersiveSpace?()
                 }
+                print("📢 SharePlay requesting immersive space to open...")
 
-                // Now configure the system coordinator for group immersive space
+                // Give the UI a moment to open the immersive space
+                try? await Task.sleep(for: .milliseconds(500))
+
+                // Configure the system coordinator based on user preference
+                // When useSpatialPersonas is true: enables spatial personas but disables gestures
+                // When false: gestures work but no spatial personas
+                let enableSpatialPersonas = await MainActor.run { self.getSpatialPersonasEnabled?() ?? false }
+
                 if let systemCoordinator = await session.systemCoordinator {
                     var configuration = SystemCoordinator.Configuration()
-                    configuration.supportsGroupImmersiveSpace = true
-                    configuration.spatialTemplatePreference = .sideBySide
+                    configuration.supportsGroupImmersiveSpace = enableSpatialPersonas
+                    if enableSpatialPersonas {
+                        configuration.spatialTemplatePreference = .sideBySide
+                    }
                     systemCoordinator.configuration = configuration
-                    print("✅ Configured supportsGroupImmersiveSpace = true for SharePlay")
+                    print("✅ Configured supportsGroupImmersiveSpace = \(enableSpatialPersonas) for SharePlay")
                 }
             }
         }

@@ -100,9 +100,6 @@ struct VisionOSMainView: View {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @StateObject private var httpServer = HTTPServer()
 
-    /// Track if SharePlay callbacks have been configured
-    @State private var sharePlayCallbacksConfigured = false
-
     enum InputMode: String {
         case file, json, server
     }
@@ -362,6 +359,20 @@ struct VisionOSMainView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
+
+                        // Toggle for spatial personas vs full interaction
+                        Toggle(isOn: $collaborativeSession.useSpatialPersonas) {
+                            Label(
+                                collaborativeSession.useSpatialPersonas ? "Personas" : "Interact",
+                                systemImage: collaborativeSession.useSpatialPersonas ? "person.2.fill" : "hand.draw.fill"
+                            )
+                            .font(.caption)
+                        }
+                        .toggleStyle(.button)
+                        .buttonStyle(.bordered)
+                        .help(collaborativeSession.useSpatialPersonas
+                              ? "Spatial Personas: See other users, but no diagram gestures"
+                              : "Full Interaction: Diagram gestures work, but no personas")
                     }
                     #endif
 
@@ -618,15 +629,6 @@ struct VisionOSMainView: View {
                     }
                 }
                 print("🔧 HTTP server callback setup complete!")
-
-                // Set up SharePlay immersive space callbacks
-                #if canImport(GroupActivities)
-                if !sharePlayCallbacksConfigured {
-                    sharePlayCallbacksConfigured = true
-                    setupSharePlayCallbacks()
-                    print("🔧 SharePlay immersive space callbacks configured")
-                }
-                #endif
             }
             .task {
                 print("🔧 VisionOSMainView.task called!")
@@ -743,8 +745,26 @@ struct VisionOSMainView: View {
             .alert(item: $collaborativeSession.pendingAlert) { a in
                 Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
             }
+            #if os(visionOS)
+            // React to SharePlay requesting the immersive space to open
+            .onChange(of: collaborativeSession.sharePlayRequestsImmersiveSpace) { _, requestsOpen in
+                if requestsOpen {
+                    Task {
+                        print("📢 SharePlay requested immersive space - opening...")
+                        let opened = await ensureImmersiveSpaceActive()
+                        if opened {
+                            print("✅ Immersive space opened for SharePlay")
+                        } else {
+                            print("❌ Failed to open immersive space for SharePlay")
+                        }
+                        // Reset the flag
+                        collaborativeSession.sharePlayRequestsImmersiveSpace = false
+                    }
+                }
+            }
+            #endif
         }
-    
+
     private func validateJSON(_ text: String) {
         guard !text.isEmpty else {
             isJSONValid = false
@@ -770,25 +790,6 @@ private extension VisionOSMainView {
         }
     }
 
-    #if canImport(GroupActivities)
-    /// Configure SharePlay callbacks for opening/closing immersive space
-    func setupSharePlayCallbacks() {
-        // Callback to open immersive space when SharePlay session starts
-        collaborativeSession.sharePlayCoordinator?.onRequestOpenImmersiveSpace = { [self] in
-            return await self.ensureImmersiveSpaceActive()
-        }
-
-        // Callback to close immersive space when SharePlay session ends
-        collaborativeSession.sharePlayCoordinator?.onRequestCloseImmersiveSpace = { [self] in
-            await self.dismissImmersiveSpace()
-            await MainActor.run {
-                self.hasEnteredImmersive = false
-                self.sharedState.activeFiles.removeAll()
-                self.sharedState.appModel.resetDiagramPositioning()
-            }
-        }
-    }
-    #endif
 }
 #endif
 
