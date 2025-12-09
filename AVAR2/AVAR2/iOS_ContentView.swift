@@ -2,9 +2,6 @@
 import SwiftUI
 import RealityKit
 import ARKit
-import OSLog
-
-private let arLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "iOS_AR")
 
 struct iOS_ContentView: View {
     @StateObject private var arViewModel = ARViewModel()
@@ -97,7 +94,7 @@ struct iOS_ContentView: View {
                     Text("iOS Overlay Guide").font(.headline)
                     Group {
                         Label("Session", systemImage: "person.2.wave.2").font(.subheadline)
-                        Text("Start/join a multi‑device session.").font(.caption).foregroundColor(.secondary)
+                        Text("Start/join a multi-device session.").font(.caption).foregroundColor(.secondary)
                     }
                     Group {
                         Label("Alignment", systemImage: "person.3.sequence").font(.subheadline)
@@ -126,7 +123,6 @@ struct iOS_ContentView: View {
             arViewModel.attachCollaborativeSession(collaborativeSession)
         }
         .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
-            // Update AR view when new diagrams are received
             print("📱 iOS received \(diagrams.count) shared diagrams")
             for (index, diagram) in diagrams.enumerated() {
                 print("📱 Diagram \(index): '\(diagram.filename)' with \(diagram.elements.count) elements")
@@ -162,6 +158,7 @@ class ARViewModel: NSObject, ObservableObject {
     private var arView: ARView?
     private var arSession: ARSession?
     private var sharedDiagrams: [SharedDiagram] = []
+    private var diagramAnchors: [String: AnchorEntity] = [:]
     private weak var collaborativeSession: CollaborativeSessionManager?
     // Shared anchor alignment
     private var sharedAnchorTransform: simd_float4x4?
@@ -175,25 +172,24 @@ class ARViewModel: NSObject, ObservableObject {
         self.arView = arView
         self.arSession = arView.session
         self.arSession?.delegate = self
-
+        
         // Configure AR session for world tracking
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]
         configuration.isCollaborationEnabled = true
         configuration.environmentTexturing = .automatic
-
+        arView.session.delegate = self
         arView.session.run(configuration)
-
-        // Enable coaching overlay
+        
         arView.debugOptions = []
-
-        arLogger.info("AR session configured for iOS with collaboration enabled")
+        
+        print("📱 AR session configured for iOS with collaboration enabled")
+        print("📱 ARSession delegate set to monitor session state")
     }
 
     func attachCollaborativeSession(_ session: CollaborativeSessionManager) {
         self.collaborativeSession = session
         #if os(iOS)
-        // Route incoming collaboration packets to our ARSession
         session.onCollaborationDataReceived = { [weak self] blob in
             guard let self = self, let arSession = self.arSession else { return }
             do {
@@ -220,10 +216,8 @@ class ARViewModel: NSObject, ObservableObject {
     func resetSession() {
         guard let arView = arView else { return }
         
-        // Clear all anchors
         arView.scene.anchors.removeAll()
         
-        // Restart session
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]
         configuration.isCollaborationEnabled = true
@@ -237,17 +231,15 @@ class ARViewModel: NSObject, ObservableObject {
     func placeAnchor() {
         guard let arView = arView else { return }
         
-        // Create a simple anchor 1 meter in front of camera
         let transform = simd_float4x4(
             SIMD4<Float>(1, 0, 0, 0),
             SIMD4<Float>(0, 1, 0, 0),
             SIMD4<Float>(0, 0, 1, 0),
-            SIMD4<Float>(0, 0, -1, 1)  // 1 meter forward
+            SIMD4<Float>(0, 0, -1, 1)
         )
         
         let anchor = AnchorEntity(world: transform)
         
-        // Add a simple sphere as reference
         let sphereMesh = MeshResource.generateSphere(radius: 0.1)
         let sphereMaterial = SimpleMaterial(color: .blue, isMetallic: false)
         let sphereEntity = ModelEntity(mesh: sphereMesh, materials: [sphereMaterial])
@@ -309,70 +301,97 @@ class ARViewModel: NSObject, ObservableObject {
     func updateSharedDiagrams(_ diagrams: [SharedDiagram]) {
         guard let arView = arView else { return }
 
+        // Mantén el modelo
         self.sharedDiagrams = diagrams
 
         if alignmentMode == .sharedSpace, diagrams.isEmpty {
             sharedAnchorStatus = isSharedAnchorLocked ? sharedAnchorStatus : "Awaiting shared anchor"
         }
-        
-        // Clear existing diagram entities
-        for anchor in arView.scene.anchors {
-            if anchor.name.hasPrefix("shared_diagram_") {
+
+        // 1) Eliminar anchors de diagramas que ya no existen
+        let filenames = Set(diagrams.map { $0.filename })
+        for (filename, anchor) in diagramAnchors {
+            if !filenames.contains(filename) {
                 arView.scene.removeAnchor(anchor)
+                diagramAnchors.removeValue(forKey: filename)
+                print("🗑️ Removed anchor for diagram '\(filename)'")
             }
         }
-        
-        // Add new diagram entities
+
+        // 2) Actualizar o crear anchors para cada diagrama
         for (index, diagram) in diagrams.enumerated() {
-            let anchor = createDiagramAnchor(diagram: diagram, index: index, totalCount: diagrams.count)
-            arView.scene.addAnchor(anchor)
+            let filename = diagram.filename
+
+            if let anchor = diagramAnchors[filename] {
+                // 🔄 Actualizar transform de un anchor existente
+                let transformMatrix: simd_float4x4
+
+                if alignmentMode == .sharedSpace, let worldPos = diagram.worldPosition {
+                    var matrix = matrix_identity_float4x4
+                    if let orientation = diagram.worldOrientation {
+                        matrix = simd_float4x4(orientation)
+                    }
+                    matrix.columns.3 = SIMD4<Float>(worldPos.x, worldPos.y, worldPos.z, 1.0)
+                    transformMatrix = matrix
+                } else {
+                    transformMatrix = ARViewModel.defaultFallbackTransform(index: index, totalCount: diagrams.count)
+                }
+
+                anchor.transform = Transform(matrix: transformMatrix)
+
+                if let worldScale = diagram.worldScale {
+                    anchor.scale = SIMD3<Float>(repeating: worldScale)
+                }
+
+                print("🔄 Updated anchor for '\(filename)'")
+            } else {
+                // ➕ Crear un nuevo anchor desde cero
+                let anchor = createDiagramAnchor(
+                    diagram: diagram,
+                    index: index,
+                    totalCount: diagrams.count
+                )
+                arView.scene.addAnchor(anchor)
+                diagramAnchors[filename] = anchor
+                print("➕ Created new anchor for '\(filename)'")
+            }
         }
-        
-        print("📱 Updated iOS view with \(diagrams.count) shared diagrams")
+
+        print("📱 Updated iOS view with \(diagrams.count) shared diagrams (anchors: \(diagramAnchors.count))")
     }
+
+
     
-    private func createDiagramAnchor(diagram: SharedDiagram, index: Int, totalCount: Int) -> AnchorEntity {
-        // Use host→local mapping when available; otherwise, place in front of user
+    private func createDiagramAnchor(diagram: SharedDiagram,
+                                     index: Int,
+                                     totalCount: Int) -> AnchorEntity {
         let transform: simd_float4x4
 
-        // Choose mapping based on mode
         if alignmentMode == .sharedSpace {
-            // iOS uses anchor-relative positioning (visionOS sends positions already transformed)
-            if let anchorRelativePos = diagram.worldPosition, let sharedAnchor = sharedAnchorTransform {
-                // Position is already relative to host's device frame
-                // Build local transform matrix with anchor-relative position
-                var localMatrix = matrix_identity_float4x4
-                if let anchorRelativeOrient = diagram.worldOrientation {
-                    localMatrix = simd_matrix4x4(anchorRelativeOrient)
-                }
-                localMatrix.columns.3 = SIMD4<Float>(anchorRelativePos.x, anchorRelativePos.y, anchorRelativePos.z, 1.0)
-
-                // Use only the rotation from the shared anchor to avoid inheriting host translation offsets
-                var anchorRotation = sharedAnchor
-                anchorRotation.columns.3 = SIMD4<Float>(0, 0, 0, 1)
-
-                transform = anchorRotation * localMatrix
-                print("📍 Placing '\(diagram.filename)' using anchor-relative position: \(anchorRelativePos)")
-                print("   Shared anchor rotation applied (translation removed for per-user placement)")
-            } else if let position = diagram.worldPosition {
-                // Have position but no anchor - place at absolute position (will be wrong but visible)
+            if let worldPos = diagram.worldPosition {
+                // ✅ Interpretar SIEMPRE worldPosition como WORLD SPACE compartido
                 var matrix = matrix_identity_float4x4
+
                 if let orientation = diagram.worldOrientation {
                     matrix = simd_matrix4x4(orientation)
                 }
-                matrix.columns.3 = SIMD4<Float>(position.x, position.y, position.z, 1.0)
+
+                matrix.columns.3 = SIMD4<Float>(
+                    worldPos.x,
+                    worldPos.y,
+                    worldPos.z,
+                    1.0
+                )
+
                 transform = matrix
-                print("⚠️ No shared anchor - placing '\(diagram.filename)' at absolute position (may be incorrect)")
-            } else if let sharedAnchor = sharedAnchorTransform {
-                // Fallback: Have anchor but no position - place at anchor
-                transform = sharedAnchor
-                print("📍 Using shared anchor transform for '\(diagram.filename)' (fallback)")
+                print("📍 Placing '\(diagram.filename)' at WORLD position: \(worldPos)")
             } else {
-                // Fallback: No position data - use default placement
+                // Sin info de posición → layout por defecto
                 transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
-                print("📍 Using fallback positioning for '\(diagram.filename)'")
+                print("📍 Using fallback positioning for '\(diagram.filename)' (no worldPosition)")
             }
         } else {
+            // Modo preview local: siempre frente al usuario
             transform = ARViewModel.defaultFallbackTransform(index: index, totalCount: totalCount)
             print("📍 Local preview positioning for '\(diagram.filename)'")
         }
@@ -380,58 +399,56 @@ class ARViewModel: NSObject, ObservableObject {
         let anchor = AnchorEntity(world: transform)
         anchor.name = "shared_diagram_\(diagram.filename)"
 
-        // Apply scale to anchor (only once, not in the matrix above)
         if let worldScale = diagram.worldScale {
             anchor.scale = SIMD3<Float>(repeating: worldScale)
             print("📏 Applying scale \(worldScale) to '\(diagram.filename)'")
         }
-        
+
         print("📱 Creating AR diagram '\(diagram.filename)' with \(diagram.elements.count) elements")
-        
-        // Determine if this is a 2D or 3D diagram
+
         let is2D = diagram.elements.allSatisfy { element in
             guard let position = element.position, position.count >= 3 else { return true }
-            return position[2] == 0 // z-coordinate is 0 for 2D diagrams
+            return position[2] == 0
         }
-        
-        // Create a container for normalized positioning
+
         let diagramContainer = Entity()
         diagramContainer.name = "diagram_container"
-        
-        // Calculate normalization context for proper scaling
+
         let normalizationContext = NormalizationContext(elements: diagram.elements, is2D: is2D)
-        
-        // Create full-scale diagram representation with proper normalization
+
         var elementCount = 0
         for (elementIndex, element) in diagram.elements.enumerated() {
-            if let elementEntity = createNormalizedElement(element: element, index: elementIndex, normalization: normalizationContext) {
+            if let elementEntity = createNormalizedElement(
+                element: element,
+                index: elementIndex,
+                normalization: normalizationContext
+            ) {
                 diagramContainer.addChild(elementEntity)
                 elementCount += 1
             }
         }
-        
-        // Add connections between elements
+
         for edge in diagram.elements {
             if let connectionEntity = createConnection(for: edge, in: diagramContainer) {
                 diagramContainer.addChild(connectionEntity)
             }
         }
-        
+
         anchor.addChild(diagramContainer)
-        
+
         print("📱 Added \(elementCount) visible elements to AR diagram")
-        
-        // Add title label positioned above the diagram
+
         if let titleEntity = createTitleEntity(text: diagram.filename) {
-            titleEntity.position = SIMD3<Float>(0, 0.8, 0)  // Above the diagram
+            titleEntity.position = SIMD3<Float>(0, 0.8, 0)
             anchor.addChild(titleEntity)
         }
-        
+
         return anchor
     }
 
 
-    // Public helper to reset the mapping (e.g., user taps Recenter)
+
+
     func resetMapping() {
         sharedAnchorTransform = nil
         sharedAnchorId = nil
@@ -505,22 +522,19 @@ class ARViewModel: NSObject, ObservableObject {
     #endif
     
     private func createNormalizedElement(element: ElementDTO, index: Int, normalization: NormalizationContext) -> ModelEntity? {
-        guard let position = element.position else { 
+        guard let position = element.position else {
             print("📱 ⚠️ Element \(index) missing position data")
             return nil
         }
         
-        // Skip camera and edge elements for cleaner visualization
-        if element.type.lowercased() == "camera" || element.type.lowercased() == "edge" || 
-           element.shape?.shapeDescription?.lowercased() == "line" {
+        if element.type.lowercased() == "camera" || element.type.lowercased() == "edge" ||
+            element.shape?.shapeDescription?.lowercased() == "line" {
             return nil
         }
         
-        // Create mesh and material using the element's properties
         let (mesh, material) = element.meshAndMaterial(normalization: normalization)
         let entity = ModelEntity(mesh: mesh, materials: [material])
 
-        // Calculate normalized position
         let dims = normalization.positionCenters.count
         let rawX = position.count > 0 ? position[0] : 0
         let rawY = position.count > 1 ? position[1] : 0
@@ -534,16 +548,13 @@ class ARViewModel: NSObject, ObservableObject {
         let yPos = normalization.is2D ? -Float(normY) : Float(normY)
         entity.position = SIMD3<Float>(Float(normX), yPos, Float(normZ))
 
-        // For 2D diagrams, rotate cylinders/ellipses to face forward (toward viewer)
         if normalization.is2D {
             if let shapeDesc = element.shape?.shapeDescription?.lowercased(),
                (shapeDesc.contains("ellipse") || shapeDesc.contains("cylinder")) {
-                // Rotate 90 degrees around X-axis so circular face points toward viewer
                 entity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
             }
         }
 
-        // Store ID for connection lookups
         entity.name = element.id ?? "element_\(index)"
         
         print("📱 ✅ Created normalized element '\(entity.name)' at position (\(entity.position.x), \(entity.position.y), \(entity.position.z))")
@@ -553,7 +564,6 @@ class ARViewModel: NSObject, ObservableObject {
     
     private func createConnection(for edge: ElementDTO, in container: Entity) -> ModelEntity? {
         guard let fromId = edge.fromId, let toId = edge.toId else { return nil }
-        // Find entities by name
         var fromEntity: Entity? = nil
         var toEntity: Entity? = nil
         
@@ -599,7 +609,6 @@ class ARViewModel: NSObject, ObservableObject {
         let lineEntity = ModelEntity(mesh: mesh, materials: [material])
         lineEntity.position = pos1 + (lineVector / 2)
         
-        // Orient the line along the vector
         let direction = lineVector / length
         let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: direction)
         lineEntity.orientation = quat
@@ -610,12 +619,10 @@ class ARViewModel: NSObject, ObservableObject {
     private func createSimplifiedElement(element: ElementDTO, index: Int) -> ModelEntity? {
         guard let position = element.position, position.count >= 3 else { return nil }
         
-        // Skip camera and edge elements
         if element.type.lowercased() == "camera" || element.type.lowercased() == "edge" {
             return nil
         }
         
-        // Create basic geometry based on shape
         let mesh: MeshResource
         let color = UIColor(
             red: CGFloat(element.color?[safe: 0] ?? 0.5),
@@ -632,17 +639,16 @@ class ARViewModel: NSObject, ObservableObject {
             } else if shapeDesc.contains("box") || shapeDesc.contains("cube") {
                 mesh = MeshResource.generateBox(size: SIMD3<Float>(0.1, 0.1, 0.1))
             } else {
-                mesh = MeshResource.generateSphere(radius: 0.05) // Default
+                mesh = MeshResource.generateSphere(radius: 0.05)
             }
         } else {
-            mesh = MeshResource.generateSphere(radius: 0.05) // Default
+            mesh = MeshResource.generateSphere(radius: 0.05)
         }
         
         let material = SimpleMaterial(color: color, isMetallic: false)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         
-        // Scale down and position
-        let scale: Float = 0.1 // Scale down for mobile viewing
+        let scale: Float = 0.1
         entity.position = SIMD3<Float>(
             Float(position[0]) * scale,
             Float(position[1]) * scale,
@@ -653,21 +659,18 @@ class ARViewModel: NSObject, ObservableObject {
     }
     
     private func createTitleEntity(text: String) -> ModelEntity? {
-        // Create visible text representation for iOS
         let textMesh = MeshResource.generateText(
             text,
-            extrusionDepth: 0.005,  // Thinner extrusion
-            font: .systemFont(ofSize: 0.05),  // Smaller but readable size
+            extrusionDepth: 0.005,
+            font: .systemFont(ofSize: 0.05),
             containerFrame: CGRect(x: -0.5, y: -0.05, width: 1.0, height: 0.1),
             alignment: .center,
             lineBreakMode: .byTruncatingTail
         )
         
-        // Use bright color for visibility
         let textMaterial = SimpleMaterial(color: .systemYellow, isMetallic: false)
         let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
         
-        // Add slight glow effect by making it emissive
         var glowMaterial = UnlitMaterial(color: .systemYellow)
         glowMaterial.color = .init(tint: .systemYellow)
         textEntity.model?.materials = [glowMaterial]
@@ -675,7 +678,6 @@ class ARViewModel: NSObject, ObservableObject {
         return textEntity
     }
     
-    /// Restart the AR session if it gets frozen or interrupted
     func restartARSession() {
         guard let arView = arView else { return }
         
@@ -710,49 +712,48 @@ class ARViewModel: NSObject, ObservableObject {
     }
 }
 
-// Helper extension for safe array access
 extension Array {
     subscript(safe index: Index) -> Element? {
         return indices.contains(index) ? self[index] : nil
     }
 }
 
-// MARK: - ARSessionDelegate
 extension ARViewModel: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
-        arLogger.error("ARSession failed with error: \(error.localizedDescription)")
+        print("📱 ❌ ARSession failed with error: \(error)")
     }
-
+    
     nonisolated func sessionWasInterrupted(_ session: ARSession) {
-        arLogger.warning("ARSession was interrupted - camera frozen")
+        print("📱 🔴 ARSession was interrupted - camera frozen")
     }
     
     nonisolated func sessionInterruptionEnded(_ session: ARSession) {
-        arLogger.info("ARSession interruption ended - camera should resume")
-
-        // Automatically restart the session with the same configuration after a brief delay
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(500))
-            self.restartARSession()
+        print("📱 🟢 ARSession interruption ended - camera should resume")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            Task { @MainActor in
+                self.restartARSession()
+            }
         }
     }
     
     nonisolated func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
+        print("📱 ARCamera tracking state changed: \(camera.trackingState)")
+        
         switch camera.trackingState {
         case .normal:
-            arLogger.debug("Camera tracking normally")
+            print("📱 ✅ Camera tracking normally")
         case .limited(let reason):
-            arLogger.warning("Camera tracking limited: \(String(describing: reason))")
+            print("📱 ⚠️ Camera tracking limited: \(reason)")
         case .notAvailable:
-            arLogger.error("Camera tracking not available")
+            print("📱 ❌ Camera tracking not available")
         @unknown default:
-            arLogger.warning("Unknown camera tracking state")
+            print("📱 ❓ Unknown camera tracking state")
         }
     }
 
     #if os(iOS)
     nonisolated func session(_ session: ARSession, didOutputCollaborationData data: ARSession.CollaborationData) {
-        // Archive and send to peers
         do {
             let blob = try NSKeyedArchiver.archivedData(withRootObject: data, requiringSecureCoding: true)
             Task { @MainActor in
@@ -765,5 +766,5 @@ extension ARViewModel: ARSessionDelegate {
     #endif
 }
 
-
 #endif
+
