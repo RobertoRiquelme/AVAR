@@ -1,3 +1,8 @@
+//
+//  PlatformApp.swift
+//  AVAR2
+//
+
 import SwiftUI
 import simd
 
@@ -23,52 +28,53 @@ class VisionOSAppState: ObservableObject {
 @main
 struct PlatformApp: App {
     @StateObject private var collaborativeSession = CollaborativeSessionManager()
+
     #if os(visionOS)
     @StateObject private var visionOSState = VisionOSAppState()
     @State private var immersionStyleVisionOS: ImmersionStyle = .mixed
     #endif
-    
+
     var body: some SwiftUI.Scene {
         #if os(visionOS)
-        // Full visionOS experience with immersive spaces
         visionOSApp
         #elseif os(iOS)
-        // iOS companion app with AR view
         iOSApp
         #else
-        // Fallback for macOS or other platforms (simplified view)
         fallbackApp
         #endif
     }
-    
+
     #if os(visionOS)
     @SceneBuilder
     private var visionOSApp: some SwiftUI.Scene {
-        // 1. Main 2D launcher window
         WindowGroup {
             VisionOSMainView(collaborativeSession: collaborativeSession, sharedState: visionOSState)
         }
         .defaultSize(width: 1000, height: 1000)
         .windowResizability(.contentMinSize)
 
-        // 2. Full immersive spatial scene
         ImmersiveSpace(id: "MainImmersive") {
-            VisionOSImmersiveView(sharedState: visionOSState, collaborativeSession: collaborativeSession, immersionStyle: immersionStyleVisionOS)
+            VisionOSImmersiveView(
+                sharedState: visionOSState,
+                collaborativeSession: collaborativeSession,
+                immersionStyle: immersionStyleVisionOS
+            )
         }
         .immersionStyle(selection: $immersionStyleVisionOS, in: .mixed, .full)
         .immersiveEnvironmentBehavior(.coexist)
+        .immersiveEnvironmentBehavior(.coexist)
     }
     #endif
-    
+
     #if os(iOS)
-    @SceneBuilder 
+    @SceneBuilder
     private var iOSApp: some SwiftUI.Scene {
         WindowGroup {
             iOS_ContentView(collaborativeSession: collaborativeSession)
         }
     }
     #endif
-    
+
     #if os(macOS)
     @SceneBuilder
     private var fallbackApp: some SwiftUI.Scene {
@@ -77,11 +83,11 @@ struct PlatformApp: App {
                 Text("AVAR2 - Collaborative Diagram Viewer")
                     .font(.title)
                     .padding()
-                
+
                 Text("This is a simplified macOS version.")
                     .font(.body)
                     .padding()
-                
+
                 Text("Full experience available on visionOS and iOS")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -116,689 +122,906 @@ struct VisionOSMainView: View {
     @State private var jsonInput: String = ""
     @State private var isJSONValid: Bool = false
     @State private var showingCollaborativeSession = false
+
+    @State private var showingDiagramChooser = false
+
     @Environment(\.scenePhase) private var scenePhase
 
     init(collaborativeSession: CollaborativeSessionManager, sharedState: VisionOSAppState) {
         self.collaborativeSession = collaborativeSession
         self.sharedState = sharedState
-        
-        // Find all .txt resources in the main bundle
+
         let names = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil)?
             .map { $0.deletingPathExtension().lastPathComponent }
             .sorted() ?? []
-        
+
         self.files = names
         self._selectedFile = State(initialValue: names.first ?? "")
-        
+
         print("📁 Found \(names.count) example files: \(names)")
     }
-    
+
     var body: some View {
-            VStack(spacing: 20) {
-                Text("Launch Immersive Experience")
-                    .font(.title)
-                    .padding(.top)
+        VStack(spacing: 16) {
+            Text("AVAR — Launch Immersive Experience")
+                .font(.title)
+                .padding(.top, 6)
 
-                #if os(visionOS)
-                HStack(spacing: 12) {
-                    let hasAnchor = collaborativeSession.sharedAnchor != nil
-                    Label("Shared Space", systemImage: hasAnchor ? "checkmark.seal.fill" : "person.3.sequence")
-                        .foregroundColor(hasAnchor ? .green : .secondary)
-                    if let anchor = collaborativeSession.sharedAnchor {
-                        Text(anchor.id.prefix(6))
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.12), in: .capsule)
-                    } else {
-                        Text("Awaiting anchor").font(.caption).foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Button {
-                        broadcastSharedAnchor()
-                    } label: {
-                        Label("Broadcast", systemImage: "antenna.radiowaves.left.and.right")
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(.horizontal)
-                #endif
-
-
-                Picker("Input Source", selection: $inputMode) {
-                    Text("From File").tag(InputMode.file)
-                    Text("From JSON").tag(InputMode.json)
-                    Text("HTTP Server").tag(InputMode.server)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
-                if inputMode == .file {
-                    Picker("Select Example", selection: $selectedFile) {
-                        ForEach(files, id: \.self) { name in
-                            Text(name).tag(name)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .padding(.horizontal)
-                } else if inputMode == .json {
-                    VStack(alignment: .leading) {
-                        Text("Paste JSON Diagram:")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        TextEditor(text: $jsonInput)
-                            .font(.system(.caption, design: .monospaced))
-                            .padding(8)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
-                            .frame(height: 120)
-                            .padding(.horizontal)
-
-                        HStack {
-                            if isJSONValid {
-                                Label("Valid JSON", systemImage: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.caption)
-                            } else if !jsonInput.isEmpty {
-                                Label("Invalid JSON", systemImage: "xmark.circle.fill")
-                                    .foregroundColor(.red)
-                                    .font(.caption)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                    }
-                    .onChange(of: jsonInput) { _, newValue in
-                        validateJSON(newValue)
-                    }
-                } else {
-                    // HTTP Server tab - inline implementation
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("HTTP Server Controls")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        HStack {
-                            Button(httpServer.isRunning ? "Stop Server" : "Start Server") {
-                                if httpServer.isRunning {
-                                    httpServer.stop()
-                                } else {
-                                    httpServer.start()
-                                }
-                            }
-                            .font(.title3)
-                            .buttonStyle(.borderedProminent)
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        
-                        // Server Status
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Server Status:")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .padding(.horizontal)
-                            
-                            Text(httpServer.serverStatus)
-                                .font(.body)
-                                .foregroundColor(httpServer.isRunning ? .green : .secondary)
-                                .padding(.horizontal)
-                            
-                            if httpServer.isRunning {
-                                Text("URL: \(httpServer.serverURL)")
-                                    .font(.body)
-                                    .foregroundColor(.blue)
-                                    .padding(.horizontal)
-                            }
-                        }
-                        
-                        // Server Logs
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Server Logs:")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .padding(.horizontal)
-                            
-                            ScrollViewReader { proxy in
-                                ScrollView {
-                                    LazyVStack(alignment: .leading, spacing: 2) {
-                                        if httpServer.serverLogs.isEmpty {
-                                            Text("No logs yet")
-                                                .font(.system(.caption, design: .monospaced))
-                                                .foregroundColor(.secondary)
-                                                .padding(8)
-                                        } else {
-                                            ForEach(Array(httpServer.serverLogs.enumerated()), id: \.offset) { index, log in
-                                                Text(log)
-                                                    .font(.system(.caption, design: .monospaced))
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 2)
-                                                    .id(index)
-                                            }
-                                        }
-                                    }
-                                    .padding(4)
-                                    .background(Color.gray.opacity(0.1))
-                                    .cornerRadius(8)
-                                }
-                                .frame(height: 120)
-                                .onChange(of: httpServer.serverLogs.count) { _, _ in
-                                    if !httpServer.serverLogs.isEmpty {
-                                        withAnimation(.easeOut(duration: 0.2)) {
-                                            proxy.scrollTo(httpServer.serverLogs.count - 1, anchor: .bottom)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal)
-                            
-                            // Last received JSON
-                            if !httpServer.lastReceivedJSON.isEmpty {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 8) {
-                                        Text("Last Received JSON:")
-                                            .font(.caption)
-                                            .fontWeight(.medium)
-                                        
-                                        Spacer()
-                                        
-                                        Button {
-                                            copyJSONToClipboard(httpServer.lastReceivedJSON)
-                                        } label: {
-                                            Label(didCopyJSON ? "Copied" : "Copy", systemImage: didCopyJSON ? "checkmark" : "doc.on.doc")
-                                                .labelStyle(.titleAndIcon)
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .font(.caption2)
-                                    }
-                                    .padding(.horizontal)
-                                    
-                                    ScrollView {
-                                        Text(httpServer.lastReceivedJSON)
-                                            .font(.system(.caption2, design: .monospaced))
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(6)
-                                            .background(Color.blue.opacity(0.1))
-                                            .cornerRadius(6)
-                                            .textSelection(.enabled)
-                                    }
-                                    .frame(height: 60)
-                                    .padding(.horizontal)
-                                    
-                                    if didCopyJSON {
-                                        Text("Copied to clipboard")
-                                            .font(.caption2)
-                                            .foregroundColor(.green)
-                                            .padding(.horizontal)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Collaborative Session Button
-                HStack {
-                    Button("Collaborative Session") {
-                        showingCollaborativeSession = true
-                    }
-                    .buttonStyle(.bordered)
-
-                    // Share button for visionOS 26+ immersive space sharing
-                    #if os(visionOS)
-                    if #available(visionOS 26.0, *) {
-                        Button {
-                            Task {
-                                await startSharePlayForImmersiveSpace()
-                            }
-                        } label: {
-                            Label("Share Space", systemImage: "shareplay")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-
-                        // Toggle for spatial personas vs full interaction
-                        Toggle(isOn: $collaborativeSession.useSpatialPersonas) {
-                            Label(
-                                collaborativeSession.useSpatialPersonas ? "Personas" : "Interact",
-                                systemImage: collaborativeSession.useSpatialPersonas ? "person.2.fill" : "hand.draw.fill"
-                            )
-                            .font(.caption)
-                        }
-                        .toggleStyle(.button)
-                        .buttonStyle(.bordered)
-                        .help(collaborativeSession.useSpatialPersonas
-                              ? "Spatial Personas: See other users, but no diagram gestures"
-                              : "Full Interaction: Diagram gestures work, but no personas")
-                    }
-                    #endif
-
-                    if collaborativeSession.isSessionActive || collaborativeSession.isSharePlayActive {
-                        HStack(spacing: 4) {
-                            Text("●")
-                                .foregroundColor(.green)
-                                .font(.system(size: 12))
-                            if collaborativeSession.isSharePlayActive {
-                                Text("SharePlay")
-                                    .font(.caption2)
-                                    .foregroundColor(.green)
-                            }
-                        }
-                    }
-                }
-
-                Button("Add Diagram") {
+            // ✅ Collaboration (expandable, fixed height so the UI doesn't resize)
+            CollaborationCard(
+                collaborativeSession: collaborativeSession,
+                onBroadcast: { broadcastSharedAnchor() },
+                onOpenCollabSession: { showingCollaborativeSession = true },
+                onStartShareSpace: {
                     Task {
-                        if inputMode == .json && !isJSONValid {
-                            return // Prevent invalid input
+                        if #available(visionOS 26.0, *) {
+                            await startSharePlayForImmersiveSpace()
                         }
+                    }
+                }
+            )
+            .padding(.horizontal)
 
-                        // Ensure immersive space is open
-                        if !hasEnteredImmersive {
-                            print("🔄 Immersive space not open, opening now...")
+            // ✅ Input (mode-dependent, collab stays stable)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 14) {
+                    Picker("Input Source", selection: $inputMode) {
+                        Text("From File").tag(InputMode.file)
+                        Text("From JSON").tag(InputMode.json)
+                        Text("HTTP Server").tag(InputMode.server)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if inputMode == .file {
+                        filePickerSection
+                    } else if inputMode == .json {
+                        jsonSection
+                    } else {
+                        serverSection
+                    }
+
+                    HStack {
+                        if inputMode != .server {
+                            Button {
+                                Task {
+                                    if inputMode == .json && !isJSONValid { return }
+
+                                    if !hasEnteredImmersive {
+                                        do {
+                                            await openImmersiveSpace(id: "MainImmersive")
+                                            hasEnteredImmersive = true
+                                        } catch {
+                                            print("❌ Failed to open immersive space for diagram: \(error)")
+                                            return
+                                        }
+                                    }
+
+                                    let newFile = (inputMode == .file) ? selectedFile : "input_json_\(UUID().uuidString)"
+                                    if inputMode == .json {
+                                        let tempURL = FileManager.default.temporaryDirectory
+                                            .appendingPathComponent(newFile)
+                                            .appendingPathExtension("txt")
+                                        try? jsonInput.write(to: tempURL, atomically: true, encoding: .utf8)
+                                    }
+
+                                    sharedState.activeFiles.append(newFile)
+
+                                    if collaborativeSession.isSessionActive {
+                                        do {
+                                            let elements = try DiagramDataLoader.loadScriptOutput(from: newFile).elements
+                                            collaborativeSession.shareDiagram(filename: newFile, elements: elements)
+                                        } catch {
+                                            print("❌ Failed to share diagram: \(error)")
+                                        }
+                                    }
+
+                                    sharedState.appModel.showPlaneVisualization = false
+                                    sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+                                }
+                            } label: {
+                                Label("Add Diagram", systemImage: "plus.circle.fill")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(inputMode == .file && selectedFile.isEmpty)
+
+                            Spacer()
+                        } else {
+                            Label("Auto-import from server", systemImage: "bolt.horizontal.circle")
+                                .font(.caption)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(.thinMaterial, in: Capsule())
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            } label: {
+                Label("Input", systemImage: "tray.and.arrow.down")
+            }
+            .padding(.horizontal)
+
+            Spacer(minLength: 0)
+
+            bottomBar
+
+            Text("60 FPS")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 8)
+        }
+        .groupBoxStyle(RoundedCardGroupBoxStyle()) // ✅ rounder cards everywhere
+        .padding()
+        .contentShape(Rectangle())
+        .environment(sharedState.appModel)
+        .sheet(isPresented: $showingCollaborativeSession) {
+            CollaborativeSessionView(sessionManager: collaborativeSession)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background { exit(0) }
+        }
+        .onAppear {
+            print("🔧 VisionOSMainView.onAppear called!")
+            print("🔧 Setting httpServer.onJSONReceived callback NOW")
+            httpServer.onJSONReceived = { scriptOutput, rawJSON in
+                print("🎉 CALLBACK INVOKED with \(scriptOutput.elements.count) elements!")
+                Task { @MainActor in
+                    guard await self.ensureImmersiveSpaceActive() else {
+                        print("🚫 Unable to present immersive space for HTTP diagram")
+                        return
+                    }
+
+                    if let diagramId = scriptOutput.id {
+                        if let existingInfo = self.sharedState.appModel.getDiagramInfo(for: diagramId) {
+                            print("🔄 Updating existing diagram with ID: \(diagramId)")
+                            self.sharedState.activeFiles.removeAll { $0 == existingInfo.filename }
+                            let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
+
                             do {
-                                await openImmersiveSpace(id: "MainImmersive")
-                                hasEnteredImmersive = true
-                                print("✅ Immersive space opened for diagram")
+                                guard let data = rawJSON.data(using: .utf8) else {
+                                    print("❌ Failed to convert raw JSON to data for diagram update")
+                                    return
+                                }
+                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                try data.write(to: tempURL)
+                                print("🔄 Redrawing diagram with ID: \(diagramId)")
+                                self.sharedState.activeFiles.append(newFile)
+                                self.sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
                             } catch {
-                                print("❌ Failed to open immersive space for diagram: \(error)")
+                                print("❌ Failed to save updated HTTP diagram: \(error)")
+                            }
+                        } else {
+                            print("➕ Creating new diagram with ID: \(diagramId)")
+                            let newFile = "http_diagram_\(diagramId)"
+                            do {
+                                guard let data = rawJSON.data(using: .utf8) else {
+                                    print("❌ Failed to convert raw JSON to data for new diagram with ID")
+                                    return
+                                }
+                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                try data.write(to: tempURL)
+
+                                print("📊 Adding new HTTP diagram: \(newFile)")
+                                let diagramIndex = self.sharedState.activeFiles.count
+                                self.sharedState.activeFiles.append(newFile)
+                                self.sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
+                            } catch {
+                                print("❌ Failed to save new HTTP diagram: \(error)")
+                            }
+                        }
+                    } else {
+                        print("➕ Creating new diagram without ID")
+                        let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
+                        do {
+                            guard let data = rawJSON.data(using: .utf8) else {
+                                print("❌ Failed to convert raw JSON to data for new diagram without ID")
                                 return
                             }
-                        }
+                            let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                            try data.write(to: tempURL)
 
-                        let newFile = inputMode == .file ? selectedFile : "input_json_\(UUID().uuidString)"
-                        if inputMode == .json {
-                            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(newFile).appendingPathExtension("txt")
-                            try? jsonInput.write(to: tempURL, atomically: true, encoding: .utf8)
+                            print("📊 Adding HTTP diagram: \(newFile)")
+                            self.sharedState.activeFiles.append(newFile)
+                        } catch {
+                            print("❌ Failed to save HTTP diagram: \(error)")
                         }
-                        print("📊 Adding diagram: \(newFile)")
-                        sharedState.activeFiles.append(newFile)
-                        
-                        // Share with collaborative session if active
-                        if collaborativeSession.isSessionActive {
-                            Task {
-                                do {
-                                    let elements = try DiagramDataLoader.loadScriptOutput(from: newFile).elements
-                                    collaborativeSession.shareDiagram(filename: newFile, elements: elements)
-                                } catch {
-                                    print("❌ Failed to share diagram: \(error)")
-                                }
-                            }
-                        }
-                        
-                        // Ensure plane visualization starts disabled for new diagrams
-                        sharedState.appModel.showPlaneVisualization = false
-                        sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
                     }
-                }
-                .font(.title2)
 
-                // Immersion Test Buttons
-                VStack(spacing: 12) {
-                    Text("Immersion Test Controls")
-                        .font(.headline)
-                        .foregroundColor(.blue)
-                    
-                    HStack(spacing: 10) {
-                        Button("0%") {
-                            print("🔘 0% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.0)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("25%") {
-                            print("🔘 25% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.25)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("50%") {
-                            print("🔘 50% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.5)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("75%") {
-                            print("🔘 75% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 0.75)
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("100%") {
-                            print("🔘 100% button pressed - sending notification")
-                            NotificationCenter.default.post(name: .setImmersionLevel, object: 1.0)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
+                    print("🔥 Final activeFiles count: \(self.sharedState.activeFiles.count)")
+                    print("🔥 Callback complete - SwiftUI should now update the view")
 
-                Spacer()
-                
-                // Bottom row buttons - Exit Immersive Space and Show Plane Visualization on the left, Quit App on the right
-                HStack {
-                    Button("Exit Immersive Space") {
-                        Task {
-                            await dismissImmersiveSpace()
-                            hasEnteredImmersive = false
-                            sharedState.activeFiles.removeAll()
-                            sharedState.appModel.resetDiagramPositioning()
-
-                            // Also leave SharePlay session if active
-                            #if canImport(GroupActivities)
-                            if collaborativeSession.isSharePlayActive {
-                                collaborativeSession.stopSharePlay()
-                                print("🛑 Left SharePlay session after closing immersive space")
-                            }
-                            #endif
-                        }
-                    }
-                    .font(.title3)
-                    
-                    Button(sharedState.appModel.showPlaneVisualization ? "Hide Plane Visualization" : "Show Plane Visualization") {
-                        sharedState.appModel.togglePlaneVisualization()
-                    }
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    Button("Quit App") {
-                        exit(0)
-                    }
-                    .font(.title2)
-                    .foregroundColor(.red)
-                }
-                
-                // Simple FPS display - inline implementation
-                Text("60 FPS")
-                    .font(.title)
-                    .padding(.bottom)
-            }
-            .padding()
-            .contentShape(Rectangle())
-            .environment(sharedState.appModel)
-            .sheet(isPresented: $showingCollaborativeSession) {
-                CollaborativeSessionView(sessionManager: collaborativeSession)
-            }
-            .onChange(of: scenePhase) { oldPhase, newPhase in
-                if newPhase == .background {
-                    exit(0)
+                    self.sharedState.appModel.showPlaneVisualization = false
+                    self.sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
                 }
             }
-            .onAppear {
-                print("🔧 VisionOSMainView.onAppear called!")
-                // Set up HTTP server callback IMMEDIATELY on appear
-                print("🔧 Setting httpServer.onJSONReceived callback NOW")
-                httpServer.onJSONReceived = { scriptOutput, rawJSON in
-                    print("🎉 CALLBACK INVOKED with \(scriptOutput.elements.count) elements!")
-                    Task { @MainActor in
-                        // Ensure immersive space is open (re-open if the user closed it)
-                        guard await self.ensureImmersiveSpaceActive() else {
-                            print("🚫 Unable to present immersive space for HTTP diagram")
-                            return
-                        }
+            print("🔧 HTTP server callback setup complete!")
 
-                        // Handle diagram ID logic
-                        if let diagramId = scriptOutput.id {
-                            // Diagram has ID - check if it exists
-                            if let existingInfo = self.sharedState.appModel.getDiagramInfo(for: diagramId) {
-                                // Diagram exists - update/redraw it
-                                print("🔄 Updating existing diagram with ID: \(diagramId)")
+            #if canImport(GroupActivities)
+            collaborativeSession.sharePlayCoordinator?.getHasDiagramsOpen = { [weak sharedState] in
+                !(sharedState?.activeFiles.isEmpty ?? true)
+            }
+            #endif
+        }
+        .task {
+            print("🔧 VisionOSMainView.task called!")
+            if !hasLaunched {
+                hasLaunched = true
+                print("🚀 App launching - starting surface detection...")
+                await sharedState.appModel.startSurfaceDetectionIfNeeded()
 
-                                // Find and remove the existing diagram from activeFiles
-                                self.sharedState.activeFiles.removeAll { $0 == existingInfo.filename }
+                print("🎯 Opening immersive space...")
+                let opened = await ensureImmersiveSpaceActive()
+                if opened {
+                    print("✅ Immersive space opened successfully")
+                }
+            }
 
-                                // Create new filename for the update
-                                let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
+            print("🔧 Setting httpServer.onJSONReceived callback in .task (backup)")
+            httpServer.onJSONReceived = { scriptOutput, rawJSON in
+                print("🎉 CALLBACK INVOKED FROM .task with \(scriptOutput.elements.count) elements!")
+                Task { @MainActor in
+                    guard await ensureImmersiveSpaceActive() else {
+                        print("🚫 Unable to present immersive space for HTTP diagram")
+                        return
+                    }
 
-                                // Save updated JSON to temporary file
-                                do {
-                                    guard let data = rawJSON.data(using: .utf8) else {
-                                        print("❌ Failed to convert raw JSON to data for diagram update")
-                                        return
-                                    }
-                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
-                                    try data.write(to: tempURL)
+                    if let diagramId = scriptOutput.id {
+                        if let existingInfo = sharedState.appModel.getDiagramInfo(for: diagramId) {
+                            print("🔄 Updating existing diagram with ID: \(diagramId)")
+                            sharedState.activeFiles.removeAll { $0 == existingInfo.filename }
+                            let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
 
-                                    print("🔄 Redrawing diagram with ID: \(diagramId)")
-                                    self.sharedState.activeFiles.append(newFile)
-
-                                    // Update AppModel tracking
-                                    self.sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
-
-                                } catch {
-                                    print("❌ Failed to save updated HTTP diagram: \(error)")
-                                }
-                            } else {
-                                // New diagram with ID
-                                print("➕ Creating new diagram with ID: \(diagramId)")
-
-                                let newFile = "http_diagram_\(diagramId)"
-                                do {
-                                    guard let data = rawJSON.data(using: .utf8) else {
-                                        print("❌ Failed to convert raw JSON to data for new diagram with ID")
-                                        return
-                                    }
-                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
-                                    try data.write(to: tempURL)
-
-                                    print("📊 Adding new HTTP diagram: \(newFile)")
-                                    let diagramIndex = self.sharedState.activeFiles.count
-                                    self.sharedState.activeFiles.append(newFile)
-
-                                    // Register in AppModel
-                                    self.sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
-
-                                } catch {
-                                    print("❌ Failed to save new HTTP diagram: \(error)")
-                                }
-                            }
-                        } else {
-                            // No ID - create new diagram
-                            print("➕ Creating new diagram without ID")
-
-                            let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
                             do {
                                 guard let data = rawJSON.data(using: .utf8) else {
-                                    print("❌ Failed to convert raw JSON to data for new diagram without ID")
+                                    print("❌ Failed to convert raw JSON to data for diagram update")
                                     return
                                 }
                                 let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
                                 try data.write(to: tempURL)
 
-                                print("📊 Adding HTTP diagram: \(newFile)")
-                                self.sharedState.activeFiles.append(newFile)
-
-                            } catch {
-                                print("❌ Failed to save HTTP diagram: \(error)")
-                            }
-                        }
-
-                        print("🔥 Final activeFiles count: \(self.sharedState.activeFiles.count)")
-                        print("🔥 Callback complete - SwiftUI should now update the view")
-
-                        // Ensure plane visualization starts disabled for new diagrams
-                        self.sharedState.appModel.showPlaneVisualization = false
-                        self.sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
-                    }
-                }
-                print("🔧 HTTP server callback setup complete!")
-
-                // Set up SharePlay callback to check if we have diagrams open
-                #if canImport(GroupActivities)
-                collaborativeSession.sharePlayCoordinator?.getHasDiagramsOpen = { [weak sharedState] in
-                    !(sharedState?.activeFiles.isEmpty ?? true)
-                }
-                #endif
-            }
-            .task {
-                print("🔧 VisionOSMainView.task called!")
-                // Auto-open immersive space on launch
-                if !hasLaunched {
-                    hasLaunched = true
-                    print("🚀 App launching - starting surface detection...")
-                    // Start surface detection BEFORE opening immersive space
-                    await sharedState.appModel.startSurfaceDetectionIfNeeded()
-
-                    print("🎯 Opening immersive space...")
-                    let opened = await ensureImmersiveSpaceActive()
-                    if opened {
-                        print("✅ Immersive space opened successfully")
-                    }
-                }
-
-                // Set up HTTP server callback for automatic diagram loading (kept as backup)
-                print("🔧 Setting httpServer.onJSONReceived callback in .task (backup)")
-                httpServer.onJSONReceived = { scriptOutput, rawJSON in
-                    print("🎉 CALLBACK INVOKED FROM .task with \(scriptOutput.elements.count) elements!")
-                    Task { @MainActor in
-                        // Ensure immersive space is open (re-open if the user closed it)
-                        guard await ensureImmersiveSpaceActive() else {
-                            print("🚫 Unable to present immersive space for HTTP diagram")
-                            return
-                        }
-
-                        // Handle diagram ID logic
-                        if let diagramId = scriptOutput.id {
-                            // Diagram has ID - check if it exists
-                            if let existingInfo = sharedState.appModel.getDiagramInfo(for: diagramId) {
-                                // Diagram exists - update/redraw it
-                                print("🔄 Updating existing diagram with ID: \(diagramId)")
-                                
-                                // Find and remove the existing diagram from activeFiles
-                                sharedState.activeFiles.removeAll { $0 == existingInfo.filename }
-                                
-                                // Create new filename for the update
-                                let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
-                                
-                                // Save updated JSON to temporary file
-                                do {
-                                    guard let data = rawJSON.data(using: .utf8) else {
-                                        print("❌ Failed to convert raw JSON to data for diagram update")
-                                        return
-                                    }
-                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
-                                    try data.write(to: tempURL)
-                                    
-                                    print("🔄 Redrawing diagram with ID: \(diagramId)")
-                                    sharedState.activeFiles.append(newFile)
-
-                                    // Update AppModel tracking
-                                    sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
-                                    
-                                } catch {
-                                    print("❌ Failed to save updated HTTP diagram: \(error)")
-                                }
-                            } else {
-                                // New diagram with ID
-                                print("➕ Creating new diagram with ID: \(diagramId)")
-                                
-                                let newFile = "http_diagram_\(diagramId)"
-                                do {
-                                    guard let data = rawJSON.data(using: .utf8) else {
-                                        print("❌ Failed to convert raw JSON to data for new diagram with ID")
-                                        return
-                                    }
-                                    let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
-                                    try data.write(to: tempURL)
-                                    
-                                    print("📊 Adding new HTTP diagram: \(newFile)")
-                                    let diagramIndex = sharedState.activeFiles.count
-                                    sharedState.activeFiles.append(newFile)
-
-                                    // Register in AppModel
-                                    sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
-                                    
-                                } catch {
-                                    print("❌ Failed to save new HTTP diagram: \(error)")
-                                }
-                            }
-                        } else {
-                            // No ID - create new diagram
-                            print("➕ Creating new diagram without ID")
-                            
-                            let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
-                            do {
-                                guard let data = rawJSON.data(using: .utf8) else {
-                                    print("❌ Failed to convert raw JSON to data for new diagram without ID")
-                                    return
-                                }
-                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
-                                try data.write(to: tempURL)
-                                
-                                print("📊 Adding HTTP diagram: \(newFile)")
+                                print("🔄 Redrawing diagram with ID: \(diagramId)")
                                 sharedState.activeFiles.append(newFile)
-
+                                sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
                             } catch {
-                                print("❌ Failed to save HTTP diagram: \(error)")
-                            }
-                        }
-
-                        print("🔥 Final activeFiles count: \(sharedState.activeFiles.count)")
-                        print("🔥 Callback complete - SwiftUI should now update the view")
-
-                        // Ensure plane visualization starts disabled for new diagrams
-                        sharedState.appModel.showPlaneVisualization = false
-                        sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
-                    }
-                }
-            }
-            .alert(item: $collaborativeSession.pendingAlert) { a in
-                Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
-            }
-            #if os(visionOS)
-            // React to SharePlay requesting the immersive space to open
-            .onChange(of: collaborativeSession.sharePlayRequestsImmersiveSpace) { _, requestsOpen in
-                if requestsOpen {
-                    Task {
-                        print("📢 SharePlay requested immersive space - opening...")
-                        let opened = await ensureImmersiveSpaceActive()
-                        if opened {
-                            print("✅ Immersive space opened for SharePlay")
-                            // Ensure plane visualization is disabled for SharePlay
-                            // (surfaces can be distracting in shared experiences)
-                            if sharedState.appModel.showPlaneVisualization {
-                                print("🔧 Disabling plane visualization for SharePlay")
-                                sharedState.appModel.showPlaneVisualization = false
-                                sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+                                print("❌ Failed to save updated HTTP diagram: \(error)")
                             }
                         } else {
-                            print("❌ Failed to open immersive space for SharePlay")
+                            print("➕ Creating new diagram with ID: \(diagramId)")
+                            let newFile = "http_diagram_\(diagramId)"
+                            do {
+                                guard let data = rawJSON.data(using: .utf8) else {
+                                    print("❌ Failed to convert raw JSON to data for new diagram with ID")
+                                    return
+                                }
+                                let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                                try data.write(to: tempURL)
+
+                                print("📊 Adding new HTTP diagram: \(newFile)")
+                                let diagramIndex = sharedState.activeFiles.count
+                                sharedState.activeFiles.append(newFile)
+                                sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: diagramIndex)
+                            } catch {
+                                print("❌ Failed to save new HTTP diagram: \(error)")
+                            }
                         }
-                        // Reset the flag
-                        collaborativeSession.sharePlayRequestsImmersiveSpace = false
+                    } else {
+                        print("➕ Creating new diagram without ID")
+                        let newFile = "http_diagram_\(UUID().uuidString.prefix(8))"
+                        do {
+                            guard let data = rawJSON.data(using: .utf8) else {
+                                print("❌ Failed to convert raw JSON to data for new diagram without ID")
+                                return
+                            }
+                            let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
+                            try data.write(to: tempURL)
+
+                            print("📊 Adding HTTP diagram: \(newFile)")
+                            sharedState.activeFiles.append(newFile)
+                        } catch {
+                            print("❌ Failed to save HTTP diagram: \(error)")
+                        }
                     }
-                }
-            }
-            // Also disable plane visualization when SharePlay becomes active
-            .onChange(of: collaborativeSession.isSharePlayActive) { _, isActive in
-                if isActive {
-                    print("🔧 SharePlay became active - ensuring plane visualization is disabled")
+
+                    print("🔥 Final activeFiles count: \(sharedState.activeFiles.count)")
+                    print("🔥 Callback complete - SwiftUI should now update the view")
+
                     sharedState.appModel.showPlaneVisualization = false
                     sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
                 }
             }
-            #endif
         }
+        .alert(item: $collaborativeSession.pendingAlert) { a in
+            Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
+        }
+        #if os(visionOS)
+        .onChange(of: collaborativeSession.sharePlayRequestsImmersiveSpace) { _, requestsOpen in
+            if requestsOpen {
+                Task {
+                    print("📢 SharePlay requested immersive space - opening...")
+                    let opened = await ensureImmersiveSpaceActive()
+                    if opened {
+                        print("✅ Immersive space opened for SharePlay")
+                        if sharedState.appModel.showPlaneVisualization {
+                            print("🔧 Disabling plane visualization for SharePlay")
+                            sharedState.appModel.showPlaneVisualization = false
+                            sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+                        }
+                    } else {
+                        print("❌ Failed to open immersive space for SharePlay")
+                    }
+                    collaborativeSession.sharePlayRequestsImmersiveSpace = false
+                }
+            }
+        }
+        .onChange(of: collaborativeSession.isSharePlayActive) { _, isActive in
+            if isActive {
+                print("🔧 SharePlay became active - ensuring plane visualization is disabled")
+                sharedState.appModel.showPlaneVisualization = false
+                sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+            }
+        }
+        #endif
+    }
+
+    // MARK: - Sections (UI)
+
+    private var filePickerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                showingDiagramChooser = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.text")
+                    Text(selectedFile.isEmpty ? "Choose a diagram" : selectedFile)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showingDiagramChooser) {
+                DiagramChooserSheet(files: files, selectedFile: $selectedFile)
+                    .presentationDetents([.medium, .large])
+            }
+
+            Text("\(files.count) available diagrams")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var jsonSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Paste JSON Diagram")
+                .font(.headline)
+
+            GroupBox {
+                TextEditor(text: $jsonInput)
+                    .font(.system(.caption, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.clear)
+            } label: {
+                Label("JSON Editor", systemImage: "curlybraces")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(height: 140)
+
+            HStack {
+                if isJSONValid {
+                    Label("Valid JSON", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                } else if !jsonInput.isEmpty {
+                    Label("Invalid JSON", systemImage: "xmark.circle.fill")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                } else {
+                    Text(" ")
+                        .font(.caption)
+                }
+                Spacer()
+            }
+        }
+        .onChange(of: jsonInput) { _, newValue in
+            validateJSON(newValue)
+        }
+    }
+
+    private var serverSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Button {
+                    if httpServer.isRunning { httpServer.stop() } else { httpServer.start() }
+                } label: {
+                    Label(
+                        httpServer.isRunning ? "Stop Server" : "Start Server",
+                        systemImage: httpServer.isRunning ? "stop.circle.fill" : "play.circle.fill"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+
+                Spacer()
+
+                if httpServer.isRunning {
+                    StatusPill(text: "Running", systemImage: "checkmark.seal.fill", tint: .green)
+                } else {
+                    StatusPill(text: "Stopped", systemImage: "pause.circle", tint: .secondary)
+                }
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    LabeledContent("Status") {
+                        Text(httpServer.serverStatus)
+                            .foregroundStyle(httpServer.isRunning ? .green : .secondary)
+                    }
+
+                    if httpServer.isRunning {
+                        LabeledContent("URL") {
+                            Text(httpServer.serverURL)
+                                .textSelection(.enabled)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                }
+            } label: {
+                Label("Server", systemImage: "network")
+            }
+
+            GroupBox {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            if httpServer.serverLogs.isEmpty {
+                                Text("No logs yet")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.vertical, 6)
+                            } else {
+                                ForEach(Array(httpServer.serverLogs.enumerated()), id: \.offset) { index, log in
+                                    Text(log)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 1)
+                                        .id(index)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    .frame(height: 140)
+                    .onChange(of: httpServer.serverLogs.count) { _, _ in
+                        if !httpServer.serverLogs.isEmpty {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(httpServer.serverLogs.count - 1, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Logs", systemImage: "text.alignleft")
+            }
+
+            if !httpServer.lastReceivedJSON.isEmpty {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Last received payload")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            Button {
+                                copyJSONToClipboard(httpServer.lastReceivedJSON)
+                            } label: {
+                                Label(didCopyJSON ? "Copied" : "Copy",
+                                      systemImage: didCopyJSON ? "checkmark" : "doc.on.doc")
+                            }
+                            .buttonStyle(.bordered)
+                            .font(.caption)
+                        }
+
+                        ScrollView {
+                            Text(httpServer.lastReceivedJSON)
+                                .font(.system(.caption2, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .textSelection(.enabled)
+                        }
+                        .frame(height: 90)
+
+                        if didCopyJSON {
+                            Text("Copied to clipboard")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                        }
+                    }
+                } label: {
+                    Label("Last JSON", systemImage: "curlybraces.square")
+                }
+            }
+        }
+    }
+
+    // MARK: - Bottom Bar
+
+    private var bottomBar: some View {
+        HStack {
+            Button("Exit Immersive Space") {
+                Task {
+                    await dismissImmersiveSpace()
+                    hasEnteredImmersive = false
+                    sharedState.activeFiles.removeAll()
+                    sharedState.appModel.resetDiagramPositioning()
+
+                    #if canImport(GroupActivities)
+                    if collaborativeSession.isSharePlayActive {
+                        collaborativeSession.stopSharePlay()
+                        print("🛑 Left SharePlay session after closing immersive space")
+                    }
+                    #endif
+                }
+            }
+            .font(.title3)
+
+            Button(sharedState.appModel.showPlaneVisualization ? "Hide Plane Visualization" : "Show Plane Visualization") {
+                sharedState.appModel.togglePlaneVisualization()
+            }
+            .font(.title3)
+            .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button("Quit App") { exit(0) }
+                .font(.title2)
+                .foregroundColor(.red)
+        }
+    }
+
+    // MARK: - Validation
 
     private func validateJSON(_ text: String) {
         guard !text.isEmpty else {
             isJSONValid = false
             return
         }
-        
+
         do {
             let data = text.data(using: .utf8) ?? Data()
             _ = try JSONDecoder().decode(ScriptOutput.self, from: data)
             isJSONValid = true
         } catch {
             isJSONValid = false
+        }
+    }
+
+    // MARK: - Styles / UI Components
+
+    private struct RoundedCardGroupBoxStyle: GroupBoxStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            VStack(alignment: .leading, spacing: 10) {
+                configuration.label
+                    .font(.headline)
+                configuration.content
+            }
+            .padding(14)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+    }
+
+    private struct StatusPill: View {
+        let text: String
+        let systemImage: String
+        let tint: Color
+
+        var body: some View {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                Text(text)
+            }
+            .font(.caption2)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.thinMaterial, in: Capsule())
+        }
+    }
+
+    // MARK: - Collaboration Card (Expandable, fixed size)
+
+    private struct CollaborationCard: View {
+        @ObservedObject var collaborativeSession: CollaborativeSessionManager
+        let onBroadcast: () -> Void
+        let onOpenCollabSession: () -> Void
+        let onStartShareSpace: () -> Void
+
+        @State private var isExpanded: Bool = false
+
+        private var badgeState: ConnectionBadge.State {
+            if collaborativeSession.isSharePlayActive { return .shareplay }
+            if collaborativeSession.isSessionActive { return .connected }
+            return .offline
+        }
+
+        private var anchorCode: String {
+            if let anchor = collaborativeSession.sharedAnchor {
+                return String(anchor.id.prefix(6))
+            }
+            return "------"
+        }
+
+        private var anchorReady: Bool {
+            collaborativeSession.sharedAnchor != nil
+        }
+
+        var body: some View {
+            GroupBox {
+                VStack(spacing: 10) {
+                    headerRow
+
+                    if isExpanded {
+                        Divider()
+                            .opacity(0.6)
+                            .transition(.opacity)
+
+                        expandedControls
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity
+                                        .combined(with: .move(edge: .top))
+                                        .combined(with: .scale(scale: 0.98, anchor: .top)),
+                                    removal: .opacity
+                                        .combined(with: .move(edge: .top))
+                                )
+                            )
+                    }
+
+                }
+            } label: {
+                Label("Collaboration", systemImage: "person.2.wave.2")
+            }
+        }
+
+        private var headerRow: some View {
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Text("Verify Anchor")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    AnchorCodeBadge(code: anchorCode, isReady: anchorReady)
+
+                    Spacer()
+
+                    ConnectionBadge(state: badgeState)
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(8)
+                        .background(.thinMaterial, in: Circle())
+                        .allowsHitTesting(false)
+                }
+                .contentShape(Rectangle())
+                .padding(.vertical, 2)
+            }
+            .buttonStyle(.plain)
+        }
+
+
+        private var expandedControls: some View {
+            HStack(spacing: 10) {
+                Button {
+                    onOpenCollabSession()
+                } label: {
+                    Label("Session", systemImage: "person.2")
+                }
+                .buttonStyle(.bordered)
+
+                // Keep broadcast action clear, but the *anchor code* is the real highlight.
+                Button {
+                    onBroadcast()
+                } label: {
+                    Label("Broadcast Anchor", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+
+                Spacer()
+
+                #if os(visionOS)
+                if #available(visionOS 26.0, *) {
+                    Button {
+                        onStartShareSpace()
+                    } label: {
+                        Label("Share Space", systemImage: "shareplay")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+
+                    Toggle(isOn: $collaborativeSession.useSpatialPersonas) {
+                        Label(
+                            collaborativeSession.useSpatialPersonas ? "Personas" : "Interact",
+                            systemImage: collaborativeSession.useSpatialPersonas ? "person.2.fill" : "hand.draw.fill"
+                        )
+                        .font(.caption)
+                    }
+                    .toggleStyle(.button)
+                    .buttonStyle(.bordered)
+                    .help(collaborativeSession.useSpatialPersonas
+                          ? "Spatial Personas: See other users, but no diagram gestures"
+                          : "Full Interaction: Diagram gestures work, but no personas")
+                }
+                #endif
+            }
+        }
+    }
+
+    private struct ConnectionBadge: View {
+        enum State { case offline, connected, shareplay }
+        let state: State
+
+        var body: some View {
+            HStack(spacing: 8) {
+                Circle()
+                    .frame(width: 8, height: 8)
+                    .foregroundStyle(dotStyle)
+
+                Image(systemName: icon)
+                    .font(.caption)
+
+                Text(label)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.thinMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(borderStyle, lineWidth: 1))
+            .foregroundStyle(.primary)
+        }
+
+        private var label: String {
+            switch state {
+            case .offline: return "Offline"
+            case .connected: return "Connected"
+            case .shareplay: return "SharePlay"
+            }
+        }
+
+        private var icon: String {
+            switch state {
+            case .offline: return "person.2"
+            case .connected: return "person.2.fill"
+            case .shareplay: return "shareplay"
+            }
+        }
+
+        private var dotStyle: AnyShapeStyle {
+            switch state {
+            case .offline: return AnyShapeStyle(Color.secondary.opacity(0.7))
+            case .connected: return AnyShapeStyle(Color.cyan)
+            case .shareplay: return AnyShapeStyle(Color.green)
+            }
+        }
+
+        private var borderStyle: Color {
+            switch state {
+            case .offline: return Color.secondary.opacity(0.35)
+            case .connected: return Color.cyan.opacity(0.55)
+            case .shareplay: return Color.green.opacity(0.55)
+            }
+        }
+    }
+
+    private struct AnchorCodeBadge: View {
+        let code: String
+        let isReady: Bool
+
+        var body: some View {
+            Text(code.uppercased())
+                .font(.system(.callout, design: .monospaced))
+                .fontWeight(.bold)
+                .tracking(1.5)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(
+                    Capsule().strokeBorder(
+                        isReady ? Color.blue.opacity(0.75) : Color.secondary.opacity(0.35),
+                        lineWidth: isReady ? 2 : 1
+                    )
+                )
+                .shadow(color: isReady ? Color.blue.opacity(0.20) : .clear, radius: 8, x: 0, y: 2)
+        }
+    }
+
+    // MARK: - Diagram chooser sheet
+
+    private struct DiagramChooserSheet: View {
+        let files: [String]
+        @Binding var selectedFile: String
+        @Environment(\.dismiss) private var dismiss
+
+        @State private var query: String = ""
+
+        private var filtered: [String] {
+            let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !q.isEmpty else { return files }
+            return files.filter { $0.localizedCaseInsensitiveContains(q) }
+        }
+
+        var body: some View {
+            NavigationStack {
+                ZStack {
+                    List {
+                        ForEach(filtered, id: \.self) { name in
+                            Button {
+                                selectedFile = name
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "doc.text")
+                                        .foregroundStyle(.secondary)
+
+                                    Text(name)
+                                        .lineLimit(1)
+
+                                    Spacer()
+
+                                    if name == selectedFile {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.tint)
+                                    }
+                                }
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollIndicators(.visible)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    if filtered.isEmpty {
+                        ContentUnavailableView(
+                            "No matches",
+                            systemImage: "magnifyingglass",
+                            description: Text("Try a different search.")
+                        )
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.ultraThinMaterial)
+                    }
+                }
+                .navigationTitle("Diagrams")
+                .searchable(
+                    text: $query,
+                    placement: .toolbar,
+                    prompt: "Search diagrams"
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+            }
         }
     }
 }
@@ -811,9 +1034,10 @@ private extension VisionOSMainView {
             print("📡 visionOS broadcast shared anchor \(anchor.id)")
         }
     }
-
 }
 #endif
+
+// MARK: - Immersive View
 
 struct VisionOSImmersiveView: View {
     @ObservedObject var sharedState: VisionOSAppState
@@ -823,12 +1047,16 @@ struct VisionOSImmersiveView: View {
     @State private var savedPlaneViz: Bool? = nil
 
     var body: some View {
-        ImmersiveSpaceWrapper(activeFiles: $sharedState.activeFiles, onClose: { file in
-            sharedState.activeFiles.removeAll { $0 == file }
-            sharedState.appModel.freeDiagramPosition(filename: file)
-            // 🔴 Broadcast removal so peers remove too
-            collaborativeSession.removeDiagram(filename: file)
-        }, collaborativeSession: collaborativeSession, showBackgroundOverlay: showBackgroundOverlay)
+        ImmersiveSpaceWrapper(
+            activeFiles: $sharedState.activeFiles,
+            onClose: { file in
+                sharedState.activeFiles.removeAll { $0 == file }
+                sharedState.appModel.freeDiagramPosition(filename: file)
+                collaborativeSession.removeDiagram(filename: file)
+            },
+            collaborativeSession: collaborativeSession,
+            showBackgroundOverlay: showBackgroundOverlay
+        )
         .environment(sharedState.appModel)
         .onAppear {
             showBackgroundOverlay = false
@@ -837,51 +1065,41 @@ struct VisionOSImmersiveView: View {
             }
         }
         .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
-            // Only sync diagrams when SharePlay is active
             guard collaborativeSession.isSharePlayActive else { return }
 
             let sharedFilenames = Set(diagrams.map { $0.filename })
             let currentFilenames = Set(sharedState.activeFiles)
 
-            // SharePlay host keeps its local diagrams - they are the source of truth
-            // Only clients (non-hosts) should sync from sharedDiagrams
             if collaborativeSession.isSharePlayHost {
                 print("📊 SharePlay host: keeping \(currentFilenames.count) local diagrams (source of truth)")
                 return
             }
 
-            // Safety: Don't remove all diagrams if sharedDiagrams is empty
-            // This can happen during view recreation or network delays
             if sharedFilenames.isEmpty && !currentFilenames.isEmpty {
                 print("⚠️ Client: sharedDiagrams is empty but we have \(currentFilenames.count) local diagrams - skipping removal")
                 return
             }
 
-            // For client devices: sync activeFiles with sharedDiagrams
-            // Remove diagrams that are no longer shared
             let diagramsToRemove = currentFilenames.subtracting(sharedFilenames)
             if !diagramsToRemove.isEmpty {
                 sharedState.activeFiles.removeAll { diagramsToRemove.contains($0) }
                 print("🗑️ Client: removed \(diagramsToRemove.count) diagrams no longer in shared list")
             }
 
-            // Add new shared diagrams that aren't already active
             for diagram in diagrams {
                 if !currentFilenames.contains(diagram.filename) {
-                    // Save the diagram elements to a temporary file so ContentView can load them
-                    // Include the shared position so the client places it correctly
                     Task { @MainActor in
                         do {
                             let encoder = JSONEncoder()
                             encoder.outputFormatting = .prettyPrinted
 
-                            // Build diagram data including position for client to use
-                            var diagramData: [String: Any] = ["elements": diagram.elements.map { element -> [String: Any] in
-                                let elementData = try! encoder.encode(element)
-                                return try! JSONSerialization.jsonObject(with: elementData) as! [String: Any]
-                            }]
+                            var diagramData: [String: Any] = [
+                                "elements": diagram.elements.map { element -> [String: Any] in
+                                    let elementData = try! encoder.encode(element)
+                                    return try! JSONSerialization.jsonObject(with: elementData) as! [String: Any]
+                                }
+                            ]
 
-                            // Include shared position so client can place diagram correctly
                             if let pos = diagram.worldPosition {
                                 diagramData["sharedPosition"] = ["x": pos.x, "y": pos.y, "z": pos.z]
                             }
@@ -935,13 +1153,13 @@ struct VisionOSImmersiveView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(10)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .padding()
             } else {
                 Label("Awaiting Shared Anchor", systemImage: "wifi.exclamationmark")
                     .font(.caption)
                     .padding(10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .padding()
             }
         }
@@ -952,11 +1170,9 @@ struct VisionOSImmersiveView: View {
 
 #if os(visionOS)
 private extension VisionOSMainView {
-    /// Starts SharePlay for sharing the immersive space with nearby people (visionOS 26+)
     @available(visionOS 26.0, *)
     @MainActor
     func startSharePlayForImmersiveSpace() async {
-        // Ensure immersive space is open first
         if !hasEnteredImmersive {
             let opened = await ensureImmersiveSpaceActive()
             if !opened {
@@ -965,24 +1181,13 @@ private extension VisionOSMainView {
             }
         }
 
-        // Ensure plane visualization stays disabled when starting share
-        // (Don't change the user's preference, just ensure surfaces aren't shown)
-        let currentVisualization = sharedState.appModel.showPlaneVisualization
-        if currentVisualization {
-            print("⚠️ Plane visualization was enabled, keeping user preference")
-        }
-
-        // Share any existing diagrams that are already loaded
-        // This ensures diagrams loaded before sharing starts are visible to peers
         await shareExistingDiagrams()
 
-        // Activate the SharePlay activity - this will prompt the share menu
         let activity = SharedSpaceActivity()
         _ = try? await activity.activate()
         print("✅ SharePlay activity activated for immersive space sharing")
     }
 
-    /// Share all currently loaded diagrams with the collaborative session
     @MainActor
     func shareExistingDiagrams() async {
         guard !sharedState.activeFiles.isEmpty else {
@@ -995,7 +1200,6 @@ private extension VisionOSMainView {
         for filename in sharedState.activeFiles {
             do {
                 let output = try DiagramDataLoader.loadScriptOutput(from: filename)
-                // Get the current position of the diagram from the AppModel if available
                 let position = sharedState.appModel.getDiagramPosition(for: filename)
 
                 collaborativeSession.shareDiagram(
@@ -1012,12 +1216,9 @@ private extension VisionOSMainView {
         }
     }
 
-    /// Makes sure an immersive space is active. If the user has closed it, we re-open it.
     @MainActor
     func ensureImmersiveSpaceActive() async -> Bool {
-        if hasEnteredImmersive {
-            return true
-        }
+        if hasEnteredImmersive { return true }
         do {
             try await openImmersiveSpace(id: "MainImmersive")
             hasEnteredImmersive = true
@@ -1031,9 +1232,9 @@ private extension VisionOSMainView {
 
     func copyJSONToClipboard(_ json: String) {
         guard !json.isEmpty else { return }
-#if canImport(UIKit)
+        #if canImport(UIKit)
         UIPasteboard.general.string = json
-#endif
+        #endif
         didCopyJSON = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             didCopyJSON = false
