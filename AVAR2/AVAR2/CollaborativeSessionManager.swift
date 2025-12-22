@@ -123,13 +123,13 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         coordinator.onSessionJoined = { [weak self] in
             guard let self else { return }
             Task { @MainActor in
+                print("✅ SharePlay session joined, isHost=\(coordinator.isHost)")
                 self.isSharePlayActive = true
                 self.isSessionActive = true
                 self.sessionState = "SharePlay active"
                 self.isHost = coordinator.isHost
 
                 #if os(visionOS)
-                // Start the new SharedWorldAnchorManager for visionOS 26+
                 if #available(visionOS 26.0, *) {
                     await self.startSharedWorldAnchorManager()
                 }
@@ -141,6 +141,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         coordinator.onSessionEnded = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
+                print("🛑 SharePlay session ended")
                 self.isSharePlayActive = false
                 self.sharePlayParticipantCount = 0
                 self.nearbyParticipantCount = 0
@@ -176,10 +177,8 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             Task { @MainActor in
                 self.nearbyParticipantCount = participants.count
                 self.hasNearbyParticipants = !participants.isEmpty
-
                 if !participants.isEmpty {
                     self.sessionState = "SharePlay: \(participants.count) nearby"
-                    print("👥 Nearby participants updated: \(participants.count)")
                 }
             }
         }
@@ -263,12 +262,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
 /// Start hosting a collaborative session
     func startHosting() async {
-        print("🤝 Starting collaborative session as host")
-        lastError = nil // Clear any previous errors
+        print("🤝 Starting host session on \(getCurrentPlatform())")
+        lastError = nil
         isHost = true
 
         #if os(iOS)
-        // Initialize ARSession for iOS
         await startARSession()
         #endif
 
@@ -285,15 +283,14 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         startSharedSpaceCoordinatorIfNeeded()
 #endif
     }
-    
+
     /// Join an existing collaborative session
     func joinSession() async {
-        print("🤝 Joining collaborative session")
-        lastError = nil // Clear any previous errors
+        print("🤝 Joining session on \(getCurrentPlatform())")
+        lastError = nil
         isHost = false
 
         #if os(iOS)
-        // Initialize ARSession for iOS
         await startARSession()
         #endif
 
@@ -612,33 +609,24 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         do {
             data = try JSONEncoder().encode(envelope)
         } catch {
-            collabLogger.error("Failed to encode SharedSpaceEnvelope: \(error.localizedDescription)")
+            print("❌ Failed to encode message: \(error.localizedDescription)")
             lastError = "Failed to encode message: \(error.localizedDescription)"
             return
         }
 
-        var sendSucceeded = false
-
         if let peers = peers {
             if !peers.isEmpty {
                 multipeerSession?.sendData(data, to: peers)
-                sendSucceeded = true
             }
         } else if !connectedPeers.isEmpty {
             multipeerSession?.sendData(data, to: connectedPeers)
-            sendSucceeded = true
         }
 
         #if canImport(GroupActivities)
         if peers == nil && sharePlayCoordinator?.isActive == true {
             sendToSharePlay(data)
-            sendSucceeded = true
         }
         #endif
-
-        if !sendSucceeded && peers == nil {
-            collabLogger.debug("No peers connected - message not sent")
-        }
     }
 
     private func resendStateToSharePlay() {
@@ -1396,7 +1384,9 @@ final class SharePlayCoordinator: ObservableObject {
     // MARK: - Private Properties
     private var currentSession: GroupSession<SharedSpaceActivity>?
     private var messenger: GroupSessionMessenger?
+    #if os(visionOS)
     private var systemCoordinator: SystemCoordinator?
+    #endif
 
     private var messageTask: Task<Void, Never>?
     private var stateTask: Task<Void, Never>?
@@ -1426,19 +1416,16 @@ final class SharePlayCoordinator: ObservableObject {
         case .activationPreferred:
             do {
                 _ = try await activity.activate()
-                print("✅ SharePlay activity activated")
+                print("✅ SharePlay activated")
             } catch {
-                print("❌ SharePlay activation failed: \(error)")
+                print("❌ SharePlay activation failed: \(error.localizedDescription)")
             }
-
         case .activationDisabled:
-            print("⚠️ SharePlay activation disabled by system")
-
+            print("⚠️ SharePlay disabled (not in FaceTime?)")
         case .cancelled:
-            print("ℹ️ SharePlay activation cancelled by user")
-
+            print("ℹ️ SharePlay cancelled")
         @unknown default:
-            print("⚠️ Unknown SharePlay activation result")
+            break
         }
     }
 
@@ -1454,7 +1441,9 @@ final class SharePlayCoordinator: ObservableObject {
         localParticipantTask = nil
 
         messenger = nil
+        #if os(visionOS)
         systemCoordinator = nil
+        #endif
 
         currentSession?.leave()
         currentSession?.end()
@@ -1470,14 +1459,11 @@ final class SharePlayCoordinator: ObservableObject {
     }
 
     func send(_ data: Data) async {
-        guard let messenger else {
-            print("⚠️ Cannot send: no messenger available")
-            return
-        }
+        guard let messenger else { return }
         do {
             try await messenger.send(data)
         } catch {
-            print("❌ SharePlay send failed: \(error)")
+            print("❌ SharePlay send failed: \(error.localizedDescription)")
         }
     }
 
@@ -1509,6 +1495,7 @@ final class SharePlayCoordinator: ObservableObject {
         // Clean up previous session
         currentSession?.leave()
         currentSession?.end()
+
         currentSession = session
         messenger = GroupSessionMessenger(session: session)
 
@@ -1516,16 +1503,11 @@ final class SharePlayCoordinator: ObservableObject {
         #if os(visionOS)
         if let coordinator = await session.systemCoordinator {
             self.systemCoordinator = coordinator
-
-            // Enable group immersive space - this allows spatial content sharing
             var config = SystemCoordinator.Configuration()
             config.supportsGroupImmersiveSpace = true
             config.spatialTemplatePreference = .sideBySide
             coordinator.configuration = config
 
-            print("✅ SystemCoordinator configured for group immersive space")
-
-            // Observe local participant state for pose updates
             localParticipantTask?.cancel()
             localParticipantTask = Task { [weak self] in
                 await self?.observeLocalParticipantState(coordinator: coordinator)
@@ -1550,39 +1532,29 @@ final class SharePlayCoordinator: ObservableObject {
             for await state in session.$state.values {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    switch state {
-                    case .joined:
-                        print("✅ SharePlay session joined")
-                    case .waiting:
-                        print("⏳ SharePlay session waiting")
-                    case .invalidated(let reason):
-                        print("❌ SharePlay session invalidated: \(reason)")
+                    if case .invalidated = state {
                         self.messenger = nil
                         self.currentSession = nil
+                        #if os(visionOS)
                         self.systemCoordinator = nil
+                        #endif
                         self.onSessionEnded?()
-                    @unknown default:
-                        break
                     }
                 }
                 if case .invalidated = state { break }
             }
         }
 
-        // Participant monitoring with nearby detection
+        // Participant monitoring
         participantsTask?.cancel()
         participantsTask = Task { [weak self] in
             for await participants in session.$activeParticipants.values {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-
                     self.totalParticipantCount = participants.count
-
-                    // Determine if we're the host (first to join)
                     let local = session.localParticipant
                     self.isHost = participants.first == local
 
-                    // Track nearby participants
                     var nearbyInfos: [ParticipantInfo] = []
                     for participant in participants {
                         let isLocal = participant == session.localParticipant
@@ -1595,17 +1567,7 @@ final class SharePlayCoordinator: ObservableObject {
                             nearbyInfos.append(info)
                         }
                     }
-
-                    let hadNearby = !self.nearbyParticipants.isEmpty
                     self.nearbyParticipants = nearbyInfos
-                    let hasNearby = !nearbyInfos.isEmpty
-
-                    if hadNearby != hasNearby {
-                        print(hasNearby
-                              ? "👥 Nearby participants detected: \(nearbyInfos.count)"
-                              : "👤 No nearby participants")
-                    }
-
                     self.onParticipantsChanged?(participants.count)
                     self.onNearbyParticipantsChanged?(nearbyInfos)
                 }
@@ -1614,7 +1576,6 @@ final class SharePlayCoordinator: ObservableObject {
 
         session.join()
         onSessionJoined?()
-        print("✅ SharePlay session configured and joined")
     }
 
     #if os(visionOS)
