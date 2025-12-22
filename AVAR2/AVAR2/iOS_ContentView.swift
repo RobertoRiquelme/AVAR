@@ -193,7 +193,6 @@ class ARViewModel: NSObject, ObservableObject {
     func attachCollaborativeSession(_ session: CollaborativeSessionManager) {
         self.collaborativeSession = session
         #if os(iOS)
-        // Route incoming collaboration packets to our ARSession
         session.onCollaborationDataReceived = { [weak self] blob in
             guard let self = self, let arSession = self.arSession else { return }
             do {
@@ -201,7 +200,7 @@ class ARViewModel: NSObject, ObservableObject {
                     arSession.update(with: collab)
                 }
             } catch {
-                print("❌ Failed to decode ARCollaborationData: \(error)")
+                print("❌ Failed to decode ARCollaborationData: \(error.localizedDescription)")
             }
         }
         session.onSharedAnchorReceived = { [weak self] message in
@@ -314,21 +313,21 @@ class ARViewModel: NSObject, ObservableObject {
         if alignmentMode == .sharedSpace, diagrams.isEmpty {
             sharedAnchorStatus = isSharedAnchorLocked ? sharedAnchorStatus : "Awaiting shared anchor"
         }
-        
+
         // Clear existing diagram entities
         for anchor in arView.scene.anchors {
             if anchor.name.hasPrefix("shared_diagram_") {
                 arView.scene.removeAnchor(anchor)
             }
         }
-        
+
         // Add new diagram entities
         for (index, diagram) in diagrams.enumerated() {
             let anchor = createDiagramAnchor(diagram: diagram, index: index, totalCount: diagrams.count)
             arView.scene.addAnchor(anchor)
         }
-        
-        print("📱 Updated iOS view with \(diagrams.count) shared diagrams")
+
+        print("📱 Updated iOS view with \(diagrams.count) diagrams")
     }
     
     private func createDiagramAnchor(diagram: SharedDiagram, index: Int, totalCount: Int) -> AnchorEntity {
@@ -464,9 +463,11 @@ class ARViewModel: NSObject, ObservableObject {
         sharedAnchorId = anchor.id
         isSharedAnchorLocked = true
         sharedAnchorStatus = "Anchor \(anchor.id.prefix(6)) · conf \(String(format: "%.2f", anchor.confidence))"
+
         if let data = anchor.worldMapData {
             applyWorldMapData(data)
         }
+
         updateSharedDiagrams(sharedDiagrams)
     }
 
@@ -480,10 +481,10 @@ class ARViewModel: NSObject, ObservableObject {
                 configuration.isCollaborationEnabled = true
                 configuration.initialWorldMap = worldMap
                 arSession?.run(configuration, options: [.resetTracking, .removeExistingAnchors])
-                print("🌍 Applied shared ARWorldMap with \(worldMap.anchors.count) anchors")
+                print("🌍 Applied shared ARWorldMap (\(worldMap.anchors.count) anchors)")
             }
         } catch {
-            print("⚠️ Failed to apply ARWorldMap: \(error)")
+            print("❌ Failed to apply ARWorldMap: \(error.localizedDescription)")
         }
     }
     #else
@@ -720,46 +721,36 @@ extension Array {
 // MARK: - ARSessionDelegate
 extension ARViewModel: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
-        arLogger.error("ARSession failed with error: \(error.localizedDescription)")
+        print("❌ ARSession failed: \(error.localizedDescription)")
     }
 
     nonisolated func sessionWasInterrupted(_ session: ARSession) {
-        arLogger.warning("ARSession was interrupted - camera frozen")
+        print("⚠️ ARSession interrupted")
     }
-    
-    nonisolated func sessionInterruptionEnded(_ session: ARSession) {
-        arLogger.info("ARSession interruption ended - camera should resume")
 
-        // Automatically restart the session with the same configuration after a brief delay
+    nonisolated func sessionInterruptionEnded(_ session: ARSession) {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(500))
             self.restartARSession()
         }
     }
-    
+
     nonisolated func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
-        switch camera.trackingState {
-        case .normal:
-            arLogger.debug("Camera tracking normally")
-        case .limited(let reason):
-            arLogger.warning("Camera tracking limited: \(String(describing: reason))")
-        case .notAvailable:
-            arLogger.error("Camera tracking not available")
-        @unknown default:
-            arLogger.warning("Unknown camera tracking state")
+        // Only log errors
+        if case .notAvailable = camera.trackingState {
+            print("❌ Camera tracking not available")
         }
     }
 
     #if os(iOS)
     nonisolated func session(_ session: ARSession, didOutputCollaborationData data: ARSession.CollaborationData) {
-        // Archive and send to peers
         do {
             let blob = try NSKeyedArchiver.archivedData(withRootObject: data, requiringSecureCoding: true)
             Task { @MainActor in
                 self.collaborativeSession?.sendCollaborationData(blob)
             }
         } catch {
-            print("❌ Failed to archive ARCollaborationData: \(error)")
+            print("❌ Failed to archive ARCollaborationData: \(error.localizedDescription)")
         }
     }
     #endif
