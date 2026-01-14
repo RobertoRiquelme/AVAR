@@ -46,6 +46,11 @@ private let collabLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AV
 
 @MainActor
 class CollaborativeSessionManager: NSObject, ObservableObject {
+    struct DiagramTransform {
+        let position: SIMD3<Float>
+        let orientation: simd_quatf
+        let scale: Float
+    }
     // MARK: - Published State
     @Published var isSessionActive = false
     @Published var connectedPeers: [MCPeerID] = []
@@ -60,6 +65,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published var nearbyParticipantCount: Int = 0
     @Published var hasNearbyParticipants: Bool = false
     @Published var worldAnchorSharingAvailable: Bool = false
+    @Published private(set) var sharedAnchorUsesSharedWorld: Bool = false
 
     private var multipeerSession: MultipeerConnectivityService?
     #if os(iOS)
@@ -70,6 +76,8 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     // Current active diagrams that should be shared
     @Published var sharedDiagrams: [SharedDiagram] = []
     @Published var sharedAnchor: SharedWorldAnchor? = nil
+
+    private var localDiagramTransforms: [String: DiagramTransform] = [:]
     private let anchorStorageURL: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return dir.appendingPathComponent("shared_anchor.json")
@@ -203,11 +211,28 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         manager.onAnchorUpdated = { [weak self] anchor in
             guard let self else { return }
             print("📍 Shared anchor updated: \(anchor.id)")
+            let shared = SharedWorldAnchor(
+                id: anchor.id.uuidString,
+                transform: anchor.originFromAnchorTransform,
+                confidence: 1.0,
+                timestamp: Date(),
+                worldMapData: nil
+            )
+            Task { @MainActor in
+                self.sharedAnchor = shared
+                self.sharedAnchorUsesSharedWorld = true
+            }
             self.onSharedWorldAnchorUpdated?(anchor.id, anchor.originFromAnchorTransform)
         }
 
         manager.onAnchorRemoved = { anchorID in
             print("🗑️ Shared anchor removed: \(anchorID)")
+            Task { @MainActor in
+                if self.sharedAnchor?.id == anchorID.uuidString {
+                    self.sharedAnchor = nil
+                    self.sharedAnchorUsesSharedWorld = false
+                }
+            }
         }
 
         manager.onSharingAvailabilityChanged = { [weak self] available in
@@ -234,6 +259,24 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     func createSharedAnchorInFrontOfUser(distance: Float = 1.5) async throws -> UUID {
         let anchor = try await sharedWorldAnchorManager.createSharedAnchorInFrontOfUser(distance: distance)
         return anchor.id
+    }
+
+    /// Ensure a shared world anchor exists for the current SharePlay session (host only).
+    @available(visionOS 26.0, *)
+    func ensureSharedWorldAnchorInFrontOfUser(distance: Float = 1.5) async {
+        guard isHost else { return }
+        guard sharedAnchor == nil else { return }
+        guard worldAnchorSharingAvailable else {
+            print("⚠️ Shared world anchors not available yet")
+            return
+        }
+
+        do {
+            _ = try await createSharedAnchorInFrontOfUser(distance: distance)
+            print("📍 Created shared world anchor in front of user")
+        } catch {
+            print("❌ Failed to create shared world anchor: \(error)")
+        }
     }
     #endif
     
@@ -353,6 +396,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                                          confidence: anchor.confidence,
                                          timestamp: anchor.timestamp,
                                          worldMapData: anchor.worldMapData)
+        sharedAnchorUsesSharedWorld = false
         persistSharedAnchor(anchor: sharedAnchor)
 
         broadcast(.anchor(anchor), to: peers)
@@ -377,6 +421,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         sessionState = "Not Connected"
         lastError = nil
         sharedAnchor = nil
+        sharedAnchorUsesSharedWorld = false
         persistSharedAnchor(anchor: nil)
 #if canImport(GroupActivities)
         sharePlayCoordinator?.stop()
@@ -407,9 +452,20 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         #if os(visionOS)
         // For visionOS: Ensure anchor exists and convert to anchor-relative coordinates
         if sharedAnchor == nil {
-            // No anchor yet - broadcast one first
+            #if canImport(GroupActivities)
+            if isSharePlayActive, #available(visionOS 26.0, *) {
+                Task { [weak self] in
+                    await self?.ensureSharedWorldAnchorInFrontOfUser()
+                }
+            } else {
+                // No anchor yet - broadcast one first (legacy/manual path)
+                broadcastCurrentSharedAnchor()
+                print("📡 Auto-broadcast anchor for new diagram on visionOS")
+            }
+            #else
             broadcastCurrentSharedAnchor()
             print("📡 Auto-broadcast anchor for new diagram on visionOS")
+            #endif
         }
 
         // Convert device-relative position to anchor-relative for iOS compatibility
@@ -460,6 +516,17 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         if let scale = worldScale {
             print("   📏 Scale: \(scale)")
         }
+    }
+
+    func cacheLocalDiagramTransform(filename: String,
+                                    position: SIMD3<Float>,
+                                    orientation: simd_quatf,
+                                    scale: Float) {
+        localDiagramTransforms[filename] = DiagramTransform(position: position, orientation: orientation, scale: scale)
+    }
+
+    func cachedTransform(for filename: String) -> DiagramTransform? {
+        localDiagramTransforms[filename]
     }
     
     /// Remove a diagram from sharing
@@ -520,6 +587,10 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         }
         if let scale = worldScale {
             sharedDiagrams[index].worldScale = scale
+        }
+
+        if let pos = worldPosition, let orient = worldOrientation, let scale = worldScale {
+            localDiagramTransforms[filename] = DiagramTransform(position: pos, orientation: orient, scale: scale)
         }
 
         // Send update to peers (fast path - no error checking needed during drag)
@@ -685,6 +756,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                                          confidence: persisted.confidence,
                                          timestamp: persisted.timestamp,
                                          worldMapData: persisted.worldMapData)
+        sharedAnchorUsesSharedWorld = false
     }
 
     private func clearPersistedAnchor() {
@@ -713,6 +785,7 @@ private extension CollaborativeSessionManager {
                                              confidence: anchorMsg.confidence,
                                              timestamp: anchorMsg.timestamp,
                                              worldMapData: anchorMsg.worldMapData)
+            sharedAnchorUsesSharedWorld = false
             persistSharedAnchor(anchor: sharedAnchor)
             onSharedAnchorReceived?(anchorMsg)
             print("📡 Received shared anchor '\(anchorMsg.anchorId)' from \(source)")
@@ -810,6 +883,7 @@ private extension CollaborativeSessionManager {
             sharedDiagrams.removeAll()
             sharedDiagrams = sharedDiagrams // force Combine publish
             sharedAnchor = nil
+            sharedAnchorUsesSharedWorld = false
             persistSharedAnchor(anchor: nil)
             isSessionActive = false
             sessionState = "Session ended by \(info.byHost)"

@@ -87,6 +87,49 @@ class ElementViewModel: ObservableObject {
         let worldScale = root.scale.x // Uniform scale
         return (worldPos, worldOrient, worldScale)
     }
+
+    /// Apply a shared transform update (from collaboration) to this diagram.
+    func applySharedDiagramTransform(position: SIMD3<Float>?,
+                                     orientation: simd_quatf?,
+                                     scale: Float?,
+                                     anchorTransform: simd_float4x4?,
+                                     useFullAnchorTransform: Bool) {
+        guard let root = rootEntity else { return }
+
+        var newTransform = root.transform
+
+        if let anchorTransform, let position {
+            var localMatrix = matrix_identity_float4x4
+            if let orientation {
+                localMatrix = simd_matrix4x4(orientation)
+            }
+            localMatrix.columns.3 = SIMD4<Float>(position.x, position.y, position.z, 1.0)
+
+            let worldMatrix: simd_float4x4
+            if useFullAnchorTransform {
+                worldMatrix = anchorTransform * localMatrix
+            } else {
+                var anchorRotation = anchorTransform
+                anchorRotation.columns.3 = SIMD4<Float>(0, 0, 0, 1)
+                worldMatrix = anchorRotation * localMatrix
+            }
+            newTransform = Transform(matrix: worldMatrix)
+        } else {
+            if let position {
+                newTransform.translation = position
+            }
+            if let orientation {
+                newTransform.rotation = orientation
+            }
+        }
+
+        root.transform = newTransform
+
+        if let scale {
+            root.scale = SIMD3<Float>(repeating: scale)
+            updateBackgroundEntityCollisionShapes(scale: scale)
+        }
+    }
     /// Background entity to capture pan/zoom gestures
     private var backgroundEntity: Entity?
     /// Starting uniform scale for the container when zoom begins

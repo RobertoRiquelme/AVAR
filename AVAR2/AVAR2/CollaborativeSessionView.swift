@@ -86,9 +86,9 @@ struct CollaborativeSessionView: View {
                 } else {
                     HStack(spacing: 4) {
                         Image(systemName: "link.circle")
-                            .foregroundColor(.orange)
+                        .foregroundColor(.orange)
                         Text("No shared anchor - positions may misalign")
-                            .font(.caption2)
+                        .font(.caption2)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -96,6 +96,24 @@ struct CollaborativeSessionView: View {
                     .cornerRadius(6)
                 }
             }
+
+#if os(visionOS)
+            if #available(visionOS 26.0, *) {
+                if sessionManager.isSharePlayActive {
+                    HStack(spacing: 6) {
+                        Image(systemName: sessionManager.sharedAnchorUsesSharedWorld ? "checkmark.seal.fill" : "link")
+                            .foregroundColor(sessionManager.sharedAnchorUsesSharedWorld ? .green : .secondary)
+                        Text(sessionManager.sharedAnchorUsesSharedWorld ? "Shared world anchor ready" : "Shared world anchor not created")
+                            .font(.caption2)
+                            .foregroundColor(sessionManager.sharedAnchorUsesSharedWorld ? .green : .secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(6)
+                }
+            }
+#endif
 
 #if canImport(GroupActivities)
             if sessionManager.isSharePlayActive {
@@ -187,6 +205,22 @@ struct CollaborativeSessionView: View {
                     .frame(maxWidth: .infinity)
                     #endif
                 }
+
+#if os(visionOS)
+                if #available(visionOS 26.0, *) {
+                    if sessionManager.isSharePlayActive && sessionManager.isHost {
+                        Button("Create Shared Anchor") {
+                            Task {
+                                await sessionManager.ensureSharedWorldAnchorInFrontOfUser()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!sessionManager.worldAnchorSharingAvailable
+                                  || sessionManager.sharedAnchorUsesSharedWorld)
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+#endif
 
                 Button("Stop Session") {
                     sessionManager.stopSession()
