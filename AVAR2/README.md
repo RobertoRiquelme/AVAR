@@ -1,197 +1,331 @@
 # AVAR2
 
-A SwiftUI + RealityKit app for visionOS and iOS that loads 2D/3D layout data and visualizes it in an immersive spatial scene. Nodes (boxes, spheres, cylinders, cones) and their connections (edges) are rendered in 3D. Features include interactive node dragging, HTTP server for remote diagram loading, collaborative sessions with SharePlay, and multi-platform support.
+AVAR2 is a **SwiftUI + RealityKit** project for visualizing **2D/3D diagram layouts** as interactive spatial content.
+
+- **visionOS (Apple Vision Pro)**: diagrams render inside an **ImmersiveSpace** using `RealityView`. Users can move entire diagrams in space, drag nodes (for 3D diagrams), and use on-diagram handles for pan/zoom/rotation.
+- **iOS (companion)**: diagrams render in an **ARKit / RealityKit `ARView`**, primarily as a viewer for shared diagrams, with optional alignment using a shared anchor.
+
+AVAR2 supports multiple diagram inputs:
+
+- **Bundled examples** ("From File")
+- **Paste JSON** ("From JSON")
+- **HTTP POST** to a local on-device server ("HTTP Server")
+
+It also supports multi-user sessions:
+
+- **Local peer-to-peer** sync via **MultipeerConnectivity**
+- **Shared anchor** alignment to keep diagrams in roughly the same place for everyone
+- On **visionOS 26**, optional Shared Space alignment via `SharedCoordinateSpaceProvider`
+
+---
+
+## Contents
+
+- [Platforms and versions](#platforms-and-versions)
+- [Requirements](#requirements)
+- [Build and run](#build-and-run)
+- [Using the app (visionOS)](#using-the-app-visionos)
+  - [Input sources](#input-sources)
+  - [Immersive controls and interactions](#immersive-controls-and-interactions)
+- [HTTP server API](#http-server-api)
+- [Collaboration](#collaboration)
+- [Diagram JSON format](#diagram-json-format)
+- [Adding new bundled examples](#adding-new-bundled-examples)
+- [Development notes](#development-notes)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Platforms and versions
+
+- **visionOS**: The project is actively developed and tested on **visionOS 26**.
+  - The codebase contains feature gates such as `#available(visionOS 26.0, *)` (e.g., Shared Space / coordinate space sync).
+- **iOS**: Companion AR viewer and collaborative participant.
+
+---
 
 ## Requirements
+
 - macOS 15+ (Sequoia) for development
 - Xcode 16+
-- visionOS 2.0+ for full immersive experience
+- visionOS 26+ for full immersive experience
 - iOS 18+ for companion AR view
 - Target device or simulator with RealityKit support
 
-## Getting Started
+**Permissions / entitlements you will typically need:**
 
-1. Clone or download the repository:
-   ```bash
-   git clone <repo-url>
-   cd AVAR2
-   ```
-2. Open the Xcode project:
-   ```bash
-   open AVAR2.xcodeproj
-   ```
-3. Build and run the app on a compatible device or simulator.
+- **Local Network** (required for HTTP server and Multipeer discovery)
+- **SharePlay / GroupActivities** (only if you use SharePlay features)
 
-## Features
+---
 
-### Input Sources
-The app supports three input modes via a segmented picker:
+## Build and run
 
-1. **From File**: Select from pre-loaded example diagrams in the app bundle
-2. **From JSON**: Paste JSON data directly into the text editor with validation
-3. **HTTP Server**: Start a local HTTP server to receive diagrams from external sources
+1. Clone the repo.
+    ```bash
+    git clone https://github.com/RobertoRiquelme/AVAR.git
+    cd AVAR2
+    ```
+2. Open the Xcode project.
+    ```bash
+    open AVAR2.xcodeproj
+    ```
+3. Select a target:
+   - `PlatformApp` builds for visionOS and iOS.
+4. Configure signing, and ensure Local Network privacy strings are present in `Info.plist`.
+5. Run on device or simulator.
 
-### HTTP Server
-- Start/stop a local HTTP server from the app
-- Accepts POST requests to `/avar` endpoint with JSON diagram data
-- Automatically draws received diagrams in the immersive space
-- Supports diagram updates via ID tracking
-- View server logs and received JSON in real-time
-- Example usage:
-  ```bash
-  curl -X POST http://<device-ip>:8081/avar \
-    -H "Content-Type: application/json" \
-    -d @diagram.json
-  ```
+---
 
-### Collaborative Sessions
-- **SharePlay Integration**: Share diagrams with other users in real-time
-- **Shared Spatial Anchors**: Diagrams appear in the same physical location for all participants
-- **Multi-device Support**: visionOS devices can share, iOS devices receive-only
-- **Session Management**: Visual indicators for active sessions and shared anchors
+## Using the app (visionOS)
 
-### Immersion Controls
-- **Keyboard shortcuts** (in immersive space):
-  - Spacebar: Toggle debug info
-  - Up/Down arrows: Adjust immersion level
-  - R: Reset immersion to 0%
-  - F: Full immersion (100%)
-- **Button controls** from launcher window to set specific immersion levels (0%, 25%, 50%, 75%, 100%)
-- **Digital Crown simulation**: Vertical drag gesture in immersive space
+On visionOS the app launches into a **launcher window** (`VisionOSMainView`) and can open an **immersive space** (`ImmersiveSpace(id: "MainImmersive")`).
 
-## Immersive View
+### Input sources
 
-Once in the immersive space:
+AVAR2 provides a segmented picker:
 
-- **Multiple Diagrams**: Load and display multiple diagrams simultaneously
-- **Spatial Positioning**: Diagrams are automatically positioned using intelligent placement algorithms
-- **Smart Snapping**: Diagrams snap to detected horizontal surfaces for stable placement
-- **Plane Visualization**: Toggle visualization of detected planes (automatically disabled in full immersion)
-- Nodes are placed at eye-level, 1 m in front of you, scaled according to data units
-- Supported shapes: **Box**, **Sphere**, **Cylinder**, **Cone** (fallback to small box)
-- Connections (edges) are drawn as thin gray lines between nodes
-- **Drag** any node to reposition it; lines update in real time
-- **Window Controls**: Grab the handle at the bottom center of each diagram to move its window in space, and tap the close button next to the handle to close the diagram
-- **Surface Detection**: Real-time plane detection for AR placement (visionOS only)
+1. **From File**
+   - Lists bundled example files.
+   - **Note:** the current example discovery code enumerates **`.txt` resources** in the main bundle (see `PlatformApp.swift`).
+   - `ElementService` can load `.txt` or `.json`, but if you want your file to appear in the picker without changing code, add it as `.txt`.
 
-## Data Format
+2. **From JSON**
+   - Paste JSON into the text editor.
+   - The UI validates by attempting to decode a `ScriptOutput` model.
+   - When loading, the JSON is written to a temporary `.txt` file and then loaded through the same code path as bundled examples.
 
-Diagrams are defined in JSON format. The app supports two formats:
+3. **HTTP Server**
+   - Starts a local on-device server (port and endpoint defined in `Constants.swift` and `HTTPServer.swift`).
+   - POST JSON to `/avar` to create or update diagrams.
+   - The launcher window shows server logs and the last received JSON.
 
-### Array Format (Direct)
+### Immersive controls and interactions
+
+Once a diagram is loaded, it renders in immersive space using `ContentView` + `ElementViewModel`.
+
+**Diagram-level controls (visionOS):**
+
+- **Grab handle** (`"grabHandle"`): move the entire diagram window in space.
+- **Zoom handle** (`"zoomHandle"`): scale the diagram.
+- **Rotation button** (`"rotationButton"`): rotate the diagram.
+- **Close button** (`"closeButton"`): remove a diagram from the scene.
+
+**Node-level controls (visionOS):**
+
+- Nodes are typically named `"element_<id>"`.
+- For **3D** diagrams, you can drag nodes; connections update live.
+- For **2D** diagrams (`isGraph2D == true`), node dragging is disabled (by design).
+
+**Immersion and debug controls (visionOS):**
+
+- The immersive environment supports `.mixed` and `.full` immersion styles.
+- Keyboard shortcuts (when a keyboard is connected) are wired in `ImmersiveSpaceWrapper`:
+  - `Space`: toggle debug overlay
+  - `r`: reset immersion toward mixed
+  - `f`: go to full immersion
+- The launcher includes buttons such as **Exit Immersive Space** and **Show/Hide Plane Visualization**.
+
+**Surface detection / plane visualization:**
+
+- Plane detection and visualization are provided by `ARKitSurfaceDetector` + `ARKitVisualizationManager`.
+- `AppModel.togglePlaneVisualization()` toggles visual plane rendering.
+
+---
+
+## HTTP server API
+
+### Endpoints
+
+- `GET /` – simple HTML page
+- `GET /avar` – HTML helper page (includes an example `curl`)
+- `POST /avar` – submit a diagram JSON payload
+- `OPTIONS *` – permissive CORS handling (basic)
+
+### Port
+
+- Default port is defined in `Constants.swift` (`AVARConstants.defaultHTTPPort`).
+
+### Authentication
+
+Authentication is **optional**.
+
+- If `AVAR_HTTP_TOKEN` is set in the environment, auth is enabled.
+- When enabled, POST requests require either:
+  - `Authorization: Bearer <token>`
+  - or `X-AVAR-Token: <token>`
+
+### Updating diagrams
+
+If your JSON includes a root-level `id`, AVAR2 will treat it as an **update key**:
+
+- First `POST` with a given `id` → creates a diagram
+- Next `POST` with the same `id` → replaces the prior diagram instance (see `AppModel.registerDiagram` / `getDiagramInfo`)
+
+### Example curl
+
+```bash
+curl -X POST http://<device-ip>:8081/avar \
+  -H "Content-Type: application/json" \
+  -d @diagram.json
+```
+
+If auth is enabled:
+
+```bash
+curl -X POST http://<device-ip>:8081/avar \
+  -H "Content-Type: application/json" \
+  -H "X-AVAR-Token: <token>" \
+  -d @diagram.json
+```
+
+---
+
+## Collaboration
+
+Collaboration is coordinated by `CollaborativeSessionManager`.
+
+### Transport
+
+- **MultipeerConnectivity** is used for discovery and data exchange (`MultipeerConnectivityService`).
+- If `GroupActivities` is available, AVAR2 can also integrate with **SharePlay**.
+
+### Roles
+
+- **Host**: starts a session, can broadcast a shared anchor, shares diagrams.
+- **Participant**: joins a session, receives shared diagrams and anchor messages.
+
+### Shared anchor alignment 
+*On construction*
+
+To reduce "everyone sees the diagram in a different place":
+
+- Hosts can **broadcast a shared anchor** (`broadcastCurrentSharedAnchor()` on visionOS; `broadcastSharedAnchor()` on iOS).
+- iOS can optionally embed an **ARWorldMap** to improve alignment.
+
+### visionOS 26 Shared Space alignment
+*On construction*
+
+On **visionOS 26**, AVAR2 can use `SharedCoordinateSpaceProvider` via `VisionOSSharedSpaceCoordinator`:
+
+- The host starts Share Space (if available)
+- The coordinator exchanges coordinate data with participants
+- Diagram transforms are treated as **device-relative** and mapped via the shared coordinate space
+
+This path is guarded by availability checks (so you can keep older build targets if needed, but the feature itself requires visionOS 26).
+
+---
+
+## Diagram JSON format
+
+The decoder model is `ScriptOutput` / `ElementDTO` (see `ElementDTO.swift`). The app is flexible and accepts multiple shapes of JSON.
+
+### 1) Direct array of elements
+
+You can POST or paste a raw array:
+
 ```json
 [
-  {
-    "model": "ClassName",
-    "position": [x, y, z],
-    "extent": [width, height, depth],
-    "shape": {
-      "shapeDescription": "RWBox|RWCylinder|RWSphere|RWCone",
-      "extent": [width, height, depth],
-      "color": [r, g, b, a]
-    },
-    "from_id": "optional_edge_source",
-    "to_id": "optional_edge_target"
-  }
+  {"id":"A","type":"node","position":[0,0,0],"shape":{"shapeDescription":"RWBox","extent":[1,1,1],"color":[0.2,0.6,1.0,1.0]}},
+  {"id":"B","type":"node","position":[2,0,0],"shape":{"shapeDescription":"RWSphere","extent":[1,1,1],"color":[1.0,0.3,0.3,1.0]}},
+  {"id":"E1","type":"edge","from_id":"A","to_id":"B"}
 ]
 ```
 
-### Object Format (With Metadata)
+### 2) ScriptOutput object (preferred)
+
 ```json
 {
-  "elements": [...],
-  "id": 123,
-  "is2D": false
+  "id": "demo",
+  "elements": [
+    {"id":"A","type":"node","position":[0,0,0]},
+    {"id":"B","type":"node","position":[2,0,0]},
+    {"id":"E1","type":"edge","from":"A","to":"B"}
+  ]
 }
 ```
 
-### Diagram ID Tracking
-- Diagrams with an `id` field support updates: sending a new diagram with the same ID will replace the existing one
-- Diagrams without an ID are always added as new instances
+Notes:
 
-To add a new example:
-1. Place your JSON file (with extension `.json` or `.txt`) into `AVAR2/Resources/`
-2. Rebuild the app; the file will appear in the launcher menu
+- The root keys can be `elements` **or** `RTelements` (both are supported).
+- For edges, both `from`/`to` **and** `from_id`/`to_id` are accepted.
+- The app will infer 2D vs 3D based on `position[2]` across nodes.
 
-## Project Structure
+### 3) RS-style node/edge graph
 
-### Core Files
-- **PlatformApp.swift**: Main app entry point with platform-specific UI (visionOS/iOS)
-  - `VisionOSMainView`: Launcher window for visionOS
-  - `VisionOSImmersiveView`: Immersive space wrapper
-- **AVAR2App.swift**: Shared UI components and views
-  - `HTTPServerTabView`, `ServerStatusView`, `ServerLogsView`
-  - `ImmersiveSpaceWrapper`: Background and content management
-  - `StaticSurfaceView`: Plane detection visualization
-  - `FPSMonitor`: Performance monitoring
-- **ContentView.swift**: RealityView container for individual diagrams
-- **ElementViewModel.swift**: Entity creation, positioning, drag interactions, and scene management
-- **AppModel.swift**: App-wide state management (diagram positioning, surface detection, settings)
+A graph can also be expressed as:
 
-### Data Layer
-- **ElementDTO.swift**: Data models and JSON decoding
-- **ElementService.swift**: File loading from bundle and shared storage
-- **DiagramDataLoader.swift**: Centralized loading with error handling
-- **DiagramStorage.swift**: Shared file storage for HTTP-received diagrams
-
-### Networking & Collaboration
-- **HTTPServer.swift**: Local HTTP server for receiving diagrams
-- **CollaborativeSessionManager.swift**: SharePlay integration and spatial anchor sharing
-- **CollaborativeSessionView.swift**: Session management UI
-
-### Surface Detection (visionOS)
-- **SurfaceDetector.swift**: ARKit plane detection and visualization
-- **Extensions.swift**: Utility extensions for 3D transformations
-
-### Platform-Specific
-- **iOS_ContentView.swift**: iOS AR view (receive-only for collaboration)
-
-### Resources
-- **Resources/**: Example diagram files (JSON/TXT)
-- **Packages/RealityKitContent/**: RealityKit assets (USDZ, materials)
-
-## Customization
-
-### Adding New Shapes
-Extend `createEntity(for:)` in `ElementViewModel.swift`:
-```swift
-case "CustomShape":
-    let mesh = MeshResource.generate...
-    entity.components.set(ModelComponent(mesh: mesh, materials: [material]))
+```json
+{
+  "nodes": [
+    {"id":"A","type":"node","position":[0,0,0]},
+    {"id":"B","type":"node","position":[1,0,0]}
+  ],
+  "edges": [
+    {"id":"E1","type":"edge","from":"A","to":"B"}
+  ]
+}
 ```
 
-### Adjusting Spatial Layout
-- **Scale Factor**: Modify the division factor in `rebuildSceneIfNeeded()` (currently divides by 10)
-- **Eye-Level Offset**: Adjust `initialPosition` in diagram positioning logic
-- **Diagram Spacing**: Configure `spacingBetweenDiagrams` in AppModel
+### Supported shapes
 
-### HTTP Server Configuration
-- **Port**: Default is 8081, configurable in `HTTPServer.swift`
-- **Endpoint**: Default is `/avar`, can be customized
-- **Storage**: Diagrams saved to shared app group container via `DiagramStorage`
+`ShapeFactory` (visionOS) and the iOS renderer handle several shape descriptions. Common ones:
 
-### Collaboration Settings
-- **Session Type**: Configure GroupActivity settings in `CollaborativeSessionManager`
-- **Anchor Broadcasting**: Adjust broadcast frequency and confidence thresholds
+- `RWBox`
+- `RWSphere`
+- `RWCylinder`
+- `RWCone`
+- `RT*` and `RS*` variants are also supported (see `ShapeFactory.swift`).
 
-## Debugging
+If shape data is missing, a reasonable default is used.
 
-### Verbose Logging
-Set environment variable `AVAR_VERBOSE_LOGS` to enable detailed logging:
-```bash
-# In Xcode scheme
-AVAR_VERBOSE_LOGS=1
-```
+---
 
-### Performance Monitoring
-- FPS display shown at bottom of launcher window
-- Debug info toggle available in immersive space (Spacebar)
+## Adding new bundled examples
 
-## Known Issues & Limitations
-- HTTP server callback must be set in `.onAppear` for immediate availability
-- Surface detection disabled automatically in full immersion mode
-- iOS version is receive-only for collaborative sessions
-- Plane visualization may impact performance with many detected surfaces
+1. Add your diagram file to the Xcode project resources.
+2. Use a **`.txt`** extension if you want it to show up in the "From File" picker without code changes.
+3. Ensure the file is included in the correct target membership.
+4. Rebuild; it should appear in the picker.
+
+---
+
+## Development notes
+
+If you want to understand the app quickly:
+
+1. Start at **`PlatformApp.swift`** to see scenes, launcher UI, and the immersive entry.
+2. Look at **`ContentView.swift`** and **`ElementViewModel.swift`** for diagram rendering + gestures.
+3. Check **`DiagramSceneBuilder.swift`** and **`ShapeFactory.swift`** for how diagram entities are built.
+4. For collaboration, read **`CollaborativeSessionManager.swift`** and **`MultipeerConnectivityService.swift`**.
+5. For HTTP input, read **`HTTPServer.swift`**, `DiagramStorage.swift`, and the callback wiring in `PlatformApp.swift`.
+
+---
+
+## Troubleshooting
+
+### "HTTP server works on simulator but not on device"
+
+- Confirm **Local Network** permission is enabled:
+  - Settings → Privacy & Security → Local Network → enable AVAR2
+- Confirm device and sender are on the same LAN/Wi‑Fi.
+
+### "POST /avar returns 401"
+
+- Auth is enabled when `AVAR_HTTP_TOKEN` exists.
+- Add `Authorization: Bearer <token>` or `X-AVAR-Token: <token>`.
+
+### "Diagram doesn't render"
+
+- Paste your JSON into the "From JSON" editor first to validate.
+- Check server logs in the UI (last JSON + decode errors).
+- Ensure your elements have `position` arrays.
+
+### "Collaboration connected but content is misaligned"
+
+- Have the **host broadcast an anchor** after opening diagrams.
+- On iOS, try resetting/recentering mapping.
+- On visionOS 26, prefer the Shared Space flow (if enabled) to reduce drift.
 
 ## License
 This project is provided as-is. Modify and distribute freely.
