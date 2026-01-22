@@ -694,8 +694,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         }
 
         #if canImport(GroupActivities)
-        if peers == nil && sharePlayCoordinator?.isActive == true {
-            sendToSharePlay(data)
+        if peers == nil {
+            print("🔍 broadcast: Checking SharePlay (isActive=\(sharePlayCoordinator?.isActive ?? false))")
+            if sharePlayCoordinator?.isActive == true {
+                sendToSharePlay(data)
+            }
         }
         #endif
     }
@@ -717,7 +720,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
     #if canImport(GroupActivities)
         private func sendToSharePlay(_ data: Data) {
-            guard sharePlayCoordinator?.isActive == true else { return }
+            guard sharePlayCoordinator?.isActive == true else {
+                print("⚠️ sendToSharePlay skipped: SharePlay not active (isActive=\(sharePlayCoordinator?.isActive ?? false))")
+                return
+            }
+            print("📤 sendToSharePlay: Sending \(data.count) bytes via SharePlay")
             Task { [weak self] in
                 await self?.sharePlayCoordinator?.send(data)
             }
@@ -1533,9 +1540,13 @@ final class SharePlayCoordinator: ObservableObject {
     }
 
     func send(_ data: Data) async {
-        guard let messenger else { return }
+        guard let messenger else {
+            print("❌ SharePlay send failed: messenger is nil")
+            return
+        }
         do {
             try await messenger.send(data)
+            print("✅ SharePlay message sent successfully (\(data.count) bytes)")
         } catch {
             print("❌ SharePlay send failed: \(error.localizedDescription)")
         }
@@ -1593,11 +1604,14 @@ final class SharePlayCoordinator: ObservableObject {
         messageTask?.cancel()
         messageTask = Task { [weak self] in
             guard let messenger = self?.messenger else { return }
+            print("📡 SharePlay: Started listening for messages")
             for await (data, _) in messenger.messages(of: Data.self) {
+                print("📥 SharePlay: Received message (\(data.count) bytes)")
                 await MainActor.run { [weak self] in
                     self?.onDataReceived?(data)
                 }
             }
+            print("📡 SharePlay: Message listener ended")
         }
 
         // Session state monitoring

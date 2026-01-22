@@ -59,7 +59,6 @@ struct PlatformApp: App {
         }
         .immersionStyle(selection: $immersionStyleVisionOS, in: .mixed, .full)
         .immersiveEnvironmentBehavior(.coexist)
-        .immersiveContentBroadcastingPolicy(.always)
     }
     #endif
 
