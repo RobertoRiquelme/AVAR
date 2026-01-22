@@ -13,6 +13,9 @@ import RealityKitContent
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(GroupActivities)
+import GroupActivities
+#endif
 
 /// Shared state for visionOS app
 @MainActor
@@ -58,6 +61,7 @@ struct PlatformApp: App {
             )
         }
         .immersionStyle(selection: $immersionStyleVisionOS, in: .mixed, .full)
+        .immersiveEnvironmentBehavior(.coexist)
         .immersiveEnvironmentBehavior(.coexist)
     }
     #endif
@@ -710,7 +714,7 @@ struct VisionOSMainView: View {
             isJSONValid = false
             return
         }
-        
+
         do {
             let data = text.data(using: .utf8) ?? Data()
             _ = try JSONDecoder().decode(ScriptOutput.self, from: data)

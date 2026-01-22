@@ -94,6 +94,16 @@ class AppModel {
         }
         return position
     }
+
+    /// Get the current position of an existing diagram (returns nil if not found)
+    func getDiagramPosition(for filename: String) -> SIMD3<Float>? {
+        let basePosition = SIMD3<Float>(0, worldPlacement.eyeLevel, worldPlacement.frontOffset)
+        // Check if this diagram has a slot assigned
+        if layoutCoordinator.slot(for: filename) != nil {
+            return layoutCoordinator.position(for: filename, basePosition: basePosition)
+        }
+        return nil
+    }
     
     /// Register a diagram with ID for tracking
     func registerDiagram(id: Int, filename: String, index: Int) {
