@@ -73,8 +73,11 @@ Caption: `Collaboration Card`
     ![Host Session](./images/visionOS/HostSession.png)
     Caption: `Collaboration Session Window (Hosting)`
 
-    ![Host Session](./images/visionOs/CollaborativeSessionWindowDiagrams.png)
+    ![Shared Diagrams](./images/visionOs/CollaborativeSessionWindowDiagrams.png)
     Caption: `Collaboration Session Window Sharing Diagrams`
+
+    ![Users in Session](./images/visionOs/ConnectedDevices.png)
+    Caption: `Collaboration Session Window Connected Devices`
 
 
   b.- **Join session**
@@ -103,6 +106,12 @@ Caption: `Collaboration Card`
 
   ![Start ShareSpace Window](./images/visionOs/ShareSpace.png)
   Caption: `Start ShareSpace Window`
+
+  ![Joining SharePlay Window](./images/visionOs/JoiningSharePlay.png)
+  Caption: `Joining SharePlay Window`
+
+  ![SharePlay Diagrams](./images/visionOs/SharePlayDiagrams.png)
+  Caption: `SharePlay Diagrams`
 
 
 4) **Interact/Personas**
@@ -200,6 +209,9 @@ Caption: `Input From HTTP Server Window`
 ![HTTP server Running](./images/visionOS/HTTPServerRunning.png)
 Caption: `HTTP Server Running`
 
+![HTTP server Diagram](./images/visionOS/ServerDiagram.png)
+Caption: `HTTP Server Diagram`
+
 ---
 
 ### 3.4 Immersive space interactions
@@ -262,7 +274,7 @@ Plane detection can be visualized to help debugging.
 3. Tap **Hide Plane Visualization**.
 
 **Screenshots:**
-- ![Plane vizsualization on](./images/visionOS/PlaneVisualization.png)
+- ![Plane visualization on](./images/visionOS/PlaneVisualization.png)
 Caption: `Plane Visualization`
 
 
