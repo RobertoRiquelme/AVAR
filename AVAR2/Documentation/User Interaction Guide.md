@@ -3,7 +3,7 @@
 ## 1) Document metadata
 
 - Project name: **AVAR2**
-- Version / build number: `__________`
+- Version / build number: `51`
 - Date: `15-01-2026`
 - Authors / maintainers: `Mateo de la Cuadra Copetta & Roberto Riquelme`
 - Devices tested:
@@ -24,8 +24,8 @@ Use this checklist to ensure you capture everything once.
 - [ X ] Launcher window – **Collaboration card** (collapsed and expanded)
 - [ X ] Collaborative Session sheet (participants list)
 - [ X ] Immersive diagram with visible handles (grab/zoom/rotate/close)
-- [ ] Plane visualization ON
-- [ ] Multiple diagrams open (layout)
+- [ X ] Plane visualization ON
+- [ X ] Multiple diagrams open (layout)
 
 ### iOS screenshots
 
@@ -141,6 +141,12 @@ Caption: `Search for specific files from the dropdown`
 ![Diagram Added](./images/visionOs/3DDiagram.png)
 Caption: `Added Diagram (3D)`
 
+![Diagram Added](./images/visionOs/2DDiagram1.png)
+Caption: `Added Diagram (2D)`
+
+![Diagram Added](./images/visionOs/MultipleDiagrams.png)
+Caption: `Multiple Diagrams Added`
+
 ---
 
 #### B) From JSON (paste)
@@ -240,7 +246,9 @@ AVAR2 renders a “diagram window” that includes interaction handles.
 3. Confirm edges update.
 
 **Screenshot:**
-- `![Node drag](./images/visionOS/visionos_node_drag.png)`
+![Node drag0](./images/visionOS/3DDiagramNode0.png)
+![Node drag1](./images/visionOS/3DDiagramNode1.png)
+Caption: Dragging Node on 3D Diagram
 
 ---
 
@@ -254,7 +262,7 @@ Plane detection can be visualized to help debugging.
 3. Tap **Hide Plane Visualization**.
 
 **Screenshots:**
-- `![Plane vizsualization on](./images/visionOS/PlaneVisualization.png)`
+- ![Plane vizsualization on](./images/visionOS/PlaneVisualization.png)
 Caption: `Plane Visualization`
 
 
@@ -372,25 +380,4 @@ Explain what each mode means for end users.
 
 - Avoid placing diagrams too close to the user’s face.
 - Use Mixed immersion if full immersion is uncomfortable.
-
----
-
-## 6) Appendix – Fillable quick reference
-
-### Quick actions (visionOS)
-
-- Load diagram from file: `__________`
-- Load from JSON: `__________`
-- Start HTTP server: `__________`
-- Host/join session: `__________`
-- Broadcast anchor: `__________`
-- Start Share Space: `__________`
-
-### Quick actions (iOS)
-
-- Open Controls menu: `__________`
-- Switch alignment mode: `__________`
-- Broadcast anchor: `__________`
-- Recenter layout: `__________`
-- Reset AR: `__________`
 
