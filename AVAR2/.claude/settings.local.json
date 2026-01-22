@@ -17,7 +17,9 @@
       "Bash(xcrun simctl launch:*)",
       "Bash(find:*)",
       "Bash(xcrun simctl list:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nImplement visionOS 26 SharePlay collaboration\n\nAdd SharedWorldAnchorManager for automatic spatial alignment between\nnearby Vision Pro devices using WorldAnchor\\(sharedWithNearbyParticipants: true\\).\n\nChanges:\n- Add SystemCoordinator integration with supportsGroupImmersiveSpace\n- Add nearby participant detection via isNearbyWithLocalParticipant\n- Add SharedWorldAnchorManager for visionOS 26+ shared anchors\n- Update CollaborationCard with nearby participant indicators\n- Add SharePlay activation button in collaboration controls\n- Fix openImmersiveSpace calls to use result enum\n- Mark VisionOSSharedSpaceCoordinator as legacy\n\nArchitecture follows Apple''s recommended visionOS 26 approach:\n- SharePlay + SystemCoordinator for session management\n- Shared World Anchors for automatic spatial alignment\n- GroupSessionMessenger for diagram data sync\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

@@ -4,6 +4,23 @@ import Foundation
 import simd
 import QuartzCore
 
+// MARK: - Legacy Shared Space Coordinator
+//
+// ⚠️ DEPRECATED for most use cases in visionOS 26+
+//
+// This coordinator uses SharedCoordinateSpaceProvider which requires:
+// - Enterprise/managed entitlement from Apple
+// - Custom networking layer (MultipeerConnectivity, etc.)
+//
+// For most apps, use the NEW approach instead:
+// - SharePlay + SystemCoordinator (for session management)
+// - WorldAnchor(sharedWithNearbyParticipants: true) (for spatial alignment)
+//
+// See: SharedWorldAnchorManager.swift for the recommended visionOS 26+ approach
+//
+// This class is kept for enterprise use cases that need custom networking
+// without FaceTime/SharePlay dependency.
+
 @available(visionOS 26.0, *)
 @MainActor
 final class VisionOSSharedSpaceCoordinator {

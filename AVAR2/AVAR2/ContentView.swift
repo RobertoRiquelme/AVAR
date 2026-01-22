@@ -28,6 +28,25 @@ struct ContentView: View {
     var collaborativeSession: CollaborativeSessionManager? = nil
 
     var body: some View {
+        if let session = collaborativeSession {
+            mainContent
+                .onReceive(session.$sharedDiagrams) { diagrams in
+                    guard let shared = diagrams.first(where: { $0.filename == filename }) else { return }
+                    let anchorTransform = session.sharedAnchor?.transform
+                    viewModel.applySharedDiagramTransform(
+                        position: shared.worldPosition,
+                        orientation: shared.worldOrientation,
+                        scale: shared.worldScale,
+                        anchorTransform: anchorTransform,
+                        useFullAnchorTransform: session.sharedAnchorUsesSharedWorld
+                    )
+                }
+        } else {
+            mainContent
+        }
+    }
+
+    private var mainContent: some View {
         RealityView { content in
             logger.debug("RealityView make block called for: \(filename)")
             viewModel.loadElements(in: content, onClose: onClose)
@@ -51,16 +70,14 @@ struct ContentView: View {
                 guard throttler.shouldUpdate() else { return }
                 guard let session = collaborativeSession else { return }
 
-                // Modern approach: Send device-relative positions
-                // SharedCoordinateSpace handles spatial alignment automatically
                 session.updateDiagramTransform(
                     filename: filename,
-                    worldPosition: position,  // Device-relative, no transform needed!
+                    worldPosition: position,
                     worldOrientation: orientation,
                     worldScale: scale
                 )
             }
-            
+
             // Send per-element edits to peers when a node drag ends
             viewModel.onElementMoved = { elementId, localPos in
                 guard let session = collaborativeSession else { return }
@@ -71,27 +88,45 @@ struct ContentView: View {
                 )
             }
 
+            // Cache local transform, and share if session is active
+            if let transform = viewModel.getWorldTransform() {
+                collaborativeSession?.cacheLocalDiagramTransform(
+                    filename: filename,
+                    position: transform.position,
+                    orientation: transform.orientation,
+                    scale: transform.scale
+                )
 
-            // Share initial position with collaborative session
-            if let transform = viewModel.getWorldTransform(),
-               collaborativeSession?.isSessionActive == true,
-               !collaborativeSession!.sharedDiagrams.contains(where: { $0.filename == filename }) {
-                do {
-                    let elements = try DiagramDataLoader.loadScriptOutput(from: filename).elements
+                if collaborativeSession?.isSessionActive == true,
+                   !collaborativeSession!.sharedDiagrams.contains(where: { $0.filename == filename }) {
+                    do {
+                        let elements = try DiagramDataLoader.loadScriptOutput(from: filename).elements
 
-                    // Modern approach: Send device-relative position
-                    // SharedCoordinateSpace handles spatial alignment automatically
-                    collaborativeSession?.shareDiagram(
-                        filename: filename,
-                        elements: elements,
-                        worldPosition: transform.position,  // Device-relative!
-                        worldOrientation: transform.orientation,
-                        worldScale: transform.scale
-                    )
-                    logger.info("Shared diagram '\(filename)' at device-relative position: \(String(describing: transform.position))")
-                } catch {
-                    logger.error("Failed to share diagram on initial load: \(error.localizedDescription)")
+                        collaborativeSession?.shareDiagram(
+                            filename: filename,
+                            elements: elements,
+                            worldPosition: transform.position,
+                            worldOrientation: transform.orientation,
+                            worldScale: transform.scale
+                        )
+                        logger.info("Shared diagram '\(filename)' at device-relative position: \(String(describing: transform.position))")
+                    } catch {
+                        logger.error("Failed to share diagram on initial load: \(error.localizedDescription)")
+                    }
                 }
+            }
+
+            // Apply shared transform after initial load (in case onReceive fired before entities existed).
+            if let session = collaborativeSession,
+               let shared = session.sharedDiagrams.first(where: { $0.filename == filename }) {
+                let anchorTransform = session.sharedAnchor?.transform
+                viewModel.applySharedDiagramTransform(
+                    position: shared.worldPosition,
+                    orientation: shared.worldOrientation,
+                    scale: shared.worldScale,
+                    anchorTransform: anchorTransform,
+                    useFullAnchorTransform: session.sharedAnchorUsesSharedWorld
+                )
             }
 
             logger.debug("ContentView task completed for: \(filename)")

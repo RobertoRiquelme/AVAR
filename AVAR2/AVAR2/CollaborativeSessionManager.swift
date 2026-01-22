@@ -46,6 +46,12 @@ private let collabLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AV
 
 @MainActor
 class CollaborativeSessionManager: NSObject, ObservableObject {
+    struct DiagramTransform {
+        let position: SIMD3<Float>
+        let orientation: simd_quatf
+        let scale: Float
+    }
+    // MARK: - Published State
     @Published var isSessionActive = false
     @Published var connectedPeers: [MCPeerID] = []
     @Published var availablePeers: [MCPeerID] = []
@@ -54,47 +60,61 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published var lastError: String? = nil
     @Published var isSharePlayActive = false
     @Published var pendingAlert: SessionAlert? = nil
-    /// Published when SharePlay requests the immersive space to be opened
-    @Published var sharePlayRequestsImmersiveSpace = false
 
-    /// When true, enables spatial personas in SharePlay (users see each other) but disables diagram gestures.
-    /// When false, diagram gestures work but no spatial personas are shown.
-    @Published var useSpatialPersonas: Bool = false
+    // visionOS 26+: Nearby participant tracking
+    @Published var nearbyParticipantCount: Int = 0
+    @Published var hasNearbyParticipants: Bool = false
+    @Published var worldAnchorSharingAvailable: Bool = false
+    @Published private(set) var sharedAnchorUsesSharedWorld: Bool = false
 
-    /// Tracks whether this device is the SharePlay host (initiated the session with diagrams)
-    /// This is set when SharePlay starts and this device already has diagrams open
-    @Published var isSharePlayHost: Bool = false
-    
     private var multipeerSession: MultipeerConnectivityService?
     #if os(iOS)
     private var arSession: ARSession?
     #endif
     private var collaborationData: CollaborationData?
-    
+
     // Current active diagrams that should be shared
     @Published var sharedDiagrams: [SharedDiagram] = []
     @Published var sharedAnchor: SharedWorldAnchor? = nil
+
+    private var localDiagramTransforms: [String: DiagramTransform] = [:]
     private let anchorStorageURL: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return dir.appendingPathComponent("shared_anchor.json")
     }()
 
-#if os(visionOS)
+    // visionOS 26+: Shared World Anchor Manager (new API)
+    #if os(visionOS)
+    @available(visionOS 26.0, *)
+    private var _sharedWorldAnchorManager: SharedWorldAnchorManager?
+
+    @available(visionOS 26.0, *)
+    var sharedWorldAnchorManager: SharedWorldAnchorManager {
+        if _sharedWorldAnchorManager == nil {
+            _sharedWorldAnchorManager = SharedWorldAnchorManager()
+        }
+        return _sharedWorldAnchorManager!
+    }
+
+    // Legacy coordinator (kept for backward compatibility)
     @available(visionOS 26.0, *)
     private var sharedSpaceCoordinator: VisionOSSharedSpaceCoordinator?
     private var sharedSpaceTask: Task<Void, Never>?
-#endif
+    #endif
 
     // iOS-only: callback to deliver ARCollaborationData blobs to the local ARSession
     #if os(iOS)
     var onCollaborationDataReceived: ((Data) -> Void)?
     #endif
+
     // Shared world anchor callback
     var onSharedAnchorReceived: ((SharedAnchorMessage) -> Void)?
 
+    // visionOS 26+: Callback when shared world anchor is created/updated
+    var onSharedWorldAnchorUpdated: ((UUID, simd_float4x4) -> Void)?
+
     #if canImport(GroupActivities)
-    /// SharePlay coordinator for group immersive space experiences
-    var sharePlayCoordinator: SharePlayCoordinator?
+    private(set) var sharePlayCoordinator: SharePlayCoordinator?
     private var sharePlayParticipantCount = 0
     #endif
 
@@ -111,21 +131,37 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         coordinator.onSessionJoined = { [weak self] in
             guard let self else { return }
             Task { @MainActor in
+                print("✅ SharePlay session joined, isHost=\(coordinator.isHost)")
                 self.isSharePlayActive = true
                 self.isSessionActive = true
                 self.sessionState = "SharePlay active"
-#if os(visionOS)
-                self.startSharedSpaceCoordinatorIfNeeded()
-#endif
+                self.isHost = coordinator.isHost
+
+                #if os(visionOS)
+                if #available(visionOS 26.0, *) {
+                    await self.startSharedWorldAnchorManager()
+                }
+                #endif
+
                 self.resendStateToSharePlay()
             }
         }
         coordinator.onSessionEnded = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
+                print("🛑 SharePlay session ended")
                 self.isSharePlayActive = false
                 self.isSharePlayHost = false
                 self.sharePlayParticipantCount = 0
+                self.nearbyParticipantCount = 0
+                self.hasNearbyParticipants = false
+
+                #if os(visionOS)
+                if #available(visionOS 26.0, *) {
+                    self._sharedWorldAnchorManager?.stop()
+                }
+                #endif
+
                 if self.connectedPeers.isEmpty {
                     self.isSessionActive = false
                     self.sessionState = self.isHost ? "Hosting - Waiting for peers" : "Not Connected"
@@ -138,33 +174,112 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                 self.sharePlayParticipantCount = count
                 let noun = count == 1 ? "participant" : "participants"
                 self.sessionState = "SharePlay: \(count) \(noun)"
+                self.isHost = coordinator.isHost
+
                 if self.isHost && count > 1 {
                     self.resendStateToSharePlay()
                 }
             }
         }
-        #if os(visionOS)
-        coordinator.onRequestImmersiveSpace = { [weak self] in
+        coordinator.onNearbyParticipantsChanged = { [weak self] participants in
             guard let self else { return }
-            self.sharePlayRequestsImmersiveSpace = true
+            Task { @MainActor in
+                self.nearbyParticipantCount = participants.count
+                self.hasNearbyParticipants = !participants.isEmpty
+                if !participants.isEmpty {
+                    self.sessionState = "SharePlay: \(participants.count) nearby"
+                }
+            }
         }
-        coordinator.getSpatialPersonasEnabled = { [weak self] in
-            self?.useSpatialPersonas ?? false
-        }
-        coordinator.setIsSharePlayHost = { [weak self] isHost in
-            self?.isSharePlayHost = isHost
-        }
-        // Note: getHasDiagramsOpen will be set by VisionOSMainView since it has access to activeFiles
-        #endif
         sharePlayCoordinator = coordinator
         #endif
 
-#if os(visionOS)
+        #if os(visionOS)
         if #available(visionOS 26.0, *) {
             sharedSpaceCoordinator = buildSharedSpaceCoordinator()
         }
-#endif
+        #endif
     }
+
+    // MARK: - visionOS 26+ Shared World Anchors
+
+    #if os(visionOS)
+    @available(visionOS 26.0, *)
+    private func startSharedWorldAnchorManager() async {
+        let manager = sharedWorldAnchorManager
+
+        // Set up callbacks
+        manager.onAnchorUpdated = { [weak self] anchor in
+            guard let self else { return }
+            print("📍 Shared anchor updated: \(anchor.id)")
+            let shared = SharedWorldAnchor(
+                id: anchor.id.uuidString,
+                transform: anchor.originFromAnchorTransform,
+                confidence: 1.0,
+                timestamp: Date(),
+                worldMapData: nil
+            )
+            Task { @MainActor in
+                self.sharedAnchor = shared
+                self.sharedAnchorUsesSharedWorld = true
+            }
+            self.onSharedWorldAnchorUpdated?(anchor.id, anchor.originFromAnchorTransform)
+        }
+
+        manager.onAnchorRemoved = { anchorID in
+            print("🗑️ Shared anchor removed: \(anchorID)")
+            Task { @MainActor in
+                if self.sharedAnchor?.id == anchorID.uuidString {
+                    self.sharedAnchor = nil
+                    self.sharedAnchorUsesSharedWorld = false
+                }
+            }
+        }
+
+        manager.onSharingAvailabilityChanged = { [weak self] available in
+            guard let self else { return }
+            Task { @MainActor in
+                self.worldAnchorSharingAvailable = available
+                print("🔄 World anchor sharing: \(available ? "available" : "unavailable")")
+            }
+        }
+
+        await manager.start()
+        print("✅ SharedWorldAnchorManager started for SharePlay session")
+    }
+
+    /// Create a shared anchor that will be visible to all nearby participants
+    @available(visionOS 26.0, *)
+    func createSharedAnchorForDiagram(at transform: simd_float4x4) async throws -> UUID {
+        let anchor = try await sharedWorldAnchorManager.createSharedAnchor(at: transform)
+        return anchor.id
+    }
+
+    /// Create a shared anchor in front of the user
+    @available(visionOS 26.0, *)
+    func createSharedAnchorInFrontOfUser(distance: Float = 1.5) async throws -> UUID {
+        let anchor = try await sharedWorldAnchorManager.createSharedAnchorInFrontOfUser(distance: distance)
+        return anchor.id
+    }
+
+    /// Ensure a shared world anchor exists for the current SharePlay session (host only).
+    @available(visionOS 26.0, *)
+    func ensureSharedWorldAnchorInFrontOfUser(distance: Float = 1.5) async {
+        guard isHost else { return }
+        guard sharedAnchor == nil else { return }
+        guard worldAnchorSharingAvailable else {
+            print("⚠️ Shared world anchors not available yet")
+            return
+        }
+
+        do {
+            _ = try await createSharedAnchorInFrontOfUser(distance: distance)
+            print("📍 Created shared world anchor in front of user")
+        } catch {
+            print("❌ Failed to create shared world anchor: \(error)")
+        }
+    }
+    #endif
     
     private func setupMultipeerSession() {
         multipeerSession = MultipeerConnectivityService()
@@ -191,12 +306,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
 /// Start hosting a collaborative session
     func startHosting() async {
-        print("🤝 Starting collaborative session as host")
-        lastError = nil // Clear any previous errors
+        print("🤝 Starting host session on \(getCurrentPlatform())")
+        lastError = nil
         isHost = true
 
         #if os(iOS)
-        // Initialize ARSession for iOS
         await startARSession()
         #endif
 
@@ -213,15 +327,14 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         startSharedSpaceCoordinatorIfNeeded()
 #endif
     }
-    
+
     /// Join an existing collaborative session
     func joinSession() async {
-        print("🤝 Joining collaborative session")
-        lastError = nil // Clear any previous errors
+        print("🤝 Joining session on \(getCurrentPlatform())")
+        lastError = nil
         isHost = false
 
         #if os(iOS)
-        // Initialize ARSession for iOS
         await startARSession()
         #endif
 
@@ -284,6 +397,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                                          confidence: anchor.confidence,
                                          timestamp: anchor.timestamp,
                                          worldMapData: anchor.worldMapData)
+        sharedAnchorUsesSharedWorld = false
         persistSharedAnchor(anchor: sharedAnchor)
 
         broadcast(.anchor(anchor), to: peers)
@@ -308,6 +422,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         sessionState = "Not Connected"
         lastError = nil
         sharedAnchor = nil
+        sharedAnchorUsesSharedWorld = false
         persistSharedAnchor(anchor: nil)
 #if canImport(GroupActivities)
         sharePlayCoordinator?.stop()
@@ -338,9 +453,20 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         #if os(visionOS)
         // For visionOS: Ensure anchor exists and convert to anchor-relative coordinates
         if sharedAnchor == nil {
-            // No anchor yet - broadcast one first
+            #if canImport(GroupActivities)
+            if isSharePlayActive, #available(visionOS 26.0, *) {
+                Task { [weak self] in
+                    await self?.ensureSharedWorldAnchorInFrontOfUser()
+                }
+            } else {
+                // No anchor yet - broadcast one first (legacy/manual path)
+                broadcastCurrentSharedAnchor()
+                print("📡 Auto-broadcast anchor for new diagram on visionOS")
+            }
+            #else
             broadcastCurrentSharedAnchor()
             print("📡 Auto-broadcast anchor for new diagram on visionOS")
+            #endif
         }
 
         // Convert device-relative position to anchor-relative for iOS compatibility
@@ -391,6 +517,17 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         if let scale = worldScale {
             print("   📏 Scale: \(scale)")
         }
+    }
+
+    func cacheLocalDiagramTransform(filename: String,
+                                    position: SIMD3<Float>,
+                                    orientation: simd_quatf,
+                                    scale: Float) {
+        localDiagramTransforms[filename] = DiagramTransform(position: position, orientation: orientation, scale: scale)
+    }
+
+    func cachedTransform(for filename: String) -> DiagramTransform? {
+        localDiagramTransforms[filename]
     }
     
     /// Remove a diagram from sharing
@@ -451,6 +588,10 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         }
         if let scale = worldScale {
             sharedDiagrams[index].worldScale = scale
+        }
+
+        if let pos = worldPosition, let orient = worldOrientation, let scale = worldScale {
+            localDiagramTransforms[filename] = DiagramTransform(position: pos, orientation: orient, scale: scale)
         }
 
         // Send update to peers (fast path - no error checking needed during drag)
@@ -540,33 +681,24 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         do {
             data = try JSONEncoder().encode(envelope)
         } catch {
-            collabLogger.error("Failed to encode SharedSpaceEnvelope: \(error.localizedDescription)")
+            print("❌ Failed to encode message: \(error.localizedDescription)")
             lastError = "Failed to encode message: \(error.localizedDescription)"
             return
         }
 
-        var sendSucceeded = false
-
         if let peers = peers {
             if !peers.isEmpty {
                 multipeerSession?.sendData(data, to: peers)
-                sendSucceeded = true
             }
         } else if !connectedPeers.isEmpty {
             multipeerSession?.sendData(data, to: connectedPeers)
-            sendSucceeded = true
         }
 
         #if canImport(GroupActivities)
         if peers == nil && sharePlayCoordinator?.isActive == true {
             sendToSharePlay(data)
-            sendSucceeded = true
         }
         #endif
-
-        if !sendSucceeded && peers == nil {
-            collabLogger.debug("No peers connected - message not sent")
-        }
     }
 
     private func resendStateToSharePlay() {
@@ -625,6 +757,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                                          confidence: persisted.confidence,
                                          timestamp: persisted.timestamp,
                                          worldMapData: persisted.worldMapData)
+        sharedAnchorUsesSharedWorld = false
     }
 
     private func clearPersistedAnchor() {
@@ -653,6 +786,7 @@ private extension CollaborativeSessionManager {
                                              confidence: anchorMsg.confidence,
                                              timestamp: anchorMsg.timestamp,
                                              worldMapData: anchorMsg.worldMapData)
+            sharedAnchorUsesSharedWorld = false
             persistSharedAnchor(anchor: sharedAnchor)
             onSharedAnchorReceived?(anchorMsg)
             print("📡 Received shared anchor '\(anchorMsg.anchorId)' from \(source)")
@@ -750,6 +884,7 @@ private extension CollaborativeSessionManager {
             sharedDiagrams.removeAll()
             sharedDiagrams = sharedDiagrams // force Combine publish
             sharedAnchor = nil
+            sharedAnchorUsesSharedWorld = false
             persistSharedAnchor(anchor: nil)
             isSessionActive = false
             sessionState = "Session ended by \(info.byHost)"
@@ -1287,29 +1422,54 @@ struct ElementPositionMessage: Codable {
 }
 
 #if canImport(GroupActivities)
+import GroupActivities
+
+/// Participant info for tracking nearby users
+struct ParticipantInfo: Identifiable, Equatable {
+    let id: UUID
+    let isLocal: Bool
+    let isNearby: Bool
+    var pose: simd_float4x4?
+
+    static func == (lhs: ParticipantInfo, rhs: ParticipantInfo) -> Bool {
+        lhs.id == rhs.id && lhs.isNearby == rhs.isNearby
+    }
+}
+
 @MainActor
-final class SharePlayCoordinator {
+final class SharePlayCoordinator: ObservableObject {
+    // MARK: - Callbacks
     var onDataReceived: ((Data) -> Void)?
     var onSessionJoined: (() -> Void)?
     var onSessionEnded: (() -> Void)?
     var onParticipantsChanged: ((Int) -> Void)?
-    /// Called when SharePlay needs the immersive space to be opened (visionOS)
-    var onRequestImmersiveSpace: (() -> Void)?
-    /// Returns whether spatial personas should be enabled (set by parent manager)
-    var getSpatialPersonasEnabled: (() -> Bool)?
-    /// Called to check if this device has diagrams open (to determine if it's the host)
-    var getHasDiagramsOpen: (() -> Bool)?
-    /// Called to mark this device as the SharePlay host
-    var setIsSharePlayHost: ((Bool) -> Void)?
+    var onNearbyParticipantsChanged: (([ParticipantInfo]) -> Void)?
+    var onLocalParticipantPoseChanged: ((simd_float4x4) -> Void)?
 
+    // MARK: - Published State
+    @Published private(set) var nearbyParticipants: [ParticipantInfo] = []
+    @Published private(set) var totalParticipantCount: Int = 0
+    @Published private(set) var isHost: Bool = false
+    @Published private(set) var localParticipantPose: simd_float4x4?
+
+    // MARK: - Public Properties
     var isActive: Bool { currentSession != nil }
+    var hasNearbyParticipants: Bool { !nearbyParticipants.isEmpty }
 
+    // MARK: - Private Properties
     private var currentSession: GroupSession<SharedSpaceActivity>?
     private var messenger: GroupSessionMessenger?
+    #if os(visionOS)
+    private var systemCoordinator: SystemCoordinator?
+    #endif
+
     private var messageTask: Task<Void, Never>?
     private var stateTask: Task<Void, Never>?
     private var listenerTask: Task<Void, Never>?
     private var participantsTask: Task<Void, Never>?
+    private var localParticipantTask: Task<Void, Never>?
+
+    // MARK: - Initialization
 
     init() {
         listenerTask = Task { [weak self] in
@@ -1321,11 +1481,26 @@ final class SharePlayCoordinator {
         listenerTask?.cancel()
     }
 
+    // MARK: - Public API
+
     func start() async {
         let activity = SharedSpaceActivity()
         let result = await activity.prepareForActivation()
-        if result == .activationPreferred {
-            _ = try? await activity.activate()
+
+        switch result {
+        case .activationPreferred:
+            do {
+                _ = try await activity.activate()
+                print("✅ SharePlay activated")
+            } catch {
+                print("❌ SharePlay activation failed: \(error.localizedDescription)")
+            }
+        case .activationDisabled:
+            print("⚠️ SharePlay disabled (not in FaceTime?)")
+        case .cancelled:
+            print("ℹ️ SharePlay cancelled")
+        @unknown default:
+            break
         }
     }
 
@@ -1333,15 +1508,29 @@ final class SharePlayCoordinator {
         messageTask?.cancel()
         stateTask?.cancel()
         participantsTask?.cancel()
+        localParticipantTask?.cancel()
+
         messageTask = nil
         stateTask = nil
         participantsTask = nil
+        localParticipantTask = nil
+
         messenger = nil
+        #if os(visionOS)
+        systemCoordinator = nil
+        #endif
+
         currentSession?.leave()
         currentSession?.end()
         currentSession = nil
 
+        nearbyParticipants.removeAll()
+        totalParticipantCount = 0
+        isHost = false
+        localParticipantPose = nil
+
         onSessionEnded?()
+        print("🛑 SharePlay session stopped")
     }
 
     func send(_ data: Data) async {
@@ -1349,65 +1538,62 @@ final class SharePlayCoordinator {
         do {
             try await messenger.send(data)
         } catch {
-            print("❌ SharePlay send failed: \(error)")
+            print("❌ SharePlay send failed: \(error.localizedDescription)")
         }
     }
+
+    /// Send data only to nearby participants
+    func sendToNearby(_ data: Data) async {
+        guard let messenger, let session = currentSession else { return }
+
+        let nearbyIDs = session.activeParticipants
+            .filter { $0.isNearbyWithLocalParticipant && $0 != session.localParticipant }
+
+        guard !nearbyIDs.isEmpty else { return }
+
+        do {
+            try await messenger.send(data, to: .only(nearbyIDs))
+        } catch {
+            print("❌ SharePlay send to nearby failed: \(error)")
+        }
+    }
+
+    // MARK: - Private Methods
 
     private func listenForSessions() async {
         for await session in SharedSpaceActivity.sessions() {
-            configureSession(session)
+            await configureSession(session)
         }
     }
 
-    private func configureSession(_ session: GroupSession<SharedSpaceActivity>) {
+    private func configureSession(_ session: GroupSession<SharedSpaceActivity>) async {
+        // Clean up previous session
         currentSession?.leave()
         currentSession?.end()
+
         currentSession = session
         messenger = GroupSessionMessenger(session: session)
 
-        // Configure for group immersive space sharing (visionOS 26+)
+        // Configure SystemCoordinator for visionOS 26+
         #if os(visionOS)
-        if #available(visionOS 26.0, *) {
-            Task { [weak self] in
-                guard let self else { return }
+        if let coordinator = await session.systemCoordinator {
+            self.systemCoordinator = coordinator
+            var config = SystemCoordinator.Configuration()
+            config.supportsGroupImmersiveSpace = true
+            config.spatialTemplatePreference = .sideBySide
+            coordinator.configuration = config
 
-                // Determine if this device is the SharePlay host (has diagrams already open)
-                let hasDiagrams = await MainActor.run { self.getHasDiagramsOpen?() ?? false }
-                await MainActor.run {
-                    self.setIsSharePlayHost?(hasDiagrams)
-                }
-                print("📢 SharePlay session starting - isHost: \(hasDiagrams)")
-
-                // Signal to the UI that SharePlay wants the immersive space open
-                await MainActor.run {
-                    self.onRequestImmersiveSpace?()
-                }
-                print("📢 SharePlay requesting immersive space to open...")
-
-                // Give the UI a moment to open the immersive space
-                try? await Task.sleep(for: .milliseconds(500))
-
-                // Configure the system coordinator based on user preference
-                // When useSpatialPersonas is true: enables spatial personas but disables gestures
-                // When false: gestures work but no spatial personas
-                let enableSpatialPersonas = await MainActor.run { self.getSpatialPersonasEnabled?() ?? false }
-
-                if let systemCoordinator = await session.systemCoordinator {
-                    var configuration = SystemCoordinator.Configuration()
-                    configuration.supportsGroupImmersiveSpace = enableSpatialPersonas
-                    if enableSpatialPersonas {
-                        configuration.spatialTemplatePreference = .sideBySide
-                    }
-                    systemCoordinator.configuration = configuration
-                    print("✅ Configured supportsGroupImmersiveSpace = \(enableSpatialPersonas) for SharePlay")
-                }
+            localParticipantTask?.cancel()
+            localParticipantTask = Task { [weak self] in
+                await self?.observeLocalParticipantState(coordinator: coordinator)
             }
         }
         #endif
 
+        // Message receiving task
         messageTask?.cancel()
-        messageTask = Task {
-            guard let messenger = messenger else { return }
+        messageTask = Task { [weak self] in
+            guard let messenger = self?.messenger else { return }
             for await (data, _) in messenger.messages(of: Data.self) {
                 await MainActor.run { [weak self] in
                     self?.onDataReceived?(data)
@@ -1415,27 +1601,50 @@ final class SharePlayCoordinator {
             }
         }
 
+        // Session state monitoring
         stateTask?.cancel()
-        stateTask = Task {
+        stateTask = Task { [weak self] in
             for await state in session.$state.values {
-                if case .invalidated = state {
-                    await MainActor.run { [weak self] in
-                        guard let self else { return }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    if case .invalidated = state {
                         self.messenger = nil
                         self.currentSession = nil
+                        #if os(visionOS)
+                        self.systemCoordinator = nil
+                        #endif
                         self.onSessionEnded?()
                     }
-                    break
                 }
+                if case .invalidated = state { break }
             }
         }
 
+        // Participant monitoring
         participantsTask?.cancel()
-        participantsTask = Task {
+        participantsTask = Task { [weak self] in
             for await participants in session.$activeParticipants.values {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
+                    self.totalParticipantCount = participants.count
+                    let local = session.localParticipant
+                    self.isHost = participants.first == local
+
+                    var nearbyInfos: [ParticipantInfo] = []
+                    for participant in participants {
+                        let isLocal = participant == session.localParticipant
+                        let info = ParticipantInfo(
+                            id: participant.id,
+                            isLocal: isLocal,
+                            isNearby: participant.isNearbyWithLocalParticipant
+                        )
+                        if info.isNearby && !isLocal {
+                            nearbyInfos.append(info)
+                        }
+                    }
+                    self.nearbyParticipants = nearbyInfos
                     self.onParticipantsChanged?(participants.count)
+                    self.onNearbyParticipantsChanged?(nearbyInfos)
                 }
             }
         }
@@ -1443,7 +1652,25 @@ final class SharePlayCoordinator {
         session.join()
         onSessionJoined?()
     }
+
+    #if os(visionOS)
+    private func observeLocalParticipantState(coordinator: SystemCoordinator) async {
+        for await localState in coordinator.localParticipantStates {
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if let pose = localState.pose {
+                    // Convert Pose3D to simd_float4x4
+                    let matrix = simd_float4x4(pose)
+                    self.localParticipantPose = matrix
+                    self.onLocalParticipantPoseChanged?(matrix)
+                }
+            }
+        }
+    }
+    #endif
 }
+
+// MARK: - SharedSpaceActivity
 
 struct SharedSpaceActivity: GroupActivity {
     static var activityIdentifier: String { "org.riquelme.avar2.sharedspace" }
@@ -1451,13 +1678,9 @@ struct SharedSpaceActivity: GroupActivity {
     var metadata: GroupActivityMetadata {
         var metadata = GroupActivityMetadata()
         metadata.title = "AVAR2 Shared Space"
-        metadata.subtitle = "Collaborate on 3D diagrams"
+        metadata.subtitle = "Collaborate on diagrams in AR"
         metadata.type = .generic
-        #if os(visionOS)
-        if #available(visionOS 26.0, *) {
-            metadata.supportsContinuationOnTV = false
-        }
-        #endif
+        metadata.supportsContinuationOnTV = false
         return metadata
     }
 }

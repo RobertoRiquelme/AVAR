@@ -24,47 +24,39 @@ class MultipeerConnectivityService: NSObject, ObservableObject {
     @Published var autoConnect = true // Automatically connect to first found host
     
     override init() {
-        // Create unique peer ID based on device
         let deviceName = ProcessInfo.processInfo.hostName
         localPeerID = MCPeerID(displayName: deviceName)
         session = MCSession(peer: localPeerID, securityIdentity: nil, encryptionPreference: .required)
-        
         super.init()
         session.delegate = self
     }
-    
+
     /// Start hosting/advertising this device
     func startHosting() {
-        stopAll() // Stop any existing services
-        makeFreshSession()      // Para asegurarnos
-        
+        stopAll()
+        makeFreshSession()
+
         advertiser = MCNearbyServiceAdvertiser(
             peer: localPeerID,
-            discoveryInfo: [
-                "version": "1.0",
-                "platform": getCurrentPlatform()
-            ],
+            discoveryInfo: ["version": "1.0", "platform": getCurrentPlatform()],
             serviceType: serviceType
         )
-        
         advertiser?.delegate = self
         advertiser?.startAdvertisingPeer()
         isHosting = true
-        
-        print("🏠 Started hosting as '\(localPeerID.displayName)' on \(getCurrentPlatform())")
+        print("🏠 Hosting as '\(localPeerID.displayName)'")
     }
-    
+
     /// Start browsing for hosts
     func startBrowsing() {
-        stopAll() // Stop any existing services
+        stopAll()
         makeFreshSession()
-        
+
         browser = MCNearbyServiceBrowser(peer: localPeerID, serviceType: serviceType)
         browser?.delegate = self
         browser?.startBrowsingForPeers()
         isBrowsing = true
-        
-        print("🔍 Started browsing for hosts as '\(localPeerID.displayName)'")
+        print("🔍 Browsing for hosts...")
     }
     
     /// Stop all services
@@ -142,25 +134,14 @@ class MultipeerConnectivityService: NSObject, ObservableObject {
 // MARK: - MCSessionDelegate
 extension MultipeerConnectivityService: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        let stateString: String
-        switch state {
-        case .notConnected:
-            stateString = "Not Connected"
-        case .connecting:
-            stateString = "Connecting"
-        case .connected:
-            stateString = "Connected"
-        @unknown default:
-            stateString = "Unknown"
-        }
-        
-        print("📡 Session state changed: '\(peerID.displayName)' → \(stateString)")
-        
+        let stateStr = state == .connected ? "connected" : (state == .connecting ? "connecting" : "disconnected")
+        print("📡 \(peerID.displayName): \(stateStr)")
+
         DispatchQueue.main.async {
             self.delegate?.multipeerService(self, peer: peerID, didChangeState: state)
         }
     }
-    
+
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         DispatchQueue.main.async {
             self.delegate?.multipeerService(self, didReceiveData: data, from: peerID)
@@ -183,30 +164,12 @@ extension MultipeerConnectivityService: MCSessionDelegate {
 // MARK: - MCNearbyServiceAdvertiserDelegate
 extension MultipeerConnectivityService: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        print("📥 Received invitation from '\(peerID.displayName)'")
-        // Auto-accept invitations when hosting
+        print("📥 Invitation from \(peerID.displayName)")
         invitationHandler(true, session)
     }
-    
+
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        let nsError = error as NSError
-        print("❌ Failed to start advertising: \(error)")
-        print("   Error domain: \(nsError.domain)")
-        print("   Error code: \(nsError.code)")
-        
-        // Provide specific guidance for common errors
-        switch nsError.code {
-        case -72008:
-            print("💡 Error -72008: DNS service not running or permission denied")
-            print("💡 Solutions:")
-            print("   • Restart the device")
-            print("   • Check that Local Network permission is granted")
-            print("   • Verify NSLocalNetworkUsageDescription is in Info.plist")
-        default:
-            print("💡 Unknown error code: \(nsError.code)")
-        }
-        
-        // Update state and notify delegate
+        print("❌ Advertising failed: \(error.localizedDescription)")
         DispatchQueue.main.async {
             self.isHosting = false
             self.delegate?.multipeerService(self, didEncounterError: error, context: "advertising")
@@ -217,57 +180,30 @@ extension MultipeerConnectivityService: MCNearbyServiceAdvertiserDelegate {
 // MARK: - MCNearbyServiceBrowserDelegate
 extension MultipeerConnectivityService: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
+        print("🔍 Found: \(peerID.displayName)")
+
         DispatchQueue.main.async {
             if !self.availablePeers.contains(peerID) {
                 self.availablePeers.append(peerID)
             }
-            print("🔍 Found peer '\(peerID.displayName)' with info: \(info ?? [:])")
-            
-            // Notify delegate of updated peer list
             self.delegate?.multipeerService(self, didUpdateAvailablePeers: self.availablePeers)
-            
-            // Auto-connect to the first host we find when browsing
+
             if self.isBrowsing && self.autoConnect && !self.session.connectedPeers.contains(peerID) {
-                print("🤝 Auto-connecting to host '\(peerID.displayName)'")
+                print("🤝 Auto-connecting to \(peerID.displayName)")
                 self.connectToPeer(peerID)
             }
         }
     }
-    
+
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         DispatchQueue.main.async {
             self.availablePeers.removeAll { $0 == peerID }
-            print("📤 Lost peer '\(peerID.displayName)'")
-            
-            // Notify delegate of updated peer list
             self.delegate?.multipeerService(self, didUpdateAvailablePeers: self.availablePeers)
         }
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
-        let nsError = error as NSError
-        print("❌ Failed to start browsing: \(error)")
-        print("   Error domain: \(nsError.domain)")
-        print("   Error code: \(nsError.code)")
-        
-        // Provide specific guidance for common errors
-        switch nsError.code {
-        case -72008:
-            print("💡 Error -72008: DNS service not running or permission denied")
-            print("💡 Solutions:")
-            print("   • Restart the device")
-            print("   • Check that Local Network permission is granted")
-            print("   • Verify NSLocalNetworkUsageDescription is in Info.plist")
-            print("   • Check NSBonjourServices configuration")
-        case -65563:
-            print("💡 Error -65563: Service type invalid or malformed")
-        case -6:
-            print("💡 Error -6: Parameter error - check service type format")
-        default:
-            print("💡 Unknown error code: \(nsError.code)")
-        }
-        
-        // Update state and notify delegate
+        print("❌ Browsing failed: \(error.localizedDescription)")
         DispatchQueue.main.async {
             self.isBrowsing = false
             self.delegate?.multipeerService(self, didEncounterError: error, context: "browsing")
