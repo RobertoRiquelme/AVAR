@@ -28,6 +28,12 @@ struct DiagramSceneBuilder {
     let spawnScale: Float
     let appModel: AppModel?
     let logger: Logger?
+    /// Shared position from collaborative session (overrides getNextDiagramPosition)
+    let sharedPosition: SIMD3<Float>?
+    /// Shared orientation from collaborative session
+    let sharedOrientation: simd_quatf?
+    /// Shared scale from collaborative session (overrides spawnScale)
+    let sharedScale: Float?
 
     func buildScene(in content: RealityViewContent,
                     normalizationContext: NormalizationContext,
@@ -62,14 +68,31 @@ struct DiagramSceneBuilder {
 
     private func createRootContainer(in content: RealityViewContent,
                                      normalizationContext: NormalizationContext) -> Entity {
-        let pivot = appModel?.getNextDiagramPosition(for: filename ?? "unknown") ?? SIMD3<Float>(0, 1.0, -2.0)
-        logger?.debug("📍 Loading diagram at position: \(pivot)")
+        // Use shared position from collaborative session if available, otherwise get next position
+        let pivot: SIMD3<Float>
+        if let shared = sharedPosition {
+            pivot = shared
+            logger?.debug("📍 Using shared position from host: \(pivot)")
+        } else {
+            pivot = appModel?.getNextDiagramPosition(for: filename ?? "unknown") ?? SIMD3<Float>(0, 1.0, -2.0)
+            logger?.debug("📍 Loading diagram at position: \(pivot)")
+        }
         logger?.debug("📍 Available surfaces: \(appModel?.surfaceDetector.surfaceAnchors.count ?? 0)")
 
         let container = Entity()
         container.name = "graphRoot"
         container.position = pivot
-        container.scale = SIMD3<Float>(repeating: spawnScale)
+
+        // Use shared scale if available, otherwise use spawn scale
+        let scale = sharedScale ?? spawnScale
+        container.scale = SIMD3<Float>(repeating: scale)
+
+        // Apply shared orientation if available
+        if let orientation = sharedOrientation {
+            container.orientation = orientation
+            logger?.debug("📍 Applied shared orientation from host")
+        }
+
         content.add(container)
         return container
     }

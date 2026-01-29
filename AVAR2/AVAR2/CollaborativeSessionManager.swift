@@ -151,6 +151,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                 guard let self else { return }
                 print("🛑 SharePlay session ended")
                 self.isSharePlayActive = false
+                self.isSharePlayHost = false
                 self.sharePlayParticipantCount = 0
                 self.nearbyParticipantCount = 0
                 self.hasNearbyParticipants = false

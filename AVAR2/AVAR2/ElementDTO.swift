@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 // USE: 
 // let decoder = JSONDecoder()
@@ -19,6 +20,12 @@ struct ScriptOutput: Codable {
     let is2D: Bool
     /// Optional diagram ID for tracking/updating diagrams
     let id: Int?
+    /// Shared position from collaborative session (used by clients to place diagram at host's position)
+    var sharedPosition: SIMD3<Float>?
+    /// Shared orientation from collaborative session
+    var sharedOrientation: simd_quatf?
+    /// Shared scale from collaborative session
+    var sharedScale: Float?
 
     private enum CodingKeys: String, CodingKey {
         case elements
@@ -27,6 +34,9 @@ struct ScriptOutput: Codable {
         case edges
         case id
         case type
+        case sharedPosition
+        case sharedOrientation
+        case sharedScale
     }
 
     // -- your custom decoder --
@@ -36,6 +46,9 @@ struct ScriptOutput: Codable {
             self.elements = directElements
             self.is2D = false // Default for direct array format
             self.id = nil // No root-level ID in direct array format
+            self.sharedPosition = nil
+            self.sharedOrientation = nil
+            self.sharedScale = nil
             return
         }
 
@@ -63,6 +76,11 @@ struct ScriptOutput: Codable {
             } else {
                 self.id = nil
             }
+
+            // Decode shared position/orientation/scale (from collaborative session)
+            self.sharedPosition = Self.decodeSharedPosition(from: container)
+            self.sharedOrientation = Self.decodeSharedOrientation(from: container)
+            self.sharedScale = try? container.decode(Float.self, forKey: .sharedScale)
             return
         }
 
@@ -85,6 +103,33 @@ struct ScriptOutput: Codable {
         } else {
             self.id = nil
         }
+
+        // Decode shared position/orientation/scale (from collaborative session)
+        self.sharedPosition = Self.decodeSharedPosition(from: container)
+        self.sharedOrientation = Self.decodeSharedOrientation(from: container)
+        self.sharedScale = try? container.decode(Float.self, forKey: .sharedScale)
+    }
+
+    /// Decode shared position from a dictionary with x, y, z keys
+    private static func decodeSharedPosition(from container: KeyedDecodingContainer<CodingKeys>) -> SIMD3<Float>? {
+        guard let posDict = try? container.decode([String: Float].self, forKey: .sharedPosition) else {
+            return nil
+        }
+        guard let x = posDict["x"], let y = posDict["y"], let z = posDict["z"] else {
+            return nil
+        }
+        return SIMD3<Float>(x, y, z)
+    }
+
+    /// Decode shared orientation from a dictionary with x, y, z, w keys
+    private static func decodeSharedOrientation(from container: KeyedDecodingContainer<CodingKeys>) -> simd_quatf? {
+        guard let orientDict = try? container.decode([String: Float].self, forKey: .sharedOrientation) else {
+            return nil
+        }
+        guard let x = orientDict["x"], let y = orientDict["y"], let z = orientDict["z"], let w = orientDict["w"] else {
+            return nil
+        }
+        return simd_quatf(ix: x, iy: y, iz: z, r: w)
     }
 
     // Helper function to flatten composite nodes
