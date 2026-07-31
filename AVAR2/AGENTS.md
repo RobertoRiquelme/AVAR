@@ -60,9 +60,50 @@ Element fields (subset):
 - Diagram updates: if JSON root has `id`, incoming POST replaces existing diagram with the same id.
 
 ## Collaboration
-- `AVAR2/CollaborativeSessionManager.swift` handles SharePlay (GroupActivities) + Multipeer fallback.
-- visionOS 26+ uses SharedWorldAnchorManager for spatial alignment.
-- iOS is receive-only; visionOS can broadcast and share anchors.
+
+### THE ALIGNMENT INVARIANT — read this before touching collaboration code
+
+**A `WorldAnchor`'s `originFromAnchorTransform` must never be transmitted between visionOS
+devices. Only its UUID crosses the wire.**
+
+Every device has a private, unrelated ARKit world origin. visionOS 26's shared-anchor mechanism
+guarantees that the same anchor UUID resolves to the same *physical* point on every nearby
+participant, expressed in that participant's own origin. The transform is therefore already
+correct locally and **already different** on each device. Transmitting it overwrites a correct
+value with a meaningless foreign one — this was the root cause of "diagrams appear everywhere,
+nothing aligned", and it is very easy to reintroduce with a well-meaning "send the transform
+too" change. `Tests/WireFormatTests.swift` asserts it (JSON key inspection), so a regression
+fails the tests rather than only misbehaving on hardware.
+
+### How it works
+- `AVAR2/CollaborativeSessionManager.swift`: transports, message types, `SharePlayCoordinator`.
+- `AVAR2/SharedWorldAnchorManager.swift`: creates `WorldAnchor(sharedWithNearbyParticipants:)`.
+  Shared anchors are **never persisted** — ARKit limits their lifetime to the SharePlay session,
+  so re-creating one per session is the normal path, not an error path. Do not add a disk cache.
+- `AVAR2/SessionOriginLogic.swift`: pure, tested logic for owner election and the gravity-aligned
+  anchor pose. Election is "lowest participant UUID wins" over the *whole* participant list, so
+  every device computes the same answer. Never derive an owner from `activeParticipants.first` —
+  it is an unordered `Set`.
+- `AVAR2/SharedWorldRoot.swift`: the `worldRoot` entity every diagram is parented to, positioned
+  at this device's own resolved anchor transform. Diagram poses on the wire are therefore plain
+  `position(relativeTo: worldRoot)` values — no matrix math at either end.
+- Transports: SharePlay for visionOS↔visionOS; MultipeerConnectivity for the iOS companion.
+- iOS is receive-only and cannot resolve a visionOS `WorldAnchor`, so it keeps its own legacy
+  `SharedAnchorMessage` handshake (built from an `ARFrame` camera transform). visionOS ignores
+  inbound anchor transforms entirely.
+- `SharedDiagram.worldPosition` / `.worldOrientation` are **misnamed**: they carry
+  anchor-relative values, not world-space ones. Names kept for wire compatibility.
+
+### Diagnostics
+`AVAR2/CollabDiagnosticsView.swift` is the panel to use when debugging a two-device session
+(launcher window → Collaboration → Diagnostics). It shows SharePlay state, elected owner vs local
+participant, `isSpatial` (co-location), anchor sharing availability, the resolved origin, and
+per-envelope traffic counters with the last send error. Note the displayed
+`originFromAnchor` translation **must differ** between the two devices — identical values mean a
+transform leaked onto the wire. `showSessionOriginMarker` draws an axis triad at the origin on
+each device; if the two triads occupy the same physical point, alignment works, independently of
+whether diagram rendering works. In DEBUG there are loopback buttons that inject a local example
+through the real receive path, so "does a remote diagram render?" is answerable on one device.
 
 ## Surface detection and snapping
 - `AVAR2/ARKitSurfaceDetector.swift` uses `PlaneDetectionProvider` on visionOS.
@@ -77,18 +118,47 @@ Element fields (subset):
 - `AVAR2/ShapeFactory.swift`: mesh/material creation for RT/RS/RW shapes
 - `AVAR2/ElementDTO.swift`: JSON decoding and format tolerance
 - `AVAR2/DiagramSceneBuilder.swift`: scene graph assembly (handles, background, close button)
-- `AVAR2/DiagramLayoutCoordinator.swift`: grid placement
+- `AVAR2/DiagramLayoutCoordinator.swift`: grid placement (local diagrams only — a diagram received
+  from a peer must NOT get a locally-assigned slot; slots are first-come-first-served per device)
 - `AVAR2/HTTPServer.swift`: local HTTP server
-- `AVAR2/DiagramStorage.swift`: caches directory for dynamic diagrams
-- `AVAR2/Constants.swift`: scaling and interaction constants
+- `AVAR2/DiagramStorage.swift`: caches directory for HTTP-uploaded diagrams
+- `AVAR2/Constants.swift`: placement and interaction constants
+- `AVAR2/SessionOriginLogic.swift`: pure election + anchor-pose logic (tested)
+- `AVAR2/SharedWorldRoot.swift`: shared session-origin frame for the scene graph
+- `AVAR2/CollabDiagnosticsView.swift`: two-device diagnostics panel
 - `Packages/RealityKitContent/`: RealityKit assets and materials
 - `Documentation/`: architecture docs + diagrams + API reference
 
+## Building
+
+**`xcodebuild -scheme AVAR2` without an explicit destination silently builds for iOS.** The target
+is multi-platform and `SUPPORTED_PLATFORMS` lists `iphoneos` first, so it reports
+`** BUILD SUCCEEDED **` having compiled zero `#if os(visionOS)` code. `-sdk xros26.5` and
+`SDKROOT=` are both overridden and do not help. Always pass a destination and confirm the log
+mentions `Debug-xrsimulator`:
+
+```
+xcodebuild -project AVAR2.xcodeproj -scheme AVAR2 \
+  -destination 'platform=visionOS Simulator,name=Apple Vision Pro' -configuration Debug build
+```
+
+Also build `-destination 'generic/platform=iOS'` after touching shared collaboration code — that
+is what proves the iOS companion still compiles.
+
 ## Tests
-Lightweight, ad-hoc test entry points (not XCTest):
-- `Tests/DataLoaderTests.swift`
-- `Tests/LayoutTests.swift`
-Run in Xcode as standalone executables or compile manually with the app sources if needed.
+`Tests/` is **not** a member of the Xcode project (the `PBXFileSystemSynchronizedRootGroup` covers
+only `AVAR2/`) and there is no test target. The idiom is one `@main struct` per file, compiled
+against the app sources:
+- `Tests/SessionOriginTests.swift` — owner election (permutation-invariance, tie-break
+  antisymmetry) and the gravity-aligned anchor pose. Pure; runs natively on macOS.
+- `Tests/WireFormatTests.swift` — the alignment invariant, envelope round-trips, `is2D`
+  preservation and back-compat, all four `ScriptOutput` input shapes. Built for xrsimulator and
+  run via `xcrun simctl spawn` so the types are exercised as they ship.
+- `Tests/LayoutTests.swift`, `Tests/DataLoaderTests.swift` — pre-existing.
+
+Compile a suite with `swiftc` plus the sources it needs, e.g.
+`xcrun swiftc -Onone -o /tmp/t Tests/SessionOriginTests.swift AVAR2/SessionOriginLogic.swift && /tmp/t`.
+Asserts are the mechanism, so build with `-Onone` (release strips them).
 
 ## Environment variables
 - `AVAR_VERBOSE_LOGS=1` to enable verbose logging in loaders/view models.
@@ -96,9 +166,23 @@ Run in Xcode as standalone executables or compile manually with the app sources 
 
 ## Gotchas / tips
 - HTTP callback must be set in `.onAppear` to avoid missing early POSTs.
-- Element positions are normalized and scaled using `NormalizationContext` and `Constants.worldScale*`.
+- Element positions are normalized by `NormalizationContext.globalRange`; metric scale comes from
+  `AppModel.defaultDiagramScale` (`PlatformConfiguration.diagramScale * 0.7`). There are no
+  `Constants.worldScale*` values — they existed but were never referenced, and were removed.
 - `AppModel` tracks diagram IDs for replace-in-place updates.
 - iOS does not support surface detection or immersive space; avoid adding visionOS-only APIs there.
+- Diagram containers are parented to `worldRoot`, not to the RealityView content root.
+  `relativeTo: nil` still means *scene* space, so `PlaneAnchor` snapping math is unaffected — but
+  any value derived from a world-space read must be assigned with `setPosition(_, relativeTo: nil)`
+  rather than a bare `.position =`, which would be interpreted in `worldRoot`'s frame.
+- `worldRoot` must stay rigid with unit scale; a few call sites pass parent-relative scale into
+  `relativeTo: nil` transforms. `SharedWorldRoot.apply` asserts this in DEBUG.
+- Decoder logging in `ElementDTO.swift` is gated behind `AVAR_VERBOSE_LOGS` because it runs once
+  per element (a 1000-node diagram otherwise emits ~5000 synchronous stdout writes per load).
+  Keep new per-element logging behind that flag.
+- Headless UI automation does not work on the visionOS simulator: coordinate taps do not activate
+  SwiftUI controls, because visionOS dispatches gaze-targeted spatial events. Screenshots, launch
+  and log inspection work; anything interactive needs a human clicking in the Simulator window.
 
 ## Architecture references
 - High-level overview: `Documentation/ARCHITECTURE.md`

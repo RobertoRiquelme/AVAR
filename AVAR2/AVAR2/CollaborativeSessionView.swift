@@ -98,20 +98,18 @@ struct CollaborativeSessionView: View {
             }
 
 #if os(visionOS)
-            if #available(visionOS 26.0, *) {
-                if sessionManager.isSharePlayActive {
-                    HStack(spacing: 6) {
-                        Image(systemName: sessionManager.sharedAnchorUsesSharedWorld ? "checkmark.seal.fill" : "link")
-                            .foregroundColor(sessionManager.sharedAnchorUsesSharedWorld ? .green : .secondary)
-                        Text(sessionManager.sharedAnchorUsesSharedWorld ? "Shared world anchor ready" : "Shared world anchor not created")
-                            .font(.caption2)
-                            .foregroundColor(sessionManager.sharedAnchorUsesSharedWorld ? .green : .secondary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(6)
+            if sessionManager.isSharePlayActive {
+                HStack(spacing: 6) {
+                    Image(systemName: sessionManager.sharedAnchorUsesSharedWorld ? "checkmark.seal.fill" : "link")
+                        .foregroundColor(sessionManager.sharedAnchorUsesSharedWorld ? .green : .secondary)
+                    Text(sessionManager.sharedAnchorUsesSharedWorld ? "Shared world anchor ready" : "Shared world anchor not created")
+                        .font(.caption2)
+                        .foregroundColor(sessionManager.sharedAnchorUsesSharedWorld ? .green : .secondary)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(6)
             }
 #endif
 
@@ -189,36 +187,21 @@ struct CollaborativeSessionView: View {
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
             } else {
-                // Anchor broadcast button - important for proper alignment
-                if sessionManager.isHost {
-                    #if os(visionOS)
-                    Button(action: {
-                        sessionManager.broadcastCurrentSharedAnchor()
-                    }) {
-                        HStack {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                            Text(sessionManager.sharedAnchor == nil ? "Broadcast Anchor (Required)" : "Update Anchor")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(sessionManager.sharedAnchor == nil ? .orange : .blue)
-                    .frame(maxWidth: .infinity)
-                    #endif
-                }
+                // NOTE: the "Broadcast Anchor (Required)" button was removed. It transmitted a
+                // head pose (usually just the identity matrix) as if it were a shared anchor,
+                // which actively destroyed alignment rather than establishing it.
 
 #if os(visionOS)
-                if #available(visionOS 26.0, *) {
-                    if sessionManager.isSharePlayActive && sessionManager.isHost {
-                        Button("Create Shared Anchor") {
-                            Task {
-                                await sessionManager.ensureSharedWorldAnchorInFrontOfUser()
-                            }
+                if sessionManager.isSharePlayActive && sessionManager.isHost {
+                    Button("Create Shared Anchor") {
+                        Task {
+                            await sessionManager.ensureSharedWorldAnchorInFrontOfUser()
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(!sessionManager.worldAnchorSharingAvailable
-                                  || sessionManager.sharedAnchorUsesSharedWorld)
-                        .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.bordered)
+                    .disabled(!sessionManager.worldAnchorSharingAvailable
+                              || sessionManager.sharedAnchorUsesSharedWorld)
+                    .frame(maxWidth: .infinity)
                 }
 #endif
 

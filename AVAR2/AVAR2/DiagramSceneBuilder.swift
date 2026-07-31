@@ -28,6 +28,13 @@ struct DiagramSceneBuilder {
     let spawnScale: Float
     let appModel: AppModel?
     let logger: Logger?
+    /// Pose received from a peer, expressed in the shared session-origin frame.
+    ///
+    /// When present the diagram is placed here directly and must NOT get a locally-assigned
+    /// `DiagramLayoutCoordinator` grid slot: slots are handed out first-come-first-served per
+    /// device, so the same filename landed in a different cell on each headset. That was the
+    /// other half of "diagrams appear everywhere".
+    var initialAnchorRelativePose: (position: SIMD3<Float>, orientation: simd_quatf?, scale: Float?)? = nil
 
     func buildScene(in content: RealityViewContent,
                     normalizationContext: NormalizationContext,
@@ -62,15 +69,31 @@ struct DiagramSceneBuilder {
 
     private func createRootContainer(in content: RealityViewContent,
                                      normalizationContext: NormalizationContext) -> Entity {
-        let pivot = appModel?.getNextDiagramPosition(for: filename ?? "unknown") ?? SIMD3<Float>(0, 1.0, -2.0)
-        logger?.debug("📍 Loading diagram at position: \(pivot)")
-        logger?.debug("📍 Available surfaces: \(appModel?.surfaceDetector.surfaceAnchors.count ?? 0)")
-
         let container = Entity()
         container.name = "graphRoot"
-        container.position = pivot
-        container.scale = SIMD3<Float>(repeating: spawnScale)
-        content.add(container)
+
+        // Parent under the shared session-origin frame so every transform that crosses the wire
+        // is a plain parent-relative value, with no matrix math at either end.
+        let worldRoot = SharedWorldRoot.findOrCreate(in: content)
+        worldRoot.addChild(container)
+
+        if let pose = initialAnchorRelativePose {
+            // Already in worldRoot space — assign directly. Placing it here rather than waiting
+            // for the first transform message means the diagram is correct on its very first
+            // frame instead of visibly snapping into place.
+            container.scale = SIMD3<Float>(repeating: pose.scale ?? spawnScale)
+            if let orientation = pose.orientation { container.orientation = orientation }
+            container.position = pose.position
+            logger?.debug("📍 Remote diagram placed at anchor-relative \(pose.position)")
+        } else {
+            let pivot = appModel?.getNextDiagramPosition(for: filename ?? "unknown") ?? SIMD3<Float>(0, 1.0, -2.0)
+            logger?.debug("📍 Loading diagram at position: \(pivot)")
+            logger?.debug("📍 Available surfaces: \(appModel?.surfaceDetector.surfaceAnchors.count ?? 0)")
+            container.scale = SIMD3<Float>(repeating: spawnScale)
+            // `pivot` is a world/eye-relative value, so it must go through setPosition with
+            // relativeTo: nil now that the container's parent is no longer the scene root.
+            container.setPosition(pivot, relativeTo: nil)
+        }
         return container
     }
 

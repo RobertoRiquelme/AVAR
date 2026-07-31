@@ -9,12 +9,10 @@ import Foundation
 
 /// Global constants for world scale and placement.
 enum Constants {
-    /// World Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
-    static let worldScale: Float = 0.005
-    /// 2D Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
-    static let worldScale2D: Float = 0.005
-    /// 3D Scale factor from data units to meters (e.g. 1 data unit = 0.01 m).
-    static let worldScale3D: Float = 0.1
+    // NOTE: worldScale / worldScale2D / worldScale3D were removed — all three were unused.
+    // Actual diagram scale comes from `AppModel.defaultDiagramScale`
+    // (= PlatformConfiguration.diagramScale * 0.7) plus per-diagram data normalization by
+    // `NormalizationContext.globalRange`.
     /// Vertical offset for placing content at eye level (meters).
     /// Typical eye height is ~1.6 meters.
     static let eyeLevel: Float = 1.0

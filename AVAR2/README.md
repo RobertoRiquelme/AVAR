@@ -46,8 +46,10 @@ The app supports three input modes via a segmented picker:
 
 ### Collaborative Sessions
 - **SharePlay Integration**: Share diagrams with other users in real-time
-- **Shared Spatial Anchors**: Diagrams appear in the same physical location for all participants
-- **Multi-device Support**: visionOS devices can share, iOS devices receive-only
+- **Shared Spatial Anchors**: Co-located Vision Pro devices align on one shared `WorldAnchor`, so
+  diagrams appear at the same physical location for every participant. Requires participants to be
+  in the same room — the diagnostics panel reports co-location as `isSpatial`.
+- **Multi-device Support**: visionOS devices share bidirectionally; iOS is receive-only
 - **Session Management**: Visual indicators for active sessions and shared anchors
 
 ### Immersion Controls
@@ -136,11 +138,15 @@ To add a new example:
 
 ### Networking & Collaboration
 - **HTTPServer.swift**: Local HTTP server for receiving diagrams
-- **CollaborativeSessionManager.swift**: SharePlay integration and spatial anchor sharing
+- **CollaborativeSessionManager.swift**: Transports, message types, SharePlay session handling
+- **SharedWorldAnchorManager.swift**: Creates the shared `WorldAnchor` used for spatial alignment
+- **SessionOriginLogic.swift**: Pure owner-election and anchor-pose logic (unit tested)
+- **SharedWorldRoot.swift**: The shared session-origin frame all diagrams are parented to
 - **CollaborativeSessionView.swift**: Session management UI
+- **CollabDiagnosticsView.swift**: Diagnostics panel for debugging two-device sessions
 
 ### Surface Detection (visionOS)
-- **SurfaceDetector.swift**: ARKit plane detection and visualization
+- **ARKitSurfaceDetector.swift**: ARKit plane detection and visualization
 - **Extensions.swift**: Utility extensions for 3D transformations
 
 ### Platform-Specific
@@ -172,7 +178,11 @@ case "CustomShape":
 
 ### Collaboration Settings
 - **Session Type**: Configure GroupActivity settings in `CollaborativeSessionManager`
-- **Anchor Broadcasting**: Adjust broadcast frequency and confidence thresholds
+- **Alignment**: Co-located devices align via a single shared `WorldAnchor`. Only the anchor's
+  **UUID** is transmitted — each device resolves the transform itself from its own ARKit session.
+  Never put an anchor transform on the wire; see the invariant in `AGENTS.md`.
+- **Diagnostics**: Launcher window → Collaboration → Diagnostics shows SharePlay state, the elected
+  origin owner, co-location (`isSpatial`), the resolved origin, and per-message traffic counters.
 
 ## Debugging
 

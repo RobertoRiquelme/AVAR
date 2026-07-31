@@ -180,14 +180,72 @@ private extension ServerLogsView {
 }
 
 #if os(visionOS)
-/// Static surface detection view that never changes
+/// Static surface detection view that never changes.
+///
+/// Also hosts the session-origin axis triad: this is the one RealityView that is always present
+/// in the immersive space, so the marker needs no per-diagram plumbing.
 struct StaticSurfaceView: View {
     @Environment(AppModel.self) private var appModel
-    
+    var collaborativeSession: CollaborativeSessionManager? = nil
+
     var body: some View {
         RealityView { content in
             content.add(appModel.surfaceDetector.rootEntity)
+            content.add(SessionOriginMarker.makeRoot())
+        } update: { content in
+            // THE ALIGNMENT TEST INSTRUMENT.
+            //
+            // The triad is placed at this device's own resolved `originFromAnchorTransform` for
+            // the shared anchor. Two co-located devices should therefore draw it at the SAME
+            // PHYSICAL POINT even though the numeric transforms differ. Both users point at it;
+            // if the triads coincide, alignment works — and that verdict is completely
+            // independent of whether diagram rendering works.
+            guard let root = content.entities.first(where: { $0.name == SessionOriginMarker.rootName }) else { return }
+            let transform = collaborativeSession?.sessionOriginTransform
+            root.isEnabled = appModel.showSessionOriginMarker && transform != nil
+            if let transform { root.transform = Transform(matrix: transform) }
         }
+    }
+}
+
+/// A labelled RGB axis triad marking the session origin.
+enum SessionOriginMarker {
+    static let rootName = "sessionOriginMarker"
+
+    static func makeRoot() -> Entity {
+        let root = Entity()
+        root.name = rootName
+        root.isEnabled = false
+
+        let axisLength: Float = 0.15
+        let thickness: Float = 0.006
+        root.addChild(axis(along: [1, 0, 0], length: axisLength, thickness: thickness, color: .red))
+        root.addChild(axis(along: [0, 1, 0], length: axisLength, thickness: thickness, color: .green))
+        root.addChild(axis(along: [0, 0, 1], length: axisLength, thickness: thickness, color: .blue))
+
+        // Small sphere exactly at the origin — the thing both users actually point at.
+        let hub = ModelEntity(
+            mesh: .generateSphere(radius: 0.012),
+            materials: [SimpleMaterial(color: .white, isMetallic: false)]
+        )
+        root.addChild(hub)
+        return root
+    }
+
+    /// Builds one axis as a box offset along its own direction, so no `look(at:)` is needed —
+    /// `look(at:relativeTo: nil)` would interpret parent-local coordinates as world space.
+    private static func axis(along direction: SIMD3<Float>, length: Float, thickness: Float, color: UIColor) -> ModelEntity {
+        let size = SIMD3<Float>(
+            direction.x != 0 ? length : thickness,
+            direction.y != 0 ? length : thickness,
+            direction.z != 0 ? length : thickness
+        )
+        let entity = ModelEntity(
+            mesh: .generateBox(size: size),
+            materials: [SimpleMaterial(color: color, isMetallic: false)]
+        )
+        entity.position = direction * (length / 2)
+        return entity
     }
 }
 
@@ -306,7 +364,7 @@ struct ImmersiveContentView: View {
     var body: some View {
         ZStack {
             // Static surface detection layer - completely independent
-            StaticSurfaceView()
+            StaticSurfaceView(collaborativeSession: collaborativeSession)
                 .environment(appModel)
                 .opacity(1.0 - immersionLevel * 0.5) // Fade out surface detection slightly
                 .animation(.easeInOut(duration: 0.3), value: immersionLevel)

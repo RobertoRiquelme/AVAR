@@ -13,6 +13,19 @@ import Foundation
 /// { "elements": [...] } or { "RTelements": [...] }.
 /// Now also supports an optional root-level "id" for diagram identification.
 
+/// Per-element decode logging, off unless `AVAR_VERBOSE_LOGS` is set.
+///
+/// These decoders run once per element, so an unconditional `print` here costs thousands of
+/// synchronous stdout writes for a large diagram (`Ejemplo03-3000.txt` alone decodes 1000 nodes
+/// plus edges, ~5 prints each). Every other file in the project already gates debug output behind
+/// this environment variable; this one did not.
+private let isElementDecodeLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
+
+@inline(__always)
+private func decodeLog(_ message: @autoclosure () -> String) {
+    if isElementDecodeLoggingEnabled { print(message()) }
+}
+
 struct ScriptOutput: Codable {
     let elements: [ElementDTO]
     /// True if decoded from the "RTelements" key (i.e. a 2D/RT graph)
@@ -27,6 +40,18 @@ struct ScriptOutput: Codable {
         case edges
         case id
         case type
+    }
+
+    /// Builds a `ScriptOutput` directly from already-decoded elements.
+    ///
+    /// Needed so a diagram received over the network can be handed to the renderer in memory.
+    /// The previous path re-encoded elements to JSON under an `"elements"` key and wrote them to
+    /// disk, which forced `is2D = false` and silently rebuilt every 2D RT/RS diagram as 3D on
+    /// the receiver.
+    init(elements: [ElementDTO], is2D: Bool, id: Int? = nil) {
+        self.elements = elements
+        self.is2D = is2D
+        self.id = id
     }
 
     // -- your custom decoder --
@@ -158,21 +183,21 @@ struct ElementDTO: Codable {
 
         // Try decoding shape as ShapeDTO or fallback to string and wrap
         let rawId = try? c.decode(String.self, forKey: .id)
-        print("🔧 Processing element with ID: '\(rawId ?? "nil")'")
+        decodeLog("🔧 Processing element with ID: '\(rawId ?? "nil")'")
         
         do {
             let shapeDTO = try c.decode(ShapeDTO.self, forKey: .shape)
-            print("✅ Successfully decoded ShapeDTO, shapeDescription: '\(shapeDTO.shapeDescription ?? "nil")'")
+            decodeLog("✅ Successfully decoded ShapeDTO, shapeDescription: '\(shapeDTO.shapeDescription ?? "nil")'")
             self.shape = shapeDTO
         } catch {
-            print("❌ ShapeDTO decoding failed with error: \(error)")
+            decodeLog("❌ ShapeDTO decoding failed with error: \(error)")
             if let shapeString = try? c.decode(String.self, forKey: .shape) {
-                print("✅ Decoded shape as string '\(shapeString)'")
+                decodeLog("✅ Decoded shape as string '\(shapeString)'")
                 self.shape = ShapeDTO(shapeDescription: shapeString)
             } else {
-                print("🚨 No shape found for element - checking if shape key exists in JSON")
+                decodeLog("🚨 No shape found for element - checking if shape key exists in JSON")
                 let hasShapeKey = c.contains(.shape)
-                print("   Shape key exists: \(hasShapeKey)")
+                decodeLog("   Shape key exists: \(hasShapeKey)")
                 self.shape = nil
             }
         }
@@ -295,13 +320,13 @@ struct ShapeDTO: Codable {
     // Custom decoder to debug shape parsing
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        print("🔍 ShapeDTO decoder - available keys: \(container.allKeys)")
+        decodeLog("🔍 ShapeDTO decoder - available keys: \(container.allKeys)")
         
         self.shapeDescription = try container.decodeIfPresent(String.self, forKey: .shapeDescription)
-        print("   shapeDescription: '\(self.shapeDescription ?? "nil")'")
+        decodeLog("   shapeDescription: '\(self.shapeDescription ?? "nil")'")
         
         self.extent = try container.decodeIfPresent([Double].self, forKey: .extent)
-        print("   extent: \(self.extent ?? [])")
+        decodeLog("   extent: \(self.extent ?? [])")
         
         self.text = try container.decodeIfPresent(String.self, forKey: .text)
         self.color = try container.decodeIfPresent([Double].self, forKey: .color)

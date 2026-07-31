@@ -423,7 +423,7 @@ class HTTPServer: ObservableObject {
             log("❌ Invalid JSON syntax: \(error.localizedDescription)")
             
             // Try additional cleaning for common issues
-            var extraCleanedBody = cleanedBody
+            let extraCleanedBody = cleanedBody
                 .replacingOccurrences(of: "\\\\", with: "\\")  // Fix double backslashes
                 .replacingOccurrences(of: "\\/", with: "/")    // Fix escaped forward slashes
                 .replacingOccurrences(of: "\\n", with: "")     // Remove literal \n strings

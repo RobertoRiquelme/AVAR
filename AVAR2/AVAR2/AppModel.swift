@@ -12,7 +12,6 @@ import OSLog
 @MainActor
 @Observable
 class AppModel {
-    let immersiveSpaceID = "ImmersiveSpace"
     enum ImmersiveSpaceState {
         case closed
         case inTransition
@@ -26,6 +25,10 @@ class AppModel {
 
     // Debug: plane visualization toggle (start disabled)
     var showPlaneVisualization = false
+    /// Shows the session-origin axis triad in the immersive space. Two co-located devices should
+    /// draw it at the same physical point — that is the alignment check, and it does not depend
+    /// on diagram rendering working.
+    var showSessionOriginMarker = false
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "AppModel")
     private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil

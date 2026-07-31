@@ -147,20 +147,13 @@ struct VisionOSMainView: View {
             // ✅ Collaboration (expandable, fixed height so the UI doesn't resize)
             CollaborationCard(
                 collaborativeSession: collaborativeSession,
-                onBroadcast: { broadcastSharedAnchor() },
                 onOpenCollabSession: { showingCollaborativeSession = true },
                 onStartShareSpace: {
-                    Task {
-                        if #available(visionOS 26.0, *) {
-                            await startSharePlayForImmersiveSpace()
-                        }
-                    }
+                    Task { await startSharePlayForImmersiveSpace() }
                 },
                 onCreateSharedAnchor: {
                     Task { @MainActor in
-                        if #available(visionOS 26.0, *) {
-                            await collaborativeSession.ensureSharedWorldAnchorInFrontOfUser()
-                        }
+                        await collaborativeSession.ensureSharedWorldAnchorInFrontOfUser()
                     }
                 }
             )
@@ -215,8 +208,10 @@ struct VisionOSMainView: View {
 
                                     if collaborativeSession.isSessionActive {
                                         do {
-                                            let elements = try DiagramDataLoader.loadScriptOutput(from: newFile).elements
-                                            collaborativeSession.shareDiagram(filename: newFile, elements: elements)
+                                            let output = try DiagramDataLoader.loadScriptOutput(from: newFile)
+                                            collaborativeSession.shareDiagram(filename: newFile,
+                                                                              elements: output.elements,
+                                                                              is2D: output.is2D)
                                         } catch {
                                             print("❌ Failed to share diagram: \(error)")
                                         }
@@ -447,9 +442,7 @@ struct VisionOSMainView: View {
                 }
                 if !didShareExistingOnSharePlay {
                     Task { @MainActor in
-                        if #available(visionOS 26.0, *) {
-                            await collaborativeSession.ensureSharedWorldAnchorInFrontOfUser()
-                        }
+                        await collaborativeSession.ensureSharedWorldAnchorInFrontOfUser()
                         let shared = await shareExistingDiagrams()
                         if shared {
                             didShareExistingOnSharePlay = true
@@ -468,6 +461,33 @@ struct VisionOSMainView: View {
                 let shared = await shareExistingDiagrams()
                 if shared {
                     didShareExistingOnSharePlay = true
+                }
+            }
+        }
+        // Materialize diagrams received from peers.
+        //
+        // This lives HERE, in the always-alive WindowGroup, not inside VisionOSImmersiveView.
+        // Previously it was attached inside the immersive space, so any diagram that arrived
+        // before the space opened was published to nobody and lost forever.
+        //
+        // It is also ADDITIVE-ONLY and role-free. The old version bailed out entirely for
+        // whichever device happened to be `isHost` (a coin flip off an unordered Set), so the
+        // host never rendered anything from its peer and sharing was one-directional at best.
+        // Removal now comes only from explicit `.remove` envelopes and the local close button —
+        // never from set-differencing against the shared list, which raced with local additions.
+        .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
+            for diagram in diagrams {
+                // Hand the elements straight to the renderer. No JSON round-trip through disk:
+                // that lost `is2D`, silently dropped the position, and let the bundle shadow
+                // the received data.
+                DiagramDataLoader.registerReceived(
+                    ScriptOutput(elements: diagram.elements, is2D: diagram.is2D),
+                    for: diagram.filename
+                )
+                if !sharedState.activeFiles.contains(diagram.filename) {
+                    print("📥 Materializing shared diagram '\(diagram.filename)' (\(diagram.elements.count) elements, is2D=\(diagram.is2D))")
+                    sharedState.activeFiles.append(diagram.filename)
+                    Task { @MainActor in _ = await ensureImmersiveSpaceActive() }
                 }
             }
         }
@@ -756,7 +776,6 @@ struct VisionOSMainView: View {
 
     private struct CollaborationCard: View {
         @ObservedObject var collaborativeSession: CollaborativeSessionManager
-        let onBroadcast: () -> Void
         let onOpenCollabSession: () -> Void
         let onStartShareSpace: () -> Void
         let onCreateSharedAnchor: () -> Void
@@ -824,12 +843,22 @@ struct VisionOSMainView: View {
                         sharedAnchorControls
                             .transition(.opacity.combined(with: .move(edge: .top)))
 
-                        // visionOS 26+: Show nearby participants and sharing status
                         #if os(visionOS)
                         if collaborativeSession.isSharePlayActive {
                             nearbyStatusRow
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
+
+                        // Full diagnostics. Deliberately in the launcher WINDOW, not the
+                        // immersive space: this text has to be readable, scrollable and
+                        // copyable, which is impossible for someone wearing a headset next to
+                        // another person wearing one.
+                        DisclosureGroup("Diagnostics") {
+                            CollabDiagnosticsView(session: collaborativeSession)
+                                .frame(maxHeight: 420)
+                        }
+                        .font(.caption)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                         #endif
                     }
 
@@ -892,14 +921,8 @@ struct VisionOSMainView: View {
                 }
                 .buttonStyle(.bordered)
 
-                // Keep broadcast action clear, but the *anchor code* is the real highlight.
-                Button {
-                    onBroadcast()
-                } label: {
-                    Label("Broadcast Anchor", systemImage: "antenna.radiowaves.left.and.right")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                // The "Broadcast Anchor" button was removed: it transmitted a head pose (in
+                // practice the identity matrix) as a shared anchor, destroying alignment.
 
                 Spacer()
 
@@ -932,20 +955,18 @@ struct VisionOSMainView: View {
                 Spacer()
 
                 #if os(visionOS)
-                if #available(visionOS 26.0, *) {
-                    if collaborativeSession.isSharePlayActive && collaborativeSession.isHost {
-                        Button {
-                            onCreateSharedAnchor()
-                        } label: {
-                            Label("Create Shared Anchor", systemImage: "link.badge.plus")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!collaborativeSession.worldAnchorSharingAvailable
-                                  || collaborativeSession.sharedAnchorUsesSharedWorld)
-                        .help(collaborativeSession.worldAnchorSharingAvailable
-                              ? "Create a shared world anchor for spatial alignment"
-                              : "Waiting for world anchor sharing to become available")
+                if collaborativeSession.isSharePlayActive && collaborativeSession.isHost {
+                    Button {
+                        onCreateSharedAnchor()
+                    } label: {
+                        Label("Create Shared Anchor", systemImage: "link.badge.plus")
                     }
+                    .buttonStyle(.bordered)
+                    .disabled(!collaborativeSession.worldAnchorSharingAvailable
+                              || collaborativeSession.sharedAnchorUsesSharedWorld)
+                    .help(collaborativeSession.worldAnchorSharingAvailable
+                          ? "Create a shared world anchor for spatial alignment"
+                          : "Waiting for world anchor sharing to become available")
                 }
                 #endif
             }
@@ -972,16 +993,14 @@ struct VisionOSMainView: View {
 
                 Spacer()
 
-                // World anchor sharing availability (visionOS 26+)
-                if #available(visionOS 26.0, *) {
-                    HStack(spacing: 6) {
-                        Image(systemName: collaborativeSession.worldAnchorSharingAvailable ? "checkmark.circle.fill" : "xmark.circle")
-                            .foregroundStyle(collaborativeSession.worldAnchorSharingAvailable ? .green : .orange)
+                // World anchor sharing availability
+                HStack(spacing: 6) {
+                    Image(systemName: collaborativeSession.worldAnchorSharingAvailable ? "checkmark.circle.fill" : "xmark.circle")
+                        .foregroundStyle(collaborativeSession.worldAnchorSharingAvailable ? .green : .orange)
 
-                        Text(collaborativeSession.worldAnchorSharingAvailable ? "Anchors ready" : "Anchors pending")
-                            .font(.caption)
-                            .foregroundStyle(collaborativeSession.worldAnchorSharingAvailable ? .green : .orange)
-                    }
+                    Text(collaborativeSession.worldAnchorSharingAvailable ? "Anchors ready" : "Anchors pending")
+                        .font(.caption)
+                        .foregroundStyle(collaborativeSession.worldAnchorSharingAvailable ? .green : .orange)
                 }
             }
             .padding(.top, 4)
@@ -1143,16 +1162,10 @@ struct VisionOSMainView: View {
 }
 #endif
 
-#if os(visionOS)
-private extension VisionOSMainView {
-    func broadcastSharedAnchor() {
-        collaborativeSession.broadcastCurrentSharedAnchor()
-        if let anchor = collaborativeSession.sharedAnchor {
-            print("📡 visionOS broadcast shared anchor \(anchor.id)")
-        }
-    }
-}
-#endif
+// NOTE: `broadcastSharedAnchor()` was deleted along with
+// `CollaborativeSessionManager.broadcastCurrentSharedAnchor()`. It put a head pose (in
+// practice the identity matrix) on the wire as a "shared anchor", which is the opposite of
+// establishing alignment.
 
 // MARK: - Immersive View
 
@@ -1164,9 +1177,6 @@ struct VisionOSImmersiveView: View {
     @State private var showBackgroundOverlay = false
     @State private var savedPlaneViz: Bool? = nil
 
-    // visionOS 26+: Track shared anchor IDs for diagrams
-    @State private var diagramAnchorMap: [String: UUID] = [:]
-
     var body: some View {
         ImmersiveSpaceWrapper(
             activeFiles: $sharedState.activeFiles,
@@ -1174,9 +1184,9 @@ struct VisionOSImmersiveView: View {
                 sharedState.activeFiles.removeAll { $0 == file }
                 sharedState.appModel.freeDiagramPosition(filename: file)
                 collaborativeSession.removeDiagram(filename: file)
-
-                // Remove the shared anchor mapping
-                diagramAnchorMap.removeValue(forKey: file)
+                // Drop any received copy so re-opening this filename locally loads the real
+                // bundle/HTTP file instead of stale network data.
+                DiagramDataLoader.forgetReceived(file)
             },
             collaborativeSession: collaborativeSession,
             showBackgroundOverlay: showBackgroundOverlay
@@ -1184,71 +1194,9 @@ struct VisionOSImmersiveView: View {
         .environment(sharedState.appModel)
         .onAppear {
             showBackgroundOverlay = false
-            if collaborativeSession.sharedAnchor == nil {
-                collaborativeSession.broadcastCurrentSharedAnchor()
-            }
-
-            // visionOS 26+: Set up shared world anchor callback
-            #if os(visionOS)
-            if #available(visionOS 26.0, *) {
-                setupSharedAnchorCallbacks()
-            }
-            #endif
-        }
-        .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
-            guard collaborativeSession.isSharePlayActive else { return }
-
-            let sharedFilenames = Set(diagrams.map { $0.filename })
-            let currentFilenames = Set(sharedState.activeFiles)
-
-            if collaborativeSession.isHost {
-                print("📊 SharePlay host: keeping \(currentFilenames.count) local diagrams (source of truth)")
-                return
-            }
-
-            if sharedFilenames.isEmpty && !currentFilenames.isEmpty {
-                print("⚠️ Client: sharedDiagrams is empty but we have \(currentFilenames.count) local diagrams - skipping removal")
-                return
-            }
-
-            let diagramsToRemove = currentFilenames.subtracting(sharedFilenames)
-            if !diagramsToRemove.isEmpty {
-                sharedState.activeFiles.removeAll { diagramsToRemove.contains($0) }
-                print("🗑️ Client: removed \(diagramsToRemove.count) diagrams no longer in shared list")
-            }
-
-            for diagram in diagrams {
-                if !currentFilenames.contains(diagram.filename) {
-                    Task { @MainActor in
-                        do {
-                            let encoder = JSONEncoder()
-                            encoder.outputFormatting = .prettyPrinted
-
-                            var diagramData: [String: Any] = [
-                                "elements": diagram.elements.map { element -> [String: Any] in
-                                    let elementData = try! encoder.encode(element)
-                                    return try! JSONSerialization.jsonObject(with: elementData) as! [String: Any]
-                                }
-                            ]
-
-                            if let pos = diagram.worldPosition {
-                                diagramData["sharedPosition"] = ["x": pos.x, "y": pos.y, "z": pos.z]
-                            }
-
-                            let data = try JSONSerialization.data(withJSONObject: diagramData, options: .prettyPrinted)
-                            let tempURL = try DiagramStorage.fileURL(for: diagram.filename, withExtension: "txt")
-                            try data.write(to: tempURL)
-
-                            print("📥 Client: Adding shared diagram '\(diagram.filename)' with \(diagram.elements.count) elements")
-                            if !sharedState.activeFiles.contains(diagram.filename) {
-                                sharedState.activeFiles.append(diagram.filename)
-                            }
-                        } catch {
-                            print("❌ Failed to save shared diagram '\(diagram.filename)': \(error)")
-                        }
-                    }
-                }
-            }
+            // Deliberately no anchor broadcast here. The shared world anchor is created by the
+            // elected owner once SharePlay reports nearby participants, and every device
+            // resolves its transform locally from its own ARKit anchorUpdates.
         }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
@@ -1264,74 +1212,49 @@ struct VisionOSImmersiveView: View {
                 showBackgroundOverlay = false
             }
         }
-        .overlay(alignment: .topLeading) {
-            if let anchor = collaborativeSession.sharedAnchor {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Shared Anchor", systemImage: "checkmark.seal.fill")
-                        .foregroundColor(.green)
-                    Text("ID: \(anchor.id.prefix(6))")
-                        .font(.caption)
-                    Text(String(format: "Confidence: %.2f", anchor.confidence))
+        // Deliberately only three items. A wall of text is unreadable while wearing a headset
+        // and standing next to someone else wearing one — the full panel lives in the launcher
+        // window (CollabDiagnosticsView).
+        .overlay(alignment: .topTrailing) {
+            if collaborativeSession.isSessionActive || collaborativeSession.isSharePlayActive {
+                HStack(spacing: 12) {
+                    dot(collaborativeSession.sharedAnchorUsesSharedWorld,
+                        label: collaborativeSession.sharedAnchor
+                            .map { String($0.id.prefix(6)) } ?? "no origin")
+                    dot(collaborativeSession.isSpatialSession, label: "co-located")
+                    Text("\(sharedState.activeFiles.count) diagrams")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(10)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
                 .padding()
-            } else {
-                Label("Awaiting Shared Anchor", systemImage: "wifi.exclamationmark")
-                    .font(.caption)
-                    .padding(10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding()
             }
         }
     }
-}
 
-// MARK: - VisionOSImmersiveView visionOS 26+ Extensions
-
-private extension VisionOSImmersiveView {
-    @available(visionOS 26.0, *)
-    func setupSharedAnchorCallbacks() {
-        // Listen for shared world anchor updates from other participants
-        collaborativeSession.onSharedWorldAnchorUpdated = { [weak sharedState] anchorID, transform in
-            guard let sharedState else { return }
-            print("📍 Received shared anchor update: \(anchorID)")
-
-            // The anchor transform can be used to position content consistently
-            // ARKit automatically aligns shared anchors across nearby devices
-            // so we just need to use the anchor's transform as the content origin
-        }
-    }
-
-    /// Create a shared world anchor for a diagram (host only)
-    @available(visionOS 26.0, *)
-    func createSharedAnchorForDiagram(_ filename: String, at transform: simd_float4x4) async {
-        guard collaborativeSession.isHost else {
-            print("⚠️ Only host can create shared anchors")
-            return
-        }
-
-        guard collaborativeSession.worldAnchorSharingAvailable else {
-            print("⚠️ World anchor sharing not available yet")
-            return
-        }
-
-        do {
-            let anchorID = try await collaborativeSession.createSharedAnchorForDiagram(at: transform)
-            print("📍 Created shared anchor \(anchorID) for diagram: \(filename)")
-        } catch {
-            print("❌ Failed to create shared anchor for diagram: \(error)")
+    private func dot(_ ok: Bool, label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(ok ? Color.green : Color.orange)
+                .frame(width: 7, height: 7)
+            Text(label)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(ok ? .green : .orange)
         }
     }
 }
+
+// NOTE: `setupSharedAnchorCallbacks()` was an empty stub whose body was three comments saying
+// the anchor transform "can be used to position content" — it never did anything. Stage 4
+// replaces it properly by driving a `worldRoot` entity from the resolved anchor transform.
+// `createSharedAnchorForDiagram` and `diagramAnchorMap` were written but never read.
 
 #endif
 
 #if os(visionOS)
 private extension VisionOSMainView {
-    @available(visionOS 26.0, *)
     @MainActor
     func startSharePlayForImmersiveSpace() async {
         if !hasEnteredImmersive {
@@ -1342,9 +1265,10 @@ private extension VisionOSMainView {
             }
         }
 
-        let activity = SharedSpaceActivity()
-        _ = try? await activity.activate()
-        print("✅ SharePlay activity activated for immersive space sharing")
+        // Route through the coordinator so there is exactly ONE activation path. This used to
+        // build and activate a second `SharedSpaceActivity()` directly, racing the
+        // coordinator's own activation and producing two competing sessions.
+        await collaborativeSession.startSharePlay()
     }
 
     @MainActor
@@ -1354,11 +1278,9 @@ private extension VisionOSMainView {
             return false
         }
 
-        if collaborativeSession.isSharePlayActive {
-            if #available(visionOS 26.0, *), !collaborativeSession.sharedAnchorUsesSharedWorld {
-                print("⏳ Waiting for shared world anchor before sharing existing diagrams")
-                return false
-            }
+        if collaborativeSession.isSharePlayActive, !collaborativeSession.sharedAnchorUsesSharedWorld {
+            print("⏳ Waiting for shared world anchor before sharing existing diagrams")
+            return false
         }
 
         print("📤 Sharing \(sharedState.activeFiles.count) existing diagrams with session...")
@@ -1370,6 +1292,7 @@ private extension VisionOSMainView {
                 collaborativeSession.shareDiagram(
                     filename: filename,
                     elements: output.elements,
+                    is2D: output.is2D,
                     worldPosition: cached?.position,
                     worldOrientation: cached?.orientation,
                     worldScale: cached?.scale

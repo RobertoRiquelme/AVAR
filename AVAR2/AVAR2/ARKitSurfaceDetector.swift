@@ -84,7 +84,7 @@ final class ARKitSurfaceDetector: ObservableObject {
             }
             
             // Create or update visual representation
-            await updatePlaneVisualization(anchor)
+            updatePlaneVisualization(anchor)
         }
     }
     

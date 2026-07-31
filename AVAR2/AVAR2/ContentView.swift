@@ -32,14 +32,18 @@ struct ContentView: View {
             mainContent
                 .onReceive(session.$sharedDiagrams) { diagrams in
                     guard let shared = diagrams.first(where: { $0.filename == filename }) else { return }
-                    let anchorTransform = session.sharedAnchor?.transform
+                    // Poses are already in the shared session-origin frame — applied directly
+                    // against worldRoot, no anchor matrix math.
                     viewModel.applySharedDiagramTransform(
                         position: shared.worldPosition,
                         orientation: shared.worldOrientation,
-                        scale: shared.worldScale,
-                        anchorTransform: anchorTransform,
-                        useFullAnchorTransform: session.sharedAnchorUsesSharedWorld
+                        scale: shared.worldScale
                     )
+                }
+                .onReceive(session.$sessionOriginTransform) { originTransform in
+                    // One assignment moves every diagram coherently when ARKit refines or
+                    // re-acquires the anchor.
+                    viewModel.updateWorldRoot(originFromAnchor: originTransform)
                 }
         } else {
             mainContent
@@ -88,8 +92,9 @@ struct ContentView: View {
                 )
             }
 
-            // Cache local transform, and share if session is active
-            if let transform = viewModel.getWorldTransform() {
+            // Cache and share the pose in the SHARED frame (relative to worldRoot), not world
+            // space. Being anchor-relative by construction is what removed the conversion math.
+            if let transform = viewModel.getSharedTransform() {
                 collaborativeSession?.cacheLocalDiagramTransform(
                     filename: filename,
                     position: transform.position,
@@ -100,11 +105,12 @@ struct ContentView: View {
                 if collaborativeSession?.isSessionActive == true,
                    !collaborativeSession!.sharedDiagrams.contains(where: { $0.filename == filename }) {
                     do {
-                        let elements = try DiagramDataLoader.loadScriptOutput(from: filename).elements
+                        let output = try DiagramDataLoader.loadScriptOutput(from: filename)
 
                         collaborativeSession?.shareDiagram(
                             filename: filename,
-                            elements: elements,
+                            elements: output.elements,
+                            is2D: output.is2D,
                             worldPosition: transform.position,
                             worldOrientation: transform.orientation,
                             worldScale: transform.scale
@@ -116,18 +122,11 @@ struct ContentView: View {
                 }
             }
 
-            // Apply shared transform after initial load (in case onReceive fired before entities existed).
-            if let session = collaborativeSession,
-               let shared = session.sharedDiagrams.first(where: { $0.filename == filename }) {
-                let anchorTransform = session.sharedAnchor?.transform
-                viewModel.applySharedDiagramTransform(
-                    position: shared.worldPosition,
-                    orientation: shared.worldOrientation,
-                    scale: shared.worldScale,
-                    anchorTransform: anchorTransform,
-                    useFullAnchorTransform: session.sharedAnchorUsesSharedWorld
-                )
-            }
+            // NOTE: the duplicate "apply shared transform after initial load" block that used to
+            // live here is gone. It existed only to paper over `applySharedDiagramTransform`
+            // silently dropping updates that arrived before `rootEntity` existed. That is now
+            // handled properly by `pendingSharedTransform`, which the scene builder consumes at
+            // construction time — so either arrival order converges without a second apply.
 
             logger.debug("ContentView task completed for: \(filename)")
         }

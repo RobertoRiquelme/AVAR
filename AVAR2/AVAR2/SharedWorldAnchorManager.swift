@@ -5,10 +5,16 @@ import simd
 import RealityKit
 import QuartzCore
 
-/// Manages shared world anchors for visionOS 26+ collaboration
-/// Uses the new `sharedWithNearbyParticipants` parameter for automatic
-/// spatial alignment between nearby Vision Pro devices during SharePlay
-@available(visionOS 26.0, *)
+/// Manages shared world anchors for co-located collaboration.
+///
+/// Uses `WorldAnchor(originFromAnchorTransform:sharedWithNearbyParticipants:)` so nearby Vision
+/// Pro devices in the same SharePlay session resolve the *same physical point*. Each device
+/// reads that anchor's transform in **its own** ARKit origin, which is why the transform must
+/// never be transmitted — see the invariant in `CollaborativeSessionManager`.
+///
+/// Note: shared anchors are not persisted; their lifetime is the SharePlay session.
+///
+/// No availability gate: the app's deployment target is already visionOS 26.0.
 @MainActor
 final class SharedWorldAnchorManager: ObservableObject {
 
@@ -138,34 +144,26 @@ final class SharedWorldAnchorManager: ObservableObject {
         return anchor
     }
 
-    /// Create a shared anchor at a position relative to the device
+    /// Create a shared anchor in front of the user, with a **yaw-only, gravity-aligned** basis.
+    ///
+    /// Yaw-only on purpose. Using the full device rotation would bake the creator's head tilt
+    /// into the shared frame, so every diagram on every device would inherit that tilt and
+    /// surface snapping would fight the anchor basis. The previous version was worse still: it
+    /// set translation with an *identity* rotation, while the receiver multiplied by the matrix
+    /// as though it carried a real basis.
     func createSharedAnchorInFrontOfUser(distance: Float = 1.0) async throws -> WorldAnchor {
         guard let provider = worldTrackingProvider else {
             throw SharedAnchorError.notRunning
         }
 
-        // Get current device position
         guard let deviceAnchor = provider.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) else {
             throw SharedAnchorError.deviceAnchorUnavailable
         }
 
-        // Calculate position in front of user
-        let deviceTransform = deviceAnchor.originFromAnchorTransform
-        let forward = SIMD3<Float>(
-            -deviceTransform.columns.2.x,
-            -deviceTransform.columns.2.y,
-            -deviceTransform.columns.2.z
+        let anchorTransform = GravityAlignedPose.inFrontOf(
+            deviceTransform: deviceAnchor.originFromAnchorTransform,
+            distance: distance
         )
-
-        let anchorPosition = SIMD3<Float>(
-            deviceTransform.columns.3.x,
-            deviceTransform.columns.3.y,
-            deviceTransform.columns.3.z
-        ) + forward * distance
-
-        var anchorTransform = matrix_identity_float4x4
-        anchorTransform.columns.3 = SIMD4<Float>(anchorPosition.x, anchorPosition.y, anchorPosition.z, 1.0)
-
         return try await createSharedAnchor(at: anchorTransform)
     }
 

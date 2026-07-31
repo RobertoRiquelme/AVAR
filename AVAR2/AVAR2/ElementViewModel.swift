@@ -79,56 +79,64 @@ class ElementViewModel: ObservableObject {
         appModel?.defaultDiagramScale ?? PlatformConfiguration.diagramScale * 0.7
     }
     
-    /// Get the current world transform of the diagram
-    func getWorldTransform() -> (position: SIMD3<Float>, orientation: simd_quatf, scale: Float)? {
+    /// A pose that arrived before the entities existed, applied once they do.
+    ///
+    /// The old code did `guard let root = rootEntity else { return }` and silently discarded the
+    /// update — which meant the peer's *first* placement message, the one that matters most, was
+    /// almost always thrown away (it races `rebuildSceneIfNeeded`, which needs both a
+    /// normalization context and scene content).
+    private var pendingSharedTransform: (position: SIMD3<Float>?, orientation: simd_quatf?, scale: Float?)?
+
+    /// This device's resolved transform for the session-origin anchor, mirrored from the
+    /// collaboration session so `worldRoot` can be positioned at build time.
+    private var sessionOriginTransform: simd_float4x4?
+
+    /// The diagram's pose **in the shared session-origin frame**.
+    ///
+    /// This is the value that goes on the wire. Because the container is parented to `worldRoot`,
+    /// asking for it relative to the parent *is* the conversion — which is why both duplicated
+    /// `anchor.transform.inverse` blocks in `CollaborativeSessionManager` could be deleted, along
+    /// with their inconsistency (position used `matrix.inverse` while orientation used
+    /// `simd_quatf(matrix).inverse`).
+    func getSharedTransform() -> (position: SIMD3<Float>, orientation: simd_quatf, scale: Float)? {
         guard let root = rootEntity else { return nil }
-        let worldPos = root.position(relativeTo: nil)
-        let worldOrient = root.orientation(relativeTo: nil)
-        let worldScale = root.scale.x // Uniform scale
-        return (worldPos, worldOrient, worldScale)
+        let parent = root.parent   // worldRoot, or nil before it exists
+        return (root.position(relativeTo: parent),
+                root.orientation(relativeTo: parent),
+                root.scale.x)
     }
 
-    /// Apply a shared transform update (from collaboration) to this diagram.
+    // NOTE: `getWorldTransform()` was removed. Every caller now uses `getSharedTransform()`,
+    // which reports the pose in the shared session-origin frame — the value that actually goes on
+    // the wire. Reporting world space was the old, unconvertible representation.
+
+    /// Apply a peer's pose, which is expressed in the shared session-origin frame.
+    ///
+    /// No matrices, no inverses, no `useFullAnchorTransform` flag — and in particular none of the
+    /// old branch that deliberately zeroed the anchor translation (`columns.3 = (0,0,0,1)`),
+    /// which placed remote diagrams around the *receiver's* origin rotated by the sender's yaw.
     func applySharedDiagramTransform(position: SIMD3<Float>?,
                                      orientation: simd_quatf?,
-                                     scale: Float?,
-                                     anchorTransform: simd_float4x4?,
-                                     useFullAnchorTransform: Bool) {
-        guard let root = rootEntity else { return }
-
-        var newTransform = root.transform
-
-        if let anchorTransform, let position {
-            var localMatrix = matrix_identity_float4x4
-            if let orientation {
-                localMatrix = simd_matrix4x4(orientation)
-            }
-            localMatrix.columns.3 = SIMD4<Float>(position.x, position.y, position.z, 1.0)
-
-            let worldMatrix: simd_float4x4
-            if useFullAnchorTransform {
-                worldMatrix = anchorTransform * localMatrix
-            } else {
-                var anchorRotation = anchorTransform
-                anchorRotation.columns.3 = SIMD4<Float>(0, 0, 0, 1)
-                worldMatrix = anchorRotation * localMatrix
-            }
-            newTransform = Transform(matrix: worldMatrix)
-        } else {
-            if let position {
-                newTransform.translation = position
-            }
-            if let orientation {
-                newTransform.rotation = orientation
-            }
+                                     scale: Float?) {
+        guard let root = rootEntity else {
+            pendingSharedTransform = (position, orientation, scale)
+            return
         }
-
-        root.transform = newTransform
-
+        let parent = root.parent
+        if let position { root.setPosition(position, relativeTo: parent) }
+        if let orientation { root.setOrientation(orientation, relativeTo: parent) }
         if let scale {
             root.scale = SIMD3<Float>(repeating: scale)
             updateBackgroundEntityCollisionShapes(scale: scale)
         }
+    }
+
+    /// Points this diagram's `worldRoot` at the session origin. Called whenever the resolved
+    /// anchor transform changes, so ARKit refinements move every diagram coherently.
+    func updateWorldRoot(originFromAnchor: simd_float4x4?) {
+        sessionOriginTransform = originFromAnchor
+        guard let worldRoot = rootEntity?.parent, worldRoot.name == SharedWorldRoot.name else { return }
+        SharedWorldRoot.apply(originFromAnchor: originFromAnchor, to: worldRoot)
     }
     /// Background entity to capture pan/zoom gestures
     private var backgroundEntity: Entity?
@@ -315,10 +323,17 @@ class ElementViewModel: ObservableObject {
         rebuildPending = false
 
         if let existing = rootEntity {
-            content.remove(existing)
+            existing.removeFromParent()
         }
         if let background = backgroundEntity {
-            content.remove(background)
+            background.removeFromParent()
+        }
+
+        // A pose that arrived before entities existed is consumed at construction time so the
+        // diagram is correct on its first frame rather than snapping into place afterwards.
+        let initialPose = pendingSharedTransform.flatMap { pending -> (SIMD3<Float>, simd_quatf?, Float?)? in
+            guard let position = pending.position else { return nil }
+            return (position, pending.orientation, pending.scale)
         }
 
         let sceneBuilder = DiagramSceneBuilder(
@@ -326,7 +341,8 @@ class ElementViewModel: ObservableObject {
             isGraph2D: isGraph2D,
             spawnScale: spawnScale,
             appModel: appModel,
-            logger: logger
+            logger: logger,
+            initialAnchorRelativePose: initialPose
         )
 
         let buildResult = sceneBuilder.buildScene(
@@ -341,10 +357,16 @@ class ElementViewModel: ObservableObject {
         self.zoomHandleEntity = buildResult.zoomHandle
         self.rotationButtonEntity = buildResult.rotationButton
 
+        // Point worldRoot at the session origin before anything reads world coordinates.
+        SharedWorldRoot.apply(originFromAnchor: sessionOriginTransform,
+                              to: SharedWorldRoot.findOrCreate(in: content))
+
         updateBackgroundEntityCollisionShapes(scale: buildResult.container.scale.x)
         createAndPositionElements(container: buildResult.container, normalizationContext: normalizationContext)
         updateConnections(in: content)
         addOriginMarker()
+
+        if initialPose != nil { pendingSharedTransform = nil }
         #else
         // No immersive scene on iOS.
         #endif
@@ -355,11 +377,13 @@ class ElementViewModel: ObservableObject {
         debugLog("rebuildPending: \(self.rebuildPending)")
         self.sceneContent = content
 
+        // removeFromParent rather than content.remove: the container now hangs off worldRoot, so
+        // content.remove would not detach it.
         if let existing = rootEntity {
-            content.remove(existing)
+            existing.removeFromParent()
         }
         if let bg = backgroundEntity {
-            content.remove(bg)
+            bg.removeFromParent()
         }
 
         // If data was already loaded but scene wasn't ready, rebuild now
@@ -490,7 +514,12 @@ class ElementViewModel: ObservableObject {
             let material = SimpleMaterial(color: color, isMetallic: false)
             let entity = ModelEntity(mesh: mesh, materials: [material])
             entity.position = from + vector / 2
-            entity.look(at: to, from: entity.position, relativeTo: nil)
+            // `to` and `entity.position` are CONTAINER-LOCAL, so the reference frame must be the
+            // container, not the scene root. With `relativeTo: nil` these local coordinates were
+            // interpreted as world space — already wrong before reparenting (the debug axes were
+            // misoriented whenever the diagram wasn't at the origin with identity rotation), and
+            // wrong differently once the container hangs off worldRoot.
+            entity.look(at: to, from: entity.position, relativeTo: container)
             return entity
         }
         // Local origin for axes and grid
@@ -550,7 +579,7 @@ class ElementViewModel: ObservableObject {
             updateConnections(in: content)
         }
         // Notify transform change
-        if let transform = getWorldTransform() {
+        if let transform = getSharedTransform() {
             onTransformChanged?(transform.position, transform.orientation, transform.scale)
         }
         // If the gesture ended on an element_*, report its new local position
@@ -590,8 +619,11 @@ class ElementViewModel: ObservableObject {
         if let pivotWorld = zoomPivotWorld, let pivotLocal = zoomPivotLocal {
             // compute local pivot after scaling
             let scaledLocal = pivotLocal * newScale
-            // set new container position so pivotWorld = container.position + scaledLocal
-            container.position = pivotWorld - scaledLocal
+            // set new container position so pivotWorld = container.position + scaledLocal.
+            // `pivotWorld` came from `convert(position:to: nil)`, i.e. WORLD space, so it must be
+            // assigned with relativeTo: nil — a bare `.position =` would be interpreted in the
+            // parent's (worldRoot's) frame and offset the pinch by the whole anchor transform.
+            container.setPosition(pivotWorld - scaledLocal, relativeTo: nil)
         }
     }
 
@@ -601,7 +633,7 @@ class ElementViewModel: ObservableObject {
         zoomPivotWorld = nil
         zoomPivotLocal = nil
         // Notify transform change
-        if let transform = getWorldTransform() {
+        if let transform = getSharedTransform() {
             onTransformChanged?(transform.position, transform.orientation, transform.scale)
         }
     }
@@ -675,7 +707,7 @@ class ElementViewModel: ObservableObject {
         updateConnectionsAfterPan()
         
         // Notify transform change
-        if let transform = getWorldTransform() {
+        if let transform = getSharedTransform() {
             onTransformChanged?(transform.position, transform.orientation, transform.scale)
         }
     }
@@ -763,7 +795,7 @@ class ElementViewModel: ObservableObject {
         }
         
         // Notify transform change
-        if let transform = getWorldTransform() {
+        if let transform = getSharedTransform() {
             onTransformChanged?(transform.position, transform.orientation, transform.scale)
         }
     }
@@ -825,7 +857,7 @@ class ElementViewModel: ObservableObject {
         debugLog("🔄 Rotation gesture ended")
         
         // Notify transform change
-        if let transform = getWorldTransform() {
+        if let transform = getSharedTransform() {
             onTransformChanged?(transform.position, transform.orientation, transform.scale)
         }
     }
@@ -840,23 +872,30 @@ class ElementViewModel: ObservableObject {
     
     /// Performs the unsnap animation from a surface
     private func unsnapFromSurface(container: Entity) {
-        guard let sceneContent = sceneContent else { return }
-        
         let worldPos = container.position(relativeTo: nil)
-        
-        // Animate back to world space
+
+        // Animate back to world space.
+        // `rotation:` must be the WORLD orientation to match `relativeTo: nil` and `worldPos`.
+        // A bare `container.orientation` is parent-relative, which would rotate the diagram by
+        // the session-origin yaw on every unsnap.
         container.move(
-            to: Transform(scale: container.scale, rotation: container.orientation, translation: worldPos),
+            to: Transform(scale: container.scale,
+                          rotation: container.orientation(relativeTo: nil),
+                          translation: worldPos),
             relativeTo: nil,
             duration: 0.25,
             timingFunction: .easeOut
         )
-        
-        // After animation, reparent to scene root
+
+        // Re-assert the world pose after the animation.
+        //
+        // This deliberately does NOT reparent. The old code did
+        // `removeFromParent(); sceneContent.add(container)`, which moved the diagram out of
+        // `worldRoot` and back to the scene root — permanently un-sharing it, since its pose was
+        // then no longer expressed in the shared frame. Nothing reparents the container during
+        // snapping in the first place, so there was never anything to undo.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-            container.removeFromParent()
-            sceneContent.add(container)
-            container.position = worldPos
+            container.setPosition(worldPos, relativeTo: nil)
         }
     }
     
@@ -1328,13 +1367,11 @@ class ElementViewModel: ObservableObject {
         let lineLength = simd_length(direction)
         arrowEntity.position = SIMD3<Float>(0, lineLength/2, 0)
 
-        // Orient arrow to point along the line direction
+        // Local rotation only. The parent connection entity is already oriented along the edge
+        // (`simd_quatf(from: (0,1,0), to: direction)`), so the arrow just needs to turn from its
+        // own X axis onto the parent's Y. The edge direction is deliberately not used here.
         if lineLength > 0 {
-            let normalizedDir = direction / lineLength
-            // Arrow needs to point in direction of line (from cylinder orientation)
-            // Since cylinder is along Y, and arrow tip is along X, rotate accordingly
-            let baseQuat = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(0, 0, 1)) // Rotate from X to Y
-            arrowEntity.orientation = baseQuat
+            arrowEntity.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(0, 0, 1))
         }
 
         return arrowEntity

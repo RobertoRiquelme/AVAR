@@ -31,7 +31,7 @@ The application uses an MVVM pattern with the following key components:
 - **ElementViewModel**: Diagram rendering, interaction logic, and scene management
 - **HTTPServer**: Local HTTP server for receiving diagram data from external sources
 - **CollaborativeSessionManager**: SharePlay integration and spatial anchor sharing
-- **SurfaceDetector**: Real-world surface detection service (ARKit on visionOS)
+- **ARKitSurfaceDetector**: Real-world surface detection service (ARKit on visionOS)
 - **ElementService**: Data loading and parsing from bundle and shared storage
 - **DiagramStorage**: Shared file storage for HTTP-received diagrams
 - **ElementDTO**: Data transfer objects for diagram elements
@@ -107,10 +107,19 @@ The application uses an MVVM pattern with the following key components:
 - **Purpose**: Multi-user session coordination
 - **Key Features**:
   - SharePlay GroupActivity integration
-  - Spatial anchor broadcasting and synchronization
+  - Session-origin anchor establishment (see the alignment invariant below)
   - Diagram sharing across devices
   - Participant tracking
   - Message passing for real-time updates
+
+> **Alignment invariant.** A `WorldAnchor`'s transform is *never* broadcast between visionOS
+> devices — only its UUID is. Each device resolves the transform itself from its own ARKit
+> session, because the same physical anchor has a different numeric transform in every device's
+> private world origin. Broadcasting it overwrites a correct local value with a meaningless
+> foreign one, which is what previously caused diagrams to appear scattered and unaligned.
+> Owner election, the gravity-aligned anchor pose, and the shared `worldRoot` frame live in
+> `SessionOriginLogic.swift` and `SharedWorldRoot.swift`; `Tests/WireFormatTests.swift` asserts
+> the invariant. See `AGENTS.md` for the full rationale.
 
 ### 3. Service Layer
 
@@ -148,7 +157,7 @@ The application uses an MVVM pattern with the following key components:
   - Real-time logging
   - Automatic diagram drawing on receipt
 
-#### SurfaceDetector (formerly ARKitSurfaceDetector)
+#### ARKitSurfaceDetector
 - **Purpose**: Real-world surface detection (visionOS only)
 - **Features**:
   - Horizontal and vertical plane detection
