@@ -99,6 +99,17 @@ class ElementViewModel: ObservableObject {
     /// indefinitely. Hence a separate channel.
     var onAuthoritativeTransform: ((SIMD3<Float>, simd_quatf, Float) -> Void)?
 
+    #if DEBUG
+    /// Forces a non-identity `worldRoot` so the reparenting can be validated on a single device.
+    /// See `SharedWorldRoot.debugOffsetPose`.
+    var debugWorldRootOffsetEnabled = false {
+        didSet {
+            guard debugWorldRootOffsetEnabled != oldValue else { return }
+            updateWorldRoot(originFromAnchor: sessionOriginTransform)
+        }
+    }
+    #endif
+
     /// Whether this diagram arrived from a peer rather than being authored on this device.
     ///
     /// Decides who owns the pose when the session origin appears or is refined — see
@@ -163,6 +174,15 @@ class ElementViewModel: ObservableObject {
     /// diagram would leave the table the user had just placed it on.
     func updateWorldRoot(originFromAnchor: simd_float4x4?) {
         sessionOriginTransform = originFromAnchor
+
+        // A real origin always wins; the debug pose only stands in when there is none.
+        var originFromAnchor = originFromAnchor
+        #if DEBUG
+        if originFromAnchor == nil, debugWorldRootOffsetEnabled {
+            originFromAnchor = SharedWorldRoot.debugOffsetPose
+        }
+        #endif
+
         guard let root = rootEntity,
               let worldRoot = root.parent,
               worldRoot.name == SharedWorldRoot.name else { return }

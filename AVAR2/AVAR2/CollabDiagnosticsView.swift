@@ -206,6 +206,20 @@ struct CollabDiagnosticsView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            #if DEBUG
+            Toggle("Force offset worldRoot (single-device test)", isOn: Binding(
+                get: { appModel.debugWorldRootOffset },
+                set: { appModel.debugWorldRootOffset = $0 }
+            ))
+            .font(.caption)
+            .disabled(session.sessionOriginTransform != nil)
+
+            Text("With one headset worldRoot sits at identity, where parent-relative and world coordinates coincide and a frame-mixing bug cannot show. This forces a non-identity frame (offset + 37° yaw) so drag, pinch-zoom, snap and unsnap exercise the real code path. Locally placed diagrams should NOT move when you toggle it — that is the jump fix working. Disabled once a real session origin exists.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            #endif
         }
     }
 

@@ -45,6 +45,11 @@ struct ContentView: View {
                     // re-acquires the anchor.
                     viewModel.updateWorldRoot(originFromAnchor: originTransform)
                 }
+                #if DEBUG
+                .onChange(of: appModel.debugWorldRootOffset, initial: true) { _, enabled in
+                    viewModel.debugWorldRootOffsetEnabled = enabled
+                }
+                #endif
         } else {
             mainContent
         }

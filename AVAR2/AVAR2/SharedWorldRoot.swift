@@ -50,6 +50,21 @@ enum SharedWorldRoot {
         return root
     }
 
+    /// A deliberately awkward stand-in for a real session origin: offset on all three axes and
+    /// rotated 37° about Y.
+    ///
+    /// With a single headset no origin ever resolves, so `worldRoot` sits at identity and the
+    /// reparenting is only exercised in its trivial case — where parent-relative and world
+    /// coordinates happen to coincide and a frame-mixing bug is invisible. Forcing a non-identity
+    /// frame makes those bugs manifest on one device: the five sites fixed in `ElementViewModel`
+    /// would each misplace content by this transform. The yaw is intentionally not a multiple of
+    /// 90° so an axis swap cannot masquerade as correct.
+    static let debugOffsetPose: simd_float4x4 = {
+        var m = simd_float4x4(simd_quatf(angle: 37 * .pi / 180, axis: [0, 1, 0]))
+        m.columns.3 = SIMD4<Float>(1.3, -0.4, 0.7, 1)
+        return m
+    }()
+
     /// Points `worldRoot` at the session origin.
     ///
     /// Falls back to identity when no origin is resolved yet, so content is

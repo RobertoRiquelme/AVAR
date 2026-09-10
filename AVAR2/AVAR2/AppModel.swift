@@ -29,6 +29,11 @@ class AppModel {
     /// draw it at the same physical point — that is the alignment check, and it does not depend
     /// on diagram rendering working.
     var showSessionOriginMarker = false
+    #if DEBUG
+    /// Forces `worldRoot` to a non-identity pose so the anchor-relative scene graph can be
+    /// validated with one headset. See `SharedWorldRoot.debugOffsetPose`.
+    var debugWorldRootOffset = false
+    #endif
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "AppModel")
     private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
