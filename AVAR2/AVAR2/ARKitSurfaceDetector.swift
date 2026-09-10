@@ -45,10 +45,10 @@ final class ARKitSurfaceDetector: ObservableObject {
             print("🚀 ARKit session STARTED - detecting surfaces for entire app session...")
             
             for await update in provider.anchorUpdates {
-                print("🔍 Surface update: \(update.anchor.classification.description) - \(update.event)")
+                print("🔍 Surface update: \(update.anchor.classificationDisplayName) - \(update.event)")
                 
                 // Skip windows
-                if update.anchor.classification == .window { continue }
+                if update.anchor.surfaceClassification == .window { continue }
 
                 switch update.event {
                 case .added, .updated:

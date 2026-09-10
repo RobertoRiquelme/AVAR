@@ -107,6 +107,20 @@ through the real receive path, so "does a remote diagram render?" is answerable 
 
 ## Surface detection and snapping
 - `AVAR2/ARKitSurfaceDetector.swift` uses `PlaneDetectionProvider` on visionOS.
+- Classification uses the visionOS 26 `anchor.surfaceClassification` (`SurfaceClassification`),
+  not the deprecated `anchor.classification`. The rename was not cosmetic: ARKit collapsed
+  `.unknown` / `.undetermined` / `.notAvailable` into a single `.none` and added six cases
+  (stairs, bed, cabinet, homeAppliance, tv, plant).
+- **The strings "Floor" and "Table" are load-bearing.** `ElementViewModel.filterValidSurfaces`
+  grants a 3D diagram snap validity via `isHorizontalSurface(surface) || surfaceType == "Floor"
+  || surfaceType == "Table"`, so mapping any other classification to those names silently turns
+  that surface into a snap target. The mapping lives on `SurfaceClassification.surfaceTypeName`
+  precisely so it can be tested; `Tests/SurfaceClassificationTests.swift` asserts that exactly
+  `.floor` and `.table` produce snap-granting names. The six new classifications return their own
+  names and can still qualify *geometrically*, exactly as before.
+- `.none` returns `nil` so the caller applies its vertical-surface heuristic. Pre-26 only
+  `.unknown` got that heuristic; now all previously-unclassified planes do, so some report "Wall"
+  where they used to say "Surface". Status text and logs only — snap validity is unaffected.
 - `AppModel` runs surface detection once per app session.
 - `ElementViewModel` uses surface anchors to snap diagrams to walls/floors/ceilings.
 
@@ -157,6 +171,7 @@ against the app sources:
 - `Tests/WorldRootTests.swift` — the RealityKit `relativeTo:` semantics that keeping locally
   authored content stationary depends on, plus cross-device convergence. Single file, so it needs
   `-parse-as-library` (swiftc otherwise treats one file as script mode, conflicting with `@main`).
+- `Tests/SurfaceClassificationTests.swift` — the snap-critical classification mapping.
 - `Tests/ResourceIntegrityTests.swift` — decodes all 37 bundled diagrams and builds a real mesh
   and material for **every** element (~8000), asserting finite geometry. Also reports the slowest
   diagrams, which is the only automated signal on load cost. Needs `AVAR2_RESOURCES` pointing at

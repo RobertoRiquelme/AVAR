@@ -951,37 +951,21 @@ class ElementViewModel: ObservableObject {
         }
     }
     
-    /// Gets a human-readable surface type name
+    /// Gets a human-readable surface type name.
+    ///
+    /// The classification-to-name mapping lives on `SurfaceClassification` so it can be tested
+    /// exhaustively — "Floor" and "Table" grant 3D snap validity in `filterValidSurfaces`, so a
+    /// stray mapping there would silently change which surfaces diagrams snap to.
+    ///
+    /// Only the unclassified case needs the anchor itself: ARKit's `.none` (which replaces the
+    /// pre-26 `.unknown` / `.undetermined` / `.notAvailable`) falls back to geometry. Previously
+    /// only `.unknown` got this heuristic and the other two returned "Surface"; now all three do,
+    /// so some unclassified vertical surfaces report "Wall" where they used to say "Surface".
+    /// That affects the status message and logs only — neither string is "Floor" or "Table", and
+    /// the 2D path filters purely on geometry.
     private func getSurfaceTypeName(_ anchor: PlaneAnchor) -> String {
-        switch anchor.classification {
-        case .table:
-            return "Table"
-        case .wall:
-            return "Wall"
-        case .floor:
-            return "Floor"
-        case .ceiling:
-            return "Ceiling"
-        case .seat:
-            return "Seat"
-        case .door:
-            return "Door"
-        case .window:
-            return "Window"
-        case .unknown:
-            // For unknown surfaces, try to detect if it's vertical (wall-like)
-            if isVerticalSurface(anchor) {
-                return "Wall"
-            } else {
-                return "Surface"
-            }
-        case .notAvailable:
-            return "Surface"
-        case .undetermined:
-            return "Surface"
-        @unknown default:
-            return "Surface"
-        }
+        if let name = anchor.surfaceClassification.surfaceTypeName { return name }
+        return isVerticalSurface(anchor) ? "Wall" : "Surface"
     }
     
     /// Detect if a surface is vertical (likely a wall) based on its orientation
