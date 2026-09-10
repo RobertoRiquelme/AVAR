@@ -1430,7 +1430,7 @@ class ElementViewModel: ObservableObject {
     }
 
     private func createLabelEntity(text: String) -> Entity {
-        let mesh = MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: 0.05), containerFrame: .zero, alignment: .center, lineBreakMode: .byWordWrapping)
+        let mesh = cachedTextMesh(text, fontSize: 0.05, lineBreakMode: .byWordWrapping)
         let material = SimpleMaterial(color: .white, isMetallic: false)
         return ModelEntity(mesh: mesh, materials: [material])
     }
@@ -1601,15 +1601,8 @@ class ElementViewModel: ObservableObject {
         // Use constant font size so all labels appear the same visual size
         // The extent values represent bounding box, not desired visual size
         let fontSize: CGFloat = 0.04  // Fixed size for uniform label appearance
-        logger.log("text: \(text) | w: \(w) | h: \(h) | fontSize: \(fontSize)")
-        let mesh = MeshResource.generateText(
-            text,
-            extrusionDepth: 0.001,  // Minimal depth for 2D labels
-            font: .systemFont(ofSize: fontSize),
-            containerFrame: .zero,
-            alignment: .center,
-            lineBreakMode: .byWordWrapping
-        )
+        debugLog("text: \(text) | w: \(w) | h: \(h) | fontSize: \(fontSize)")
+        let mesh = cachedTextMesh(text, fontSize: fontSize, lineBreakMode: .byWordWrapping)
 
         let materialColor: UIColor = {
             let rgba = element.shape?.color ?? element.color

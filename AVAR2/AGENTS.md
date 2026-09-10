@@ -181,11 +181,19 @@ Asserts are the mechanism, so build with `-Onone` (release strips them).
   made a 360-circle diagram (`Ejemplo09`) the slowest of all 37 at ~30 ms/element; routing them
   through the cache cut it by roughly 20x. `Tests/ResourceIntegrityTests.swift` prints the slowest
   diagrams so a regression here is visible.
-- Text meshes (`generateText`) are *not* cached and CoreText is slow; label-heavy diagrams are the
-  remaining cost leaders. Caching by text+size would help where labels repeat (about 2x in
-  `Ejemplo11`), but has not been done.
-- `MeshCache` never evicts and `clearCache()` is never called. Harmless today (610 keys for the
-  whole bundled corpus), but worth revisiting if long sessions load many distinct HTTP diagrams.
+- Text meshes go through `cachedTextMesh(_:fontSize:extrusionDepth:alignment:lineBreakMode:)`.
+  `generateText` runs CoreText glyph layout plus extrusion and is the most expensive geometry the
+  app builds. **Every parameter that affects the mesh is part of the cache key** — add to the key
+  if you add a parameter, or callers will silently share a mesh built with different settings.
+  Three per-element label paths use it; the remaining `generateText` calls (grab-handle caption,
+  status message, plane labels, iOS title) are one-off per diagram or per plane and are left
+  uncached deliberately.
+- `MeshCache` is bounded at 512 entries with FIFO eviction. Geometry keys are naturally bounded
+  (610 across the whole bundled corpus) but **text keys are not** — every distinct label string is
+  an entry and diagrams keep arriving over HTTP, so an unbounded cache would leak GPU memory over
+  a long session. Eviction is safe: RealityKit retains any mesh still in use by an entity, so
+  dropping our reference only costs a regeneration if that mesh recurs. The diagnostics panel
+  shows the live count.
 - Per-element logging must be gated behind `AVAR_VERBOSE_LOGS` — see `ElementDTO.swift` and
   `ShapeFactory.swift`. Ungated, a 1000-node diagram emits thousands of synchronous stdout writes.
 

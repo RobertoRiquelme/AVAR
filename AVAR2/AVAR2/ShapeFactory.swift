@@ -28,7 +28,17 @@ final class MeshCache: @unchecked Sendable {
     static let shared = MeshCache()
 
     private var cache: [String: MeshResource] = [:]
+    private var insertionOrder: [String] = []
     private let lock = NSLock()
+
+    /// Upper bound on cached meshes.
+    ///
+    /// Geometry keys are naturally bounded (610 distinct meshes across all 37 bundled diagrams),
+    /// but **text** keys are not — every distinct label string is its own entry, and diagrams can
+    /// arrive over HTTP for the lifetime of the app. Meshes are GPU-backed, so an unbounded cache
+    /// would leak steadily across a long session. Evicting is safe: RealityKit retains any mesh an
+    /// entity is still using, so dropping our reference only costs a regeneration if it recurs.
+    private let limit = 512
 
     private init() {}
 
@@ -42,6 +52,15 @@ final class MeshCache: @unchecked Sendable {
 
         guard let newMesh = generator() else { return nil }
         cache[key] = newMesh
+        insertionOrder.append(key)
+
+        // FIFO rather than LRU: loads are bursty (a whole diagram at once), so insertion order is
+        // a good proxy for what is still in play, and it avoids touching the map on every hit.
+        if insertionOrder.count > limit {
+            let overflow = insertionOrder.count - limit
+            for key in insertionOrder.prefix(overflow) { cache.removeValue(forKey: key) }
+            insertionOrder.removeFirst(overflow)
+        }
         return newMesh
     }
 
@@ -49,7 +68,40 @@ final class MeshCache: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         cache.removeAll()
+        insertionOrder.removeAll()
     }
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return cache.count
+    }
+}
+
+/// Cached 3D text mesh.
+///
+/// `MeshResource.generateText` runs CoreText glyph layout and extrusion, which is by far the most
+/// expensive geometry the app builds — it dominates load time on label-heavy diagrams. Labels
+/// repeat often enough to be worth caching (about 2x in `Ejemplo11`), and repeated axis ticks or
+/// categorical labels repeat much more.
+///
+/// Every parameter that affects the geometry is part of the key; add to the key if you add a
+/// parameter, or callers will silently share a mesh built with different settings.
+func cachedTextMesh(_ text: String,
+                    fontSize: CGFloat,
+                    extrusionDepth: Float = 0.001,
+                    alignment: CTTextAlignment = .center,
+                    lineBreakMode: CTLineBreakMode = .byTruncatingTail) -> MeshResource {
+    let key = "text_\(fontSize)_\(extrusionDepth)_\(alignment.rawValue)_\(lineBreakMode.rawValue)_\(text)"
+    let build = {
+        MeshResource.generateText(text,
+                                  extrusionDepth: extrusionDepth,
+                                  font: .systemFont(ofSize: fontSize),
+                                  containerFrame: .zero,
+                                  alignment: alignment,
+                                  lineBreakMode: lineBreakMode)
+    }
+    return MeshCache.shared.mesh(for: key, generator: build) ?? build()
 }
 
 /// Context for normalizing positions and extents based on the overall data range.
@@ -260,21 +312,13 @@ extension ElementDTO {
         let w = normalized(0, 0.1)
         let h = normalized(1, 0.05)
 
-        // Try to create 3D text mesh with minimal extrusion depth for 2D
-        do {
-            let textMesh = MeshResource.generateText(
-                text,
-                extrusionDepth: 0.001,  // Minimal depth for 2D diagrams
-                font: .systemFont(ofSize: 0.08),
-                containerFrame: .zero,
-                alignment: .center,
-                lineBreakMode: .byTruncatingTail
-            )
-            return textMesh
-        } catch {
-            // Fallback to a small box if text generation fails
+        // Empty text yields a degenerate mesh, so fall back to a box. This replaces a do/catch
+        // whose catch was unreachable — `generateText` does not throw, so the fallback could
+        // never actually run.
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return cachedBox(size: SIMD3(w, h, 0.001))
         }
+        return cachedTextMesh(text, fontSize: 0.08)
     }
 
     private func createCube(normalized: (Int, Double) -> Float) -> MeshResource {

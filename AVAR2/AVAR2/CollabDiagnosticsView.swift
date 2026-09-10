@@ -123,6 +123,13 @@ struct CollabDiagnosticsView: View {
                 diagramsSection
                 trafficSection
 
+                DiagSection("Rendering") {
+                    // Surfaces the bounded mesh cache. Steady growth toward the cap across a long
+                    // session means geometry keys are churning (e.g. many distinct HTTP diagrams
+                    // or label strings) and meshes are being regenerated rather than reused.
+                    DiagRow(label: "Cached meshes", value: "\(MeshCache.shared.count) / 512")
+                }
+
                 #if DEBUG
                 loopbackSection
                 #endif
