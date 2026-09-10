@@ -12,7 +12,18 @@ import OSLog
 
 private let shapeFactoryLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ShapeFactory")
 
-/// Thread-safe cache for reusable mesh resources
+/// Per-element shape warnings, off unless `AVAR_VERBOSE_LOGS` is set. These fire once per element,
+/// so on a large diagram they cost thousands of synchronous stdout writes — see the same treatment
+/// in `ElementDTO.swift`.
+private let isShapeLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
+
+/// Thread-safe cache for reusable mesh resources.
+///
+/// Procedural mesh generation (especially `generateCylinder`) is expensive, and diagrams repeat
+/// the same handful of geometries hundreds of times — a 360-circle diagram would otherwise
+/// tessellate 360 identical cylinders. Every shape builder must go through `cachedBox` /
+/// `cachedSphere` / `cachedCylinder` / `cachedCone` rather than calling `MeshResource.generate*`
+/// directly; several RS/RT builders previously bypassed this and dominated load time.
 final class MeshCache: @unchecked Sendable {
     static let shared = MeshCache()
 
@@ -159,7 +170,7 @@ extension ElementDTO {
         } else if desc.contains("ellipse") {
             return createRTEllipse(normalized: normalized)
         } else {
-            print("⚠️ Unknown RT shape: '\(desc)' - using fallback")
+            if isShapeLoggingEnabled { print("⚠️ Unknown RT shape: '\(desc)' - using fallback") }
             return createEmptyMesh()
         }
     }
@@ -193,7 +204,7 @@ extension ElementDTO {
         let w = max(0.001, normalized(0, 0.05))
         let h = max(0.001, normalized(1, 0.05))
         let d: Float = 0.001  // Minimal depth for 2D diagrams
-        return MeshResource.generateBox(size: SIMD3(w, h, d))
+        return cachedBox(size: SIMD3(w, h, d))
     }
 
     private func createRSEllipse(normalized: (Int, Double) -> Float) -> MeshResource {
@@ -203,7 +214,7 @@ extension ElementDTO {
         // Use average of width and height as radius, with minimum threshold
         let radius = max(0.005, (w + h) / 4.0)
         let depth: Float = 0.002
-        return MeshResource.generateCylinder(height: depth, radius: radius)
+        return cachedCylinder(height: depth, radius: radius)
     }
     
     private func create3DMesh(desc: String, normalized: (Int, Double) -> Float) -> MeshResource {
@@ -216,7 +227,7 @@ extension ElementDTO {
         } else if desc.contains("cone") {
             return createCone(normalized: normalized)
         } else {
-            print("⚠️ Unknown 3D shape: '\(desc)'")
+            if isShapeLoggingEnabled { print("⚠️ Unknown 3D shape: '\(desc)'") }
             return createEmptyMesh()
         }
     }
@@ -225,13 +236,13 @@ extension ElementDTO {
         let w = normalized(0, 0.1)
         let h = normalized(1, 0.1)
         let d = normalized(2, 0.001)  // Minimal depth for 2D diagrams
-        return MeshResource.generateBox(size: SIMD3(w, h, d))
+        return cachedBox(size: SIMD3(w, h, d))
     }
     
     private func createRTEllipse(normalized: (Int, Double) -> Float) -> MeshResource {
         let h = normalized(0, 0.001)  // Minimal depth for 2D diagrams
         let r = normalized(1, Double(h * 2))
-        return MeshResource.generateCylinder(height: h, radius: r)
+        return cachedCylinder(height: h, radius: r)
     }
 
     private func createRSCircle(normalized: (Int, Double) -> Float) -> MeshResource {
@@ -240,7 +251,7 @@ extension ElementDTO {
         let diameter = normalized(0, 0.05)  // Default to 0.05 if no extent
         let radius = max(0.005, diameter / 2.0)  // Minimum radius for visibility
         let height: Float = 0.002  // Minimal depth for 2D diagrams
-        return MeshResource.generateCylinder(height: height, radius: radius)
+        return cachedCylinder(height: height, radius: radius)
     }
 
     private func createRTLabel(normalized: (Int, Double) -> Float) -> MeshResource {
@@ -262,7 +273,7 @@ extension ElementDTO {
             return textMesh
         } catch {
             // Fallback to a small box if text generation fails
-            return MeshResource.generateBox(size: SIMD3(w, h, 0.001))
+            return cachedBox(size: SIMD3(w, h, 0.001))
         }
     }
 

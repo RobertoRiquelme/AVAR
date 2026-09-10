@@ -157,6 +157,10 @@ against the app sources:
 - `Tests/WorldRootTests.swift` — the RealityKit `relativeTo:` semantics that keeping locally
   authored content stationary depends on, plus cross-device convergence. Single file, so it needs
   `-parse-as-library` (swiftc otherwise treats one file as script mode, conflicting with `@main`).
+- `Tests/ResourceIntegrityTests.swift` — decodes all 37 bundled diagrams and builds a real mesh
+  and material for **every** element (~8000), asserting finite geometry. Also reports the slowest
+  diagrams, which is the only automated signal on load cost. Needs `AVAR2_RESOURCES` pointing at
+  `AVAR2/Resources` (pass it as `SIMCTL_CHILD_AVAR2_RESOURCES` when spawning in the simulator).
 - `Tests/LayoutTests.swift`, `Tests/DataLoaderTests.swift` — pre-existing.
 
 Compile a suite with `swiftc` plus the sources it needs, e.g.
@@ -166,6 +170,31 @@ Asserts are the mechanism, so build with `-Onone` (release strips them).
 ## Environment variables
 - `AVAR_VERBOSE_LOGS=1` to enable verbose logging in loaders/view models.
 - `AVAR_HTTP_TOKEN=<token>` to enable HTTP auth.
+
+## Performance
+
+- **Every shape builder must go through `MeshCache`** (`cachedBox` / `cachedSphere` /
+  `cachedCylinder` / `cachedCone`), never `MeshResource.generate*` directly. Diagrams repeat a
+  tiny number of geometries — across all 37 bundled examples, 7928 elements resolve to just 610
+  distinct meshes (13x reuse), and `Ejemplo03-1000` uses **2** meshes for 1999 elements. Six RS/RT
+  builders previously bypassed the cache and re-tessellated identical cylinders per element, which
+  made a 360-circle diagram (`Ejemplo09`) the slowest of all 37 at ~30 ms/element; routing them
+  through the cache cut it by roughly 20x. `Tests/ResourceIntegrityTests.swift` prints the slowest
+  diagrams so a regression here is visible.
+- Text meshes (`generateText`) are *not* cached and CoreText is slow; label-heavy diagrams are the
+  remaining cost leaders. Caching by text+size would help where labels repeat (about 2x in
+  `Ejemplo11`), but has not been done.
+- `MeshCache` never evicts and `clearCache()` is never called. Harmless today (610 keys for the
+  whole bundled corpus), but worth revisiting if long sessions load many distinct HTTP diagrams.
+- Per-element logging must be gated behind `AVAR_VERBOSE_LOGS` — see `ElementDTO.swift` and
+  `ShapeFactory.swift`. Ungated, a 1000-node diagram emits thousands of synchronous stdout writes.
+
+## Known data issues
+
+- **`Resources/Ejemplo03-3000.txt` is byte-identical to `Ejemplo03-1000.txt`** (same MD5; 1000
+  nodes + 999 edges, not 3000). The documented "with 3000 elements the app doesn't load the
+  visualization" issue therefore cannot be reproduced from the bundled files — regenerate a real
+  3000-element export from Pharo before investigating it.
 
 ## Gotchas / tips
 - HTTP callback must be set in `.onAppear` to avoid missing early POSTs.
