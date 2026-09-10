@@ -1278,10 +1278,21 @@ private extension VisionOSMainView {
             return false
         }
 
-        if collaborativeSession.isSharePlayActive, !collaborativeSession.sharedAnchorUsesSharedWorld {
-            print("⏳ Waiting for shared world anchor before sharing existing diagrams")
-            return false
-        }
+        // Deliberately NOT gated on the shared origin existing yet.
+        //
+        // This used to `return false` whenever `!sharedAnchorUsesSharedWorld`, which meant that
+        // with a peer who can never produce a shared WorldAnchor — notably the iOS companion,
+        // whose ARKit has no such API — existing diagrams were never shared at all and the peer
+        // sat looking at an empty scene forever.
+        //
+        // Withholding buys nothing anyway. The transmitted pose is
+        // `position(relativeTo: worldRoot)`; while no origin is resolved `worldRoot` is identity,
+        // so that value is world space. When an origin later resolves, every participant's
+        // `worldRoot` moves to the same physical anchor while each diagram's parent-relative pose
+        // is unchanged — so both ends interpret the same number in now-aligned frames and agree
+        // on the physical location, with no re-broadcast needed. Content simply settles into the
+        // shared frame once, which is the correct outcome. Unaligned-but-visible beats invisible,
+        // and `alignmentDiagnostic` reports the state honestly meanwhile.
 
         print("📤 Sharing \(sharedState.activeFiles.count) existing diagrams with session...")
 

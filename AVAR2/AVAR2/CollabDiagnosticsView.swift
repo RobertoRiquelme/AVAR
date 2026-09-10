@@ -34,6 +34,9 @@ enum AlignmentDiagnostic: Equatable {
     /// Participants are NOT co-located. Shared world anchors can never become available.
     /// This is the case that looks identical to every other in the old UI.
     case notSpatial
+    /// No participant in this session can resolve a visionOS `WorldAnchor` — e.g. the peer is the
+    /// iOS companion. Diagrams are still shared and visible, just not spatially aligned.
+    case alignmentNotAchievable
     /// Co-located, but ARKit hasn't reported world-anchor sharing as available yet.
     case waitingForAvailability
     /// Sharing available, but no session-origin anchor has been announced yet.
@@ -49,6 +52,7 @@ enum AlignmentDiagnostic: Equatable {
         switch self {
         case .noSession: return "No session"
         case .notSpatial: return "NOT co-located"
+        case .alignmentNotAchievable: return "Shared, not aligned"
         case .waitingForAvailability: return "Waiting for anchor sharing"
         case .waitingForOwnerAnnounce: return "Waiting for origin anchor"
         case .waitingForLocalResolve: return "Resolving origin locally"
@@ -65,6 +69,8 @@ enum AlignmentDiagnostic: Equatable {
             return "Start SharePlay from a FaceTime call with the other device."
         case .notSpatial:
             return "Participants are not in the same room — shared world anchors are unavailable, so diagrams cannot align. Each device places them independently."
+        case .alignmentNotAchievable:
+            return "This peer cannot resolve a visionOS world anchor (e.g. the iPhone companion), so spatial alignment is not possible. Diagrams are still shared and visible — useful for checking content, transforms and 2D/3D handling, but not physical alignment."
         case .waitingForAvailability:
             return "Co-located. Look around the room so tracking settles; sharing usually becomes available within a few seconds."
         case .waitingForOwnerAnnounce:
@@ -84,6 +90,7 @@ enum AlignmentDiagnostic: Equatable {
         switch self {
         case .aligned: return .green
         case .notSpatial, .creationFailed: return .red
+        case .alignmentNotAchievable: return .blue
         default: return .orange
         }
     }
@@ -437,6 +444,9 @@ extension CollaborativeSessionManager {
         guard isSessionActive else { return .noSession }
         #endif
 
+        // Distinguish "alignment is pending" from "alignment is impossible in this session".
+        // Without this, an iPhone peer looks like a broken visionOS pairing.
+        if !isAlignmentAchievable { return .alignmentNotAchievable }
         guard worldAnchorSharingAvailable else { return .waitingForAvailability }
 
         #if os(visionOS)

@@ -680,6 +680,21 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
     #endif
 
+    /// Whether a shared spatial origin is even achievable in this session.
+    ///
+    /// False when no participant can resolve a visionOS `WorldAnchor` — most importantly when the
+    /// peer is the **iOS companion**, which aligns via its own legacy `SharedAnchorMessage`
+    /// handshake instead. Callers must not block on the origin when this is false, or they wait
+    /// forever: `worldAnchorSharingAvailability` only reports `.available` for a SharePlay session
+    /// with nearby *visionOS* participants.
+    var isAlignmentAchievable: Bool {
+        #if os(visionOS)
+        return isSpatialSession || worldAnchorSharingAvailable
+        #else
+        return false
+        #endif
+    }
+
     /// Whether participants are actually co-located, i.e. `localParticipantState.isSpatial`.
     /// Shared world anchors can only ever become available when this is true.
     var isSpatialSession: Bool {

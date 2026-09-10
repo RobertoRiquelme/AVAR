@@ -12,6 +12,18 @@ struct iOS_ContentView: View {
     @State private var showingCollaborativeSession = false
     @State private var showingHelp = false
     
+    /// True when this device has a live link to the host, by either transport.
+    private var isConnected: Bool {
+        !collaborativeSession.connectedPeers.isEmpty || collaborativeSession.isSharePlayActive
+    }
+
+    private var connectionSummary: String {
+        if collaborativeSession.isSharePlayActive { return "SharePlay" }
+        let count = collaborativeSession.connectedPeers.count
+        if count > 0 { return count == 1 ? "1 peer" : "\(count) peers" }
+        return "Not connected"
+    }
+
     var body: some View {
         ZStack {
             // AR View for iOS - Full screen
@@ -68,6 +80,16 @@ struct iOS_ContentView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
+                    // Connection state. Without this there is no way to tell "not connected"
+                    // from "connected but the host has not shared anything yet" — the two look
+                    // identical (empty camera view), which makes debugging a session guesswork.
+                    Label(connectionSummary, systemImage: isConnected ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
+                        .font(.caption)
+                        .foregroundStyle(isConnected ? .green : .secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.thinMaterial, in: .capsule)
+
                     Label(arViewModel.sharedAnchorStatus, systemImage: arViewModel.isSharedAnchorLocked ? "checkmark.seal.fill" : "wifi.exclamationmark")
                         .font(.caption)
                         .padding(.horizontal, 10)
@@ -387,11 +409,13 @@ class ARViewModel: NSObject, ObservableObject {
         
         print("📱 Creating AR diagram '\(diagram.filename)' with \(diagram.elements.count) elements")
         
-        // Determine if this is a 2D or 3D diagram
-        let is2D = diagram.elements.allSatisfy { element in
-            guard let position = element.position, position.count >= 3 else { return true }
-            return position[2] == 0 // z-coordinate is 0 for 2D diagrams
-        }
+        // Use the sender's authoritative `is2D`, which is derived from which key the diagram was
+        // decoded under (`RTelements`/`nodes` => 2D). This previously guessed locally from
+        // "all elements have z == 0", which mislabels a genuinely 3D layout that happens to be
+        // flat — and, because `is2D` feeds `NormalizationContext`, a wrong guess renders the
+        // diagram at different proportions here than on the host, making this view useless for
+        // cross-checking the host.
+        let is2D = diagram.is2D
         
         // Create a container for normalized positioning
         let diagramContainer = Entity()
