@@ -9,6 +9,17 @@
 import RealityKit
 import SwiftUI   // RealityViewContent
 import simd
+import OSLog
+
+/// Whether this build ships the on-device test affordances (loopback injection, the offset
+/// `worldRoot` toggle).
+///
+/// Deliberately **not** `#if DEBUG`. Hardware validation happens through TestFlight, which ships
+/// **Release** builds — so gating on DEBUG removed precisely the tools needed to do the testing
+/// from the only builds used to do it. This is a research app distributed to its own author, so
+/// the affordances are always compiled; they live behind the Diagnostics disclosure and are inert
+/// unless opened. Flip this to `false` (or restore a `#if DEBUG`) before any App Store build.
+let includesTestAffordances = true
 
 /// Owns the `worldRoot` entity: the parent of every diagram, positioned at this device's own
 /// resolved transform for the session-origin shared `WorldAnchor`.
@@ -86,13 +97,17 @@ enum SharedWorldRoot {
     /// `worldRoot` a scale, this trips in debug instead of silently producing diagrams that are
     /// subtly the wrong size on one device only.
     private static func assertRigidUnitScale(_ m: simd_float4x4) {
-        #if DEBUG
         let sx = simd_length(SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z))
         let sy = simd_length(SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z))
         let sz = simd_length(SIMD3<Float>(m.columns.2.x, m.columns.2.y, m.columns.2.z))
-        assert(abs(sx - 1) < 1e-3 && abs(sy - 1) < 1e-3 && abs(sz - 1) < 1e-3,
-               "worldRoot must be rigid with unit scale (got \(sx), \(sy), \(sz)) — ElementViewModel mixes parent-relative scale with relativeTo: nil transforms")
-        #endif
+        guard abs(sx - 1) > 1e-3 || abs(sy - 1) > 1e-3 || abs(sz - 1) > 1e-3 else { return }
+
+        let message = "worldRoot must be rigid with unit scale (got \(sx), \(sy), \(sz)) — ElementViewModel mixes parent-relative scale with relativeTo: nil transforms"
+        // `assert` is stripped in Release, and Release is what TestFlight ships — so also log,
+        // or the invariant would be silently unenforced in exactly the builds run on hardware.
+        Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "SharedWorldRoot")
+            .fault("\(message, privacy: .public)")
+        assertionFailure(message)
     }
 }
 #endif

@@ -130,9 +130,7 @@ struct CollabDiagnosticsView: View {
                     DiagRow(label: "Cached meshes", value: "\(MeshCache.shared.count) / 512")
                 }
 
-                #if DEBUG
-                loopbackSection
-                #endif
+                if includesTestAffordances { loopbackSection }
 
                 if let error = session.lastError {
                     DiagRow(label: "Last error", value: error, tint: .red)
@@ -207,7 +205,6 @@ struct CollabDiagnosticsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            #if DEBUG
             Toggle("Force offset worldRoot (single-device test)", isOn: Binding(
                 get: { appModel.debugWorldRootOffset },
                 set: { appModel.debugWorldRootOffset = $0 }
@@ -219,7 +216,6 @@ struct CollabDiagnosticsView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            #endif
         }
     }
 
@@ -272,9 +268,8 @@ struct CollabDiagnosticsView: View {
         }
     }
 
-    // MARK: Loopback (DEBUG)
+    // MARK: Loopback
 
-    #if DEBUG
     /// Example diagrams chosen to cover both decode shapes: one 2D (RT/RS) and one 3D. The 2D
     /// case is the one that used to be silently rebuilt as 3D on the receiver.
     private static let loopbackSamples = ["2D Tree Layout", "Ejemplo08"]
@@ -295,7 +290,6 @@ struct CollabDiagnosticsView: View {
             }
         }
     }
-    #endif
 
     // MARK: Formatting
 

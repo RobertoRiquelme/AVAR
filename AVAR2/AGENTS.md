@@ -166,6 +166,15 @@ xcodebuild -project AVAR2.xcodeproj -scheme AVAR2 \
 Also build `-destination 'generic/platform=iOS'` after touching shared collaboration code — that
 is what proves the iOS companion still compiles.
 
+**Hardware testing happens through TestFlight, which ships RELEASE builds.** Two consequences:
+- Do not put on-device test affordances behind `#if DEBUG` — that removes them from exactly the
+  builds used to do the testing. Use the `includesTestAffordances` flag in `SharedWorldRoot.swift`.
+- `assert` is stripped in Release. An invariant that must stay observable on hardware needs a
+  `Logger.fault` alongside the `assertionFailure` — see `SharedWorldRoot.assertRigidUnitScale`.
+- `AVAR_VERBOSE_LOGS` cannot easily be set for a TestFlight install, so the in-app diagnostics
+  panel is the primary observability on hardware, not the console.
+Build Release locally before pushing anything meant for a TestFlight run; the gate does this.
+
 ## Tests
 `Tests/` is **not** a member of the Xcode project (the `PBXFileSystemSynchronizedRootGroup` covers
 only `AVAR2/`) and there is no test target. The idiom is one `@main struct` per file, compiled

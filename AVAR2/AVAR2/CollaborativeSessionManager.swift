@@ -654,7 +654,6 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         localDiagramTransforms[filename]
     }
 
-    #if DEBUG
     /// Injects a local example back through the **production receive path** as if it had arrived
     /// from a peer, under the name `remote_<filename>`.
     ///
@@ -680,7 +679,6 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             print("❌ Loopback injection failed: \(error)")
         }
     }
-    #endif
 
     /// Whether a shared spatial origin is even achievable in this session.
     ///
