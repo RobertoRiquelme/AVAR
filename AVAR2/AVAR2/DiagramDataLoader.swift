@@ -57,6 +57,17 @@ struct DiagramDataLoader {
         receivedDiagrams.removeValue(forKey: filename)
     }
 
+    /// Whether this diagram arrived from a peer rather than being created on this device.
+    ///
+    /// This is the provenance signal used to decide who owns a diagram's pose. It cannot be
+    /// inferred from "did we receive a transform for it", because `shareDiagram` appends our own
+    /// diagrams to `sharedDiagrams` too — so the update handler fires for locally-created
+    /// diagrams as well.
+    @MainActor
+    static func isReceived(_ filename: String) -> Bool {
+        receivedDiagrams[filename] != nil
+    }
+
     @MainActor
     static func loadScriptOutput(from filename: String) throws -> ScriptOutput {
         // Network-received data wins over anything on disk or in the bundle.

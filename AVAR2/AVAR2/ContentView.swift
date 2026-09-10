@@ -82,6 +82,19 @@ struct ContentView: View {
                 )
             }
 
+            // Authoritative, one-shot pose pushes (e.g. the correction issued when the session
+            // origin resolves). Deliberately NOT throttled — there is no follow-up update to
+            // cover for a dropped one.
+            viewModel.onAuthoritativeTransform = { position, orientation, scale in
+                guard let session = collaborativeSession else { return }
+                session.updateDiagramTransform(
+                    filename: filename,
+                    worldPosition: position,
+                    worldOrientation: orientation,
+                    worldScale: scale
+                )
+            }
+
             // Send per-element edits to peers when a node drag ends
             viewModel.onElementMoved = { elementId, localPos in
                 guard let session = collaborativeSession else { return }

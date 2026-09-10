@@ -91,6 +91,20 @@ class ElementViewModel: ObservableObject {
     /// collaboration session so `worldRoot` can be positioned at build time.
     private var sessionOriginTransform: simd_float4x4?
 
+    /// Pushes a pose that must reach peers exactly once and must NOT be throttled.
+    ///
+    /// `onTransformChanged` is rate-limited for drag streams, where dropping a frame is harmless
+    /// because another follows immediately. A pose correction after the session origin resolves
+    /// has no follow-up: if the throttle swallows it, peers keep the stale pre-origin coordinates
+    /// indefinitely. Hence a separate channel.
+    var onAuthoritativeTransform: ((SIMD3<Float>, simd_quatf, Float) -> Void)?
+
+    /// Whether this diagram arrived from a peer rather than being authored on this device.
+    ///
+    /// Decides who owns the pose when the session origin appears or is refined — see
+    /// `updateWorldRoot(originFromAnchor:)`.
+    private var isPeerOriginated = false
+
     /// The diagram's pose **in the shared session-origin frame**.
     ///
     /// This is the value that goes on the wire. Because the container is parented to `worldRoot`,
@@ -131,12 +145,49 @@ class ElementViewModel: ObservableObject {
         }
     }
 
-    /// Points this diagram's `worldRoot` at the session origin. Called whenever the resolved
-    /// anchor transform changes, so ARKit refinements move every diagram coherently.
+    /// Points this diagram's `worldRoot` at the session origin.
+    ///
+    /// Called whenever the resolved anchor transform appears or is refined by ARKit. What should
+    /// happen to the diagram depends on **who owns its pose**, and the two cases are opposites:
+    ///
+    /// - **Peer-originated**: the anchor-relative pose from the wire is authoritative. The
+    ///   container must therefore keep its parent-relative pose and *move with* `worldRoot` —
+    ///   that movement is precisely what brings it onto the same physical spot as the owner's.
+    ///
+    /// - **Locally authored**: the user put this diagram at a physical place, and it must stay
+    ///   there. Its parent-relative pose is only a derived value, so we preserve the world pose
+    ///   across the frame change and re-broadcast the recomputed anchor-relative pose to peers.
+    ///
+    /// Without the second branch, local content visibly jumped by the whole anchor transform the
+    /// moment a session origin was established (or slightly, on every ARKit refinement) — the
+    /// diagram would leave the table the user had just placed it on.
     func updateWorldRoot(originFromAnchor: simd_float4x4?) {
         sessionOriginTransform = originFromAnchor
-        guard let worldRoot = rootEntity?.parent, worldRoot.name == SharedWorldRoot.name else { return }
+        guard let root = rootEntity,
+              let worldRoot = root.parent,
+              worldRoot.name == SharedWorldRoot.name else { return }
+
+        guard !isPeerOriginated else {
+            SharedWorldRoot.apply(originFromAnchor: originFromAnchor, to: worldRoot)
+            return
+        }
+
+        // Capture in WORLD space, move the frame, then restore the world pose. Scale is
+        // parent-relative but `worldRoot` is always rigid and unit-scale, so it is unaffected.
+        let worldPosition = root.position(relativeTo: nil)
+        let worldOrientation = root.orientation(relativeTo: nil)
+
         SharedWorldRoot.apply(originFromAnchor: originFromAnchor, to: worldRoot)
+
+        root.setPosition(worldPosition, relativeTo: nil)
+        root.setOrientation(worldOrientation, relativeTo: nil)
+
+        // Physically unchanged, but its pose *in the shared frame* is now different — so peers
+        // need the new value or they would keep placing it at the pre-origin coordinates.
+        // Deliberately on the unthrottled channel: this correction is one-shot.
+        if let transform = getSharedTransform() {
+            onAuthoritativeTransform?(transform.position, transform.orientation, transform.scale)
+        }
     }
     /// Background entity to capture pan/zoom gestures
     private var backgroundEntity: Entity?
@@ -276,6 +327,7 @@ class ElementViewModel: ObservableObject {
         do {
             debugLog("About to call DiagramDataLoader for: \(filename)")
             let output = try DiagramDataLoader.loadScriptOutput(from: filename)
+            self.isPeerOriginated = DiagramDataLoader.isReceived(filename)
             self.elements = output.elements
             self.isGraph2D = output.is2D
             self.normalizationContext = NormalizationContext(elements: output.elements, is2D: output.is2D)

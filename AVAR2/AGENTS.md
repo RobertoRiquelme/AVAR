@@ -154,6 +154,9 @@ against the app sources:
 - `Tests/WireFormatTests.swift` — the alignment invariant, envelope round-trips, `is2D`
   preservation and back-compat, all four `ScriptOutput` input shapes. Built for xrsimulator and
   run via `xcrun simctl spawn` so the types are exercised as they ship.
+- `Tests/WorldRootTests.swift` — the RealityKit `relativeTo:` semantics that keeping locally
+  authored content stationary depends on, plus cross-device convergence. Single file, so it needs
+  `-parse-as-library` (swiftc otherwise treats one file as script mode, conflicting with `@main`).
 - `Tests/LayoutTests.swift`, `Tests/DataLoaderTests.swift` — pre-existing.
 
 Compile a suite with `swiftc` plus the sources it needs, e.g.
@@ -177,6 +180,19 @@ Asserts are the mechanism, so build with `-Onone` (release strips them).
   rather than a bare `.position =`, which would be interpreted in `worldRoot`'s frame.
 - `worldRoot` must stay rigid with unit scale; a few call sites pass parent-relative scale into
   `relativeTo: nil` transforms. `SharedWorldRoot.apply` asserts this in DEBUG.
+- **Pose ownership decides what happens when the session origin appears or is refined**, and the
+  two cases are opposites (`ElementViewModel.updateWorldRoot`):
+  - *Peer-originated* (`DiagramDataLoader.isReceived(filename)`): the wire pose is authoritative,
+    so the container keeps its parent-relative pose and moves with `worldRoot`. That movement is
+    what lands it on the same physical spot as the owner's copy.
+  - *Locally authored*: the user chose a physical place, so the world pose is preserved across the
+    frame change and the recomputed anchor-relative pose is re-broadcast. Without this, local
+    content jumped by the whole anchor transform the moment an origin was established.
+  Ownership cannot be inferred from "did we receive a transform for it" — `shareDiagram` appends
+  our own diagrams to `sharedDiagrams`, so the update handler fires for local ones too.
+- One-shot pose corrections go through `onAuthoritativeTransform`, **not** `onTransformChanged`.
+  The latter is throttled for drag streams, where a dropped frame is harmless; a correction with
+  no follow-up would be swallowed and peers would keep stale coordinates indefinitely.
 - Decoder logging in `ElementDTO.swift` is gated behind `AVAR_VERBOSE_LOGS` because it runs once
   per element (a 1000-node diagram otherwise emits ~5000 synchronous stdout writes per load).
   Keep new per-element logging behind that flag.
