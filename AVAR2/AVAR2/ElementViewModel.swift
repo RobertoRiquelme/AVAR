@@ -174,13 +174,13 @@ class ElementViewModel: ObservableObject {
 
         // Capture in WORLD space, move the frame, then restore the world pose. Scale is
         // parent-relative but `worldRoot` is always rigid and unit-scale, so it is unaffected.
-        let worldPosition = root.position(relativeTo: nil)
-        let worldOrientation = root.orientation(relativeTo: nil)
+        let preservedWorldPosition = root.position(relativeTo: nil)
+        let preservedWorldOrientation = root.orientation(relativeTo: nil)
 
         SharedWorldRoot.apply(originFromAnchor: originFromAnchor, to: worldRoot)
 
-        root.setPosition(worldPosition, relativeTo: nil)
-        root.setOrientation(worldOrientation, relativeTo: nil)
+        root.setPosition(preservedWorldPosition, relativeTo: nil)
+        root.setOrientation(preservedWorldOrientation, relativeTo: nil)
 
         // Physically unchanged, but its pose *in the shared frame* is now different — so peers
         // need the new value or they would keep placing it at the pre-origin coordinates.

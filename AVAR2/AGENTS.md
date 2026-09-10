@@ -91,8 +91,15 @@ fails the tests rather than only misbehaving on hardware.
 - iOS is receive-only and cannot resolve a visionOS `WorldAnchor`, so it keeps its own legacy
   `SharedAnchorMessage` handshake (built from an `ARFrame` camera transform). visionOS ignores
   inbound anchor transforms entirely.
-- `SharedDiagram.worldPosition` / `.worldOrientation` are **misnamed**: they carry
-  anchor-relative values, not world-space ones. Names kept for wire compatibility.
+- `SharedDiagram` / `UpdateDiagramTransformMessage` carry `anchorRelativePosition`,
+  `anchorRelativeOrientation` and `anchorRelativeScale` — poses in the session-origin frame, never
+  world space. **The JSON keys are still `worldPositionX`, `worldOrientationW`, `worldScale` etc.**
+  and must stay that way: the iOS lane and any build predating the rename speak those keys.
+  `Tests/WireFormatTests.swift` pins the emitted key names.
+- Scale is frame-independent (`worldRoot` is rigid, unit-scale); it carries the `anchorRelative`
+  prefix only so the three pose fields read as a group.
+- A local named `world*` in `ElementViewModel`/`WorldRootTests` genuinely *is* world space (see
+  `preservedWorldPosition` in `updateWorldRoot`) — do not blanket-rename those.
 
 ### Diagnostics
 `AVAR2/CollabDiagnosticsView.swift` is the panel to use when debugging a two-device session

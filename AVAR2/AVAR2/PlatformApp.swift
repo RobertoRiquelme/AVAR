@@ -1304,9 +1304,9 @@ private extension VisionOSMainView {
                     filename: filename,
                     elements: output.elements,
                     is2D: output.is2D,
-                    worldPosition: cached?.position,
-                    worldOrientation: cached?.orientation,
-                    worldScale: cached?.scale
+                    anchorRelativePosition: cached?.position,
+                    anchorRelativeOrientation: cached?.orientation,
+                    anchorRelativeScale: cached?.scale
                 )
                 print("📤 Shared diagram: \(filename)")
             } catch {

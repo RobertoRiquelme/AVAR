@@ -291,12 +291,12 @@ struct CollabDiagnosticsView: View {
 
     static func describeDiagram(_ diagram: SharedDiagram) -> String {
         var parts = ["\(diagram.elements.count) elements"]
-        if let p = diagram.worldPosition {
+        if let p = diagram.anchorRelativePosition {
             parts.append(String(format: "pos [%.2f, %.2f, %.2f]", p.x, p.y, p.z))
         } else {
             parts.append("pos —")
         }
-        if let s = diagram.worldScale { parts.append(String(format: "scale %.2f", s)) }
+        if let s = diagram.anchorRelativeScale { parts.append(String(format: "scale %.2f", s)) }
         return parts.joined(separator: "  ")
     }
 
@@ -510,9 +510,9 @@ extension CollaborativeSessionManager {
 
         lines.append("--- diagrams (\(sharedDiagrams.count)) ---")
         for d in sharedDiagrams {
-            let p = d.worldPosition
+            let p = d.anchorRelativePosition
             let pos = p.map { String(format: "[%.4f, %.4f, %.4f]", $0.x, $0.y, $0.z) } ?? "—"
-            lines.append("  \(d.filename)  elements=\(d.elements.count)  anchorRelPos=\(pos)  scale=\(d.worldScale.map { String(format: "%.3f", $0) } ?? "—")")
+            lines.append("  \(d.filename)  elements=\(d.elements.count)  anchorRelPos=\(pos)  scale=\(d.anchorRelativeScale.map { String(format: "%.3f", $0) } ?? "—")")
         }
 
         lines.append("--- traffic ---")

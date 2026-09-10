@@ -585,23 +585,24 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     
     /// Share a diagram with all connected peers including position data
     func shareDiagram(filename: String, elements: [ElementDTO], is2D: Bool = false,
-                      worldPosition: SIMD3<Float>? = nil,
-                      worldOrientation: simd_quatf? = nil, worldScale: Float? = nil) {
+                      anchorRelativePosition: SIMD3<Float>? = nil,
+                      anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
 
 #if os(iOS)
+        // iOS is receive-only. Structured as #if/#else rather than an early `return` so the rest
+        // of the body is not compiled-but-unreachable on iOS (which warned).
         print("ℹ️ Ignoring shareDiagram request on iOS client; iOS is receive-only")
-        return
-#endif
+#else
 
-        // `worldPosition` / `worldOrientation` already arrive in the shared session-origin frame
+        // `anchorRelativePosition` / `anchorRelativeOrientation` already arrive in the shared session-origin frame
         // (see `ElementViewModel.getSharedTransform`), so there is nothing to convert here.
         //
         // This replaces a duplicated block that computed position via `anchor.transform.inverse`
         // but orientation via `simd_quatf(anchor.transform).inverse` — inconsistent with each
         // other, and both operating on a transform that was frequently the identity matrix or a
         // stale value restored from disk.
-        let finalPosition = worldPosition
-        let finalOrientation = worldOrientation
+        let finalPosition = anchorRelativePosition
+        let finalOrientation = anchorRelativeOrientation
 
         #if os(visionOS)
         // No origin anchor yet? Ask for a real shared WorldAnchor. Never fabricate one from a
@@ -619,9 +620,9 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             elements: elements,
             timestamp: Date(),
             is2D: is2D,
-            worldPosition: finalPosition,
-            worldOrientation: finalOrientation,
-            worldScale: worldScale
+            anchorRelativePosition: finalPosition,
+            anchorRelativeOrientation: finalOrientation,
+            anchorRelativeScale: anchorRelativeScale
         )
 
         sharedDiagrams.append(sharedDiagram)
@@ -636,9 +637,10 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         if let orient = finalOrientation {
             print("   🔄 Orientation: \(orient)")
         }
-        if let scale = worldScale {
+        if let scale = anchorRelativeScale {
             print("   📏 Scale: \(scale)")
         }
+#endif
     }
 
     func cacheLocalDiagramTransform(filename: String,
@@ -725,37 +727,37 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
     
     /// Update the transform of an existing shared diagram
-    func updateDiagramTransform(filename: String, worldPosition: SIMD3<Float>? = nil,
-                                worldOrientation: simd_quatf? = nil, worldScale: Float? = nil) {
+    func updateDiagramTransform(filename: String, anchorRelativePosition: SIMD3<Float>? = nil,
+                                anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
         // Update local copy
         guard let index = sharedDiagrams.firstIndex(where: { $0.filename == filename }) else {
             return
         }
 
         // Already in the shared session-origin frame — see shareDiagram(...) above.
-        let finalPosition = worldPosition
-        let finalOrientation = worldOrientation
+        let finalPosition = anchorRelativePosition
+        let finalOrientation = anchorRelativeOrientation
 
         if let pos = finalPosition {
-            sharedDiagrams[index].worldPosition = pos
+            sharedDiagrams[index].anchorRelativePosition = pos
         }
         if let orient = finalOrientation {
-            sharedDiagrams[index].worldOrientation = orient
+            sharedDiagrams[index].anchorRelativeOrientation = orient
         }
-        if let scale = worldScale {
-            sharedDiagrams[index].worldScale = scale
+        if let scale = anchorRelativeScale {
+            sharedDiagrams[index].anchorRelativeScale = scale
         }
 
-        if let pos = worldPosition, let orient = worldOrientation, let scale = worldScale {
+        if let pos = anchorRelativePosition, let orient = anchorRelativeOrientation, let scale = anchorRelativeScale {
             localDiagramTransforms[filename] = DiagramTransform(position: pos, orientation: orient, scale: scale)
         }
 
         // Send update to peers (fast path - no error checking needed during drag)
         let updateMessage = UpdateDiagramTransformMessage(
             filename: filename,
-            worldPosition: finalPosition,
-            worldOrientation: finalOrientation,
-            worldScale: worldScale
+            anchorRelativePosition: finalPosition,
+            anchorRelativeOrientation: finalOrientation,
+            anchorRelativeScale: anchorRelativeScale
         )
 
         // Encode and broadcast (JSONEncoder is cached per thread by Swift)
@@ -798,9 +800,9 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                 elements: newElements,
                 timestamp: Date(),                      // refresh timestamp on edit
                 is2D: old.is2D,
-                worldPosition: old.worldPosition,
-                worldOrientation: old.worldOrientation,
-                worldScale: old.worldScale
+                anchorRelativePosition: old.anchorRelativePosition,
+                anchorRelativeOrientation: old.anchorRelativeOrientation,
+                anchorRelativeScale: old.anchorRelativeScale
             )
             sharedDiagrams[dIndex] = newDiagram
             // 🔔 Force a publish
@@ -954,7 +956,7 @@ private extension CollaborativeSessionManager {
             if !sharedDiagrams.contains(where: { $0.id == sharedDiagram.id }) {
                 sharedDiagrams.append(sharedDiagram)
                 print("📥 Received shared diagram '\(sharedDiagram.filename)' from \(source)")
-                if let pos = sharedDiagram.worldPosition {
+                if let pos = sharedDiagram.anchorRelativePosition {
                     print("   📍 Position: \(pos)")
                 }
             } else if let index = sharedDiagrams.firstIndex(where: { $0.id == sharedDiagram.id }) {
@@ -964,14 +966,14 @@ private extension CollaborativeSessionManager {
 
         case .transform(let updateMessage):
             if let index = sharedDiagrams.firstIndex(where: { $0.filename == updateMessage.filename }) {
-                if let pos = updateMessage.worldPosition {
-                    sharedDiagrams[index].worldPosition = pos
+                if let pos = updateMessage.anchorRelativePosition {
+                    sharedDiagrams[index].anchorRelativePosition = pos
                 }
-                if let orient = updateMessage.worldOrientation {
-                    sharedDiagrams[index].worldOrientation = orient
+                if let orient = updateMessage.anchorRelativeOrientation {
+                    sharedDiagrams[index].anchorRelativeOrientation = orient
                 }
-                if let scale = updateMessage.worldScale {
-                    sharedDiagrams[index].worldScale = scale
+                if let scale = updateMessage.anchorRelativeScale {
+                    sharedDiagrams[index].anchorRelativeScale = scale
                 }
                 print("🔄 Updated transform for diagram '\(updateMessage.filename)' from \(source)")
                 sharedDiagrams = sharedDiagrams
@@ -1012,9 +1014,9 @@ private extension CollaborativeSessionManager {
                         elements: newElements,
                         timestamp: Date(),
                         is2D: old.is2D,
-                        worldPosition: old.worldPosition,
-                        worldOrientation: old.worldOrientation,
-                        worldScale: old.worldScale
+                        anchorRelativePosition: old.anchorRelativePosition,
+                        anchorRelativeOrientation: old.anchorRelativeOrientation,
+                        anchorRelativeScale: old.anchorRelativeScale
                     )
                     sharedDiagrams[dIndex] = newDiagram
                     // 🔔 Force a Combine publish so all subscribers refresh
@@ -1150,17 +1152,22 @@ struct SharedDiagram: Codable, Identifiable {
     var is2D: Bool = false
     // MARK: Pose
     //
-    // ⚠️ MISNAMED: despite "world", these carry the diagram's pose **relative to the shared
-    // session-origin anchor** (`SharedWorldRoot`), not world space. Producers use
-    // `ElementViewModel.getSharedTransform()` (`position(relativeTo: worldRoot)`) and consumers
-    // apply them with `setPosition(_, relativeTo: worldRoot)`. World-space values must never be
-    // put here — they are not comparable across devices.
+    // The diagram's pose **relative to the shared session-origin anchor** (`SharedWorldRoot`),
+    // never world space. Producers use `ElementViewModel.getSharedTransform()`
+    // (`position(relativeTo: worldRoot)`); consumers apply them with
+    // `setPosition(_, relativeTo: worldRoot)`. A world-space value must never be put here — world
+    // coordinates are private to a device and are not comparable across participants.
     //
-    // The names are retained for wire compatibility with the iOS lane and older builds; renaming
-    // them to `anchorRelative*` touches ~90 call sites and is a separate mechanical change.
-    var worldPosition: SIMD3<Float>?
-    var worldOrientation: simd_quatf?
-    var worldScale: Float? // Uniform scale factor
+    // Scale is frame-independent (`worldRoot` is rigid and unit-scale, asserted in
+    // `SharedWorldRoot.apply`); it carries the `anchorRelative` prefix only so the three pose
+    // fields read as one group, not to imply a second scale exists in another frame.
+    //
+    // The JSON keys are still `worldPositionX`, `worldOrientationW`, `worldScale` and so on — see
+    // `CodingKeys` below. They were deliberately left alone so the wire format is unchanged for
+    // the iOS lane and any build that predates this rename.
+    var anchorRelativePosition: SIMD3<Float>?
+    var anchorRelativeOrientation: simd_quatf?
+    var anchorRelativeScale: Float?
 
     // Encode/decode helpers for SIMD types
     enum CodingKeys: String, CodingKey {
@@ -1172,15 +1179,15 @@ struct SharedDiagram: Codable, Identifiable {
 
     init(id: UUID = UUID(), filename: String, elements: [ElementDTO], timestamp: Date = Date(),
          is2D: Bool = false,
-         worldPosition: SIMD3<Float>? = nil, worldOrientation: simd_quatf? = nil, worldScale: Float? = nil) {
+         anchorRelativePosition: SIMD3<Float>? = nil, anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
         self.id = id
         self.filename = filename
         self.elements = elements
         self.timestamp = timestamp
         self.is2D = is2D
-        self.worldPosition = worldPosition
-        self.worldOrientation = worldOrientation
-        self.worldScale = worldScale
+        self.anchorRelativePosition = anchorRelativePosition
+        self.anchorRelativeOrientation = anchorRelativeOrientation
+        self.anchorRelativeScale = anchorRelativeScale
     }
 
     init(from decoder: Decoder) throws {
@@ -1196,7 +1203,7 @@ struct SharedDiagram: Codable, Identifiable {
         if let x = try container.decodeIfPresent(Float.self, forKey: .worldPositionX),
            let y = try container.decodeIfPresent(Float.self, forKey: .worldPositionY),
            let z = try container.decodeIfPresent(Float.self, forKey: .worldPositionZ) {
-            worldPosition = SIMD3<Float>(x, y, z)
+            anchorRelativePosition = SIMD3<Float>(x, y, z)
         }
         
         // Decode world orientation if present
@@ -1204,10 +1211,10 @@ struct SharedDiagram: Codable, Identifiable {
            let y = try container.decodeIfPresent(Float.self, forKey: .worldOrientationY),
            let z = try container.decodeIfPresent(Float.self, forKey: .worldOrientationZ),
            let w = try container.decodeIfPresent(Float.self, forKey: .worldOrientationW) {
-            worldOrientation = simd_quatf(ix: x, iy: y, iz: z, r: w)
+            anchorRelativeOrientation = simd_quatf(ix: x, iy: y, iz: z, r: w)
         }
         
-        worldScale = try container.decodeIfPresent(Float.self, forKey: .worldScale)
+        anchorRelativeScale = try container.decodeIfPresent(Float.self, forKey: .worldScale)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -1219,21 +1226,21 @@ struct SharedDiagram: Codable, Identifiable {
         try container.encode(is2D, forKey: .is2D)
 
         // Encode world position if present
-        if let pos = worldPosition {
+        if let pos = anchorRelativePosition {
             try container.encode(pos.x, forKey: .worldPositionX)
             try container.encode(pos.y, forKey: .worldPositionY)
             try container.encode(pos.z, forKey: .worldPositionZ)
         }
         
         // Encode world orientation if present
-        if let orient = worldOrientation {
+        if let orient = anchorRelativeOrientation {
             try container.encode(orient.imag.x, forKey: .worldOrientationX)
             try container.encode(orient.imag.y, forKey: .worldOrientationY)
             try container.encode(orient.imag.z, forKey: .worldOrientationZ)
             try container.encode(orient.real, forKey: .worldOrientationW)
         }
         
-        if let scale = worldScale {
+        if let scale = anchorRelativeScale {
             try container.encode(scale, forKey: .worldScale)
         }
     }
@@ -1471,10 +1478,11 @@ struct RemoveDiagramMessage: Codable {
 
 struct UpdateDiagramTransformMessage: Codable {
     let filename: String
-    // ⚠️ MISNAMED — anchor-relative, not world space. See `SharedDiagram`'s pose fields.
-    var worldPosition: SIMD3<Float>?
-    var worldOrientation: simd_quatf?
-    var worldScale: Float?
+    // Anchor-relative, like `SharedDiagram`'s pose fields. JSON keys remain `world*` for wire
+    // compatibility — see `CodingKeys` below.
+    var anchorRelativePosition: SIMD3<Float>?
+    var anchorRelativeOrientation: simd_quatf?
+    var anchorRelativeScale: Float?
     
     // Encode/decode helpers for SIMD types
     enum CodingKeys: String, CodingKey {
@@ -1484,12 +1492,12 @@ struct UpdateDiagramTransformMessage: Codable {
         case worldScale
     }
     
-    init(filename: String, worldPosition: SIMD3<Float>? = nil,
-         worldOrientation: simd_quatf? = nil, worldScale: Float? = nil) {
+    init(filename: String, anchorRelativePosition: SIMD3<Float>? = nil,
+         anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
         self.filename = filename
-        self.worldPosition = worldPosition
-        self.worldOrientation = worldOrientation
-        self.worldScale = worldScale
+        self.anchorRelativePosition = anchorRelativePosition
+        self.anchorRelativeOrientation = anchorRelativeOrientation
+        self.anchorRelativeScale = anchorRelativeScale
     }
     
     init(from decoder: Decoder) throws {
@@ -1500,7 +1508,7 @@ struct UpdateDiagramTransformMessage: Codable {
         if let x = try container.decodeIfPresent(Float.self, forKey: .worldPositionX),
            let y = try container.decodeIfPresent(Float.self, forKey: .worldPositionY),
            let z = try container.decodeIfPresent(Float.self, forKey: .worldPositionZ) {
-            worldPosition = SIMD3<Float>(x, y, z)
+            anchorRelativePosition = SIMD3<Float>(x, y, z)
         }
         
         // Decode world orientation if present
@@ -1508,10 +1516,10 @@ struct UpdateDiagramTransformMessage: Codable {
            let y = try container.decodeIfPresent(Float.self, forKey: .worldOrientationY),
            let z = try container.decodeIfPresent(Float.self, forKey: .worldOrientationZ),
            let w = try container.decodeIfPresent(Float.self, forKey: .worldOrientationW) {
-            worldOrientation = simd_quatf(ix: x, iy: y, iz: z, r: w)
+            anchorRelativeOrientation = simd_quatf(ix: x, iy: y, iz: z, r: w)
         }
         
-        worldScale = try container.decodeIfPresent(Float.self, forKey: .worldScale)
+        anchorRelativeScale = try container.decodeIfPresent(Float.self, forKey: .worldScale)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -1519,21 +1527,21 @@ struct UpdateDiagramTransformMessage: Codable {
         try container.encode(filename, forKey: .filename)
         
         // Encode world position if present
-        if let pos = worldPosition {
+        if let pos = anchorRelativePosition {
             try container.encode(pos.x, forKey: .worldPositionX)
             try container.encode(pos.y, forKey: .worldPositionY)
             try container.encode(pos.z, forKey: .worldPositionZ)
         }
         
         // Encode world orientation if present
-        if let orient = worldOrientation {
+        if let orient = anchorRelativeOrientation {
             try container.encode(orient.imag.x, forKey: .worldOrientationX)
             try container.encode(orient.imag.y, forKey: .worldOrientationY)
             try container.encode(orient.imag.z, forKey: .worldOrientationZ)
             try container.encode(orient.real, forKey: .worldOrientationW)
         }
         
-        if let scale = worldScale {
+        if let scale = anchorRelativeScale {
             try container.encode(scale, forKey: .worldScale)
         }
     }

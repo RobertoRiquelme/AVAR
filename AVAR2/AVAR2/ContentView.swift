@@ -35,9 +35,9 @@ struct ContentView: View {
                     // Poses are already in the shared session-origin frame — applied directly
                     // against worldRoot, no anchor matrix math.
                     viewModel.applySharedDiagramTransform(
-                        position: shared.worldPosition,
-                        orientation: shared.worldOrientation,
-                        scale: shared.worldScale
+                        position: shared.anchorRelativePosition,
+                        orientation: shared.anchorRelativeOrientation,
+                        scale: shared.anchorRelativeScale
                     )
                 }
                 .onReceive(session.$sessionOriginTransform) { originTransform in
@@ -76,9 +76,9 @@ struct ContentView: View {
 
                 session.updateDiagramTransform(
                     filename: filename,
-                    worldPosition: position,
-                    worldOrientation: orientation,
-                    worldScale: scale
+                    anchorRelativePosition: position,
+                    anchorRelativeOrientation: orientation,
+                    anchorRelativeScale: scale
                 )
             }
 
@@ -89,9 +89,9 @@ struct ContentView: View {
                 guard let session = collaborativeSession else { return }
                 session.updateDiagramTransform(
                     filename: filename,
-                    worldPosition: position,
-                    worldOrientation: orientation,
-                    worldScale: scale
+                    anchorRelativePosition: position,
+                    anchorRelativeOrientation: orientation,
+                    anchorRelativeScale: scale
                 )
             }
 
@@ -124,9 +124,9 @@ struct ContentView: View {
                             filename: filename,
                             elements: output.elements,
                             is2D: output.is2D,
-                            worldPosition: transform.position,
-                            worldOrientation: transform.orientation,
-                            worldScale: transform.scale
+                            anchorRelativePosition: transform.position,
+                            anchorRelativeOrientation: transform.orientation,
+                            anchorRelativeScale: transform.scale
                         )
                         logger.info("Shared diagram '\(filename)' at device-relative position: \(String(describing: transform.position))")
                     } catch {

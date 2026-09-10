@@ -18,6 +18,7 @@ struct WireFormatTests {
         testEnvelopeKindsAreUniqueAndStable()
         testSharedDiagramPreservesIs2D()
         testSharedDiagramIs2DBackCompatWhenKeyAbsent()
+        testWireKeysAreUnchangedByTheRename()
         testSharedDiagramTransformRoundTrip()
         testScriptOutputMemberwiseInit()
         testScriptOutputDecodesAllFourFormats()
@@ -70,9 +71,9 @@ struct WireFormatTests {
             .sessionOrigin(SessionOriginMessage(anchorID: UUID(), ownerParticipantID: UUID())),
             .diagram(SharedDiagram(filename: "d", elements: [], is2D: true)),
             .transform(UpdateDiagramTransformMessage(filename: "d",
-                                                     worldPosition: SIMD3<Float>(1, 2, 3),
-                                                     worldOrientation: simd_quatf(angle: 0.5, axis: [0, 1, 0]),
-                                                     worldScale: 0.7)),
+                                                     anchorRelativePosition: SIMD3<Float>(1, 2, 3),
+                                                     anchorRelativeOrientation: simd_quatf(angle: 0.5, axis: [0, 1, 0]),
+                                                     anchorRelativeScale: 0.7)),
             .remove(RemoveDiagramMessage(filename: "d")),
             .arCollaboration(Data([1, 2, 3])),
             .elementMoved(ElementPositionMessage(filename: "d", elementId: "e",
@@ -141,17 +142,54 @@ struct WireFormatTests {
         assert(decoded.filename == "legacy")
     }
 
+    /// The properties were renamed `world*` -> `anchorRelative*`, but the JSON keys deliberately
+    /// were not: the iOS companion and any build predating the rename still speak `world*`.
+    /// Pinning the emitted keys means a future edit to `CodingKeys` cannot silently break
+    /// cross-version sessions, which would be invisible until two mismatched devices met.
+    static func testWireKeysAreUnchangedByTheRename() {
+        let diagram = SharedDiagram(filename: "x", elements: [],
+                                    anchorRelativePosition: SIMD3<Float>(1, 2, 3),
+                                    anchorRelativeOrientation: simd_quatf(angle: 0.3, axis: [0, 1, 0]),
+                                    anchorRelativeScale: 0.5)
+        let object = try! JSONSerialization.jsonObject(
+            with: try! JSONEncoder().encode(diagram)) as! [String: Any]
+
+        for key in ["worldPositionX", "worldPositionY", "worldPositionZ",
+                    "worldOrientationX", "worldOrientationY", "worldOrientationZ",
+                    "worldOrientationW", "worldScale"] {
+            assert(object[key] != nil,
+                   "Wire key '\(key)' disappeared — the rename must not change the JSON. Present: "
+                   + "\(object.keys.sorted())")
+        }
+        for key in object.keys {
+            assert(!key.hasPrefix("anchorRelative"),
+                   "Swift property name '\(key)' leaked into the wire format")
+        }
+
+        // Same for the transform message.
+        let update = UpdateDiagramTransformMessage(filename: "x",
+                                                   anchorRelativePosition: SIMD3<Float>(1, 2, 3),
+                                                   anchorRelativeOrientation: nil,
+                                                   anchorRelativeScale: 0.5)
+        let updateObject = try! JSONSerialization.jsonObject(
+            with: try! JSONEncoder().encode(update)) as! [String: Any]
+        for key in ["worldPositionX", "worldScale"] {
+            assert(updateObject[key] != nil,
+                   "UpdateDiagramTransformMessage wire key '\(key)' disappeared")
+        }
+    }
+
     static func testSharedDiagramTransformRoundTrip() {
         let position = SIMD3<Float>(0.25, -1.5, 3.125)
         let orientation = simd_quatf(angle: 0.75, axis: simd_normalize(SIMD3<Float>(0, 1, 0.5)))
         let diagram = SharedDiagram(filename: "x", elements: [], is2D: false,
-                                    worldPosition: position,
-                                    worldOrientation: orientation,
-                                    worldScale: 0.42)
+                                    anchorRelativePosition: position,
+                                    anchorRelativeOrientation: orientation,
+                                    anchorRelativeScale: 0.42)
         let data = try! JSONEncoder().encode(diagram)
         let decoded = try! JSONDecoder().decode(SharedDiagram.self, from: data)
 
-        guard let p = decoded.worldPosition, let o = decoded.worldOrientation, let s = decoded.worldScale else {
+        guard let p = decoded.anchorRelativePosition, let o = decoded.anchorRelativeOrientation, let s = decoded.anchorRelativeScale else {
             fatalError("Transform fields lost across the wire")
         }
         assert(simd_length(p - position) < 1e-5, "position drifted: \(p) vs \(position)")
@@ -163,9 +201,9 @@ struct WireFormatTests {
         // different things to the receiver.
         let bare = try! JSONEncoder().encode(SharedDiagram(filename: "y", elements: []))
         let bareDecoded = try! JSONDecoder().decode(SharedDiagram.self, from: bare)
-        assert(bareDecoded.worldPosition == nil, "Missing position must stay nil")
-        assert(bareDecoded.worldOrientation == nil, "Missing orientation must stay nil")
-        assert(bareDecoded.worldScale == nil, "Missing scale must stay nil")
+        assert(bareDecoded.anchorRelativePosition == nil, "Missing position must stay nil")
+        assert(bareDecoded.anchorRelativeOrientation == nil, "Missing orientation must stay nil")
+        assert(bareDecoded.anchorRelativeScale == nil, "Missing scale must stay nil")
     }
 
     // MARK: - ScriptOutput

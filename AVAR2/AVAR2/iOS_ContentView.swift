@@ -359,11 +359,11 @@ class ARViewModel: NSObject, ObservableObject {
         // Choose mapping based on mode
         if alignmentMode == .sharedSpace {
             // iOS uses anchor-relative positioning (visionOS sends positions already transformed)
-            if let anchorRelativePos = diagram.worldPosition, let sharedAnchor = sharedAnchorTransform {
+            if let anchorRelativePos = diagram.anchorRelativePosition, let sharedAnchor = sharedAnchorTransform {
                 // Position is already relative to host's device frame
                 // Build local transform matrix with anchor-relative position
                 var localMatrix = matrix_identity_float4x4
-                if let anchorRelativeOrient = diagram.worldOrientation {
+                if let anchorRelativeOrient = diagram.anchorRelativeOrientation {
                     localMatrix = simd_matrix4x4(anchorRelativeOrient)
                 }
                 localMatrix.columns.3 = SIMD4<Float>(anchorRelativePos.x, anchorRelativePos.y, anchorRelativePos.z, 1.0)
@@ -375,10 +375,10 @@ class ARViewModel: NSObject, ObservableObject {
                 transform = anchorRotation * localMatrix
                 print("📍 Placing '\(diagram.filename)' using anchor-relative position: \(anchorRelativePos)")
                 print("   Shared anchor rotation applied (translation removed for per-user placement)")
-            } else if let position = diagram.worldPosition {
+            } else if let position = diagram.anchorRelativePosition {
                 // Have position but no anchor - place at absolute position (will be wrong but visible)
                 var matrix = matrix_identity_float4x4
-                if let orientation = diagram.worldOrientation {
+                if let orientation = diagram.anchorRelativeOrientation {
                     matrix = simd_matrix4x4(orientation)
                 }
                 matrix.columns.3 = SIMD4<Float>(position.x, position.y, position.z, 1.0)
@@ -402,9 +402,9 @@ class ARViewModel: NSObject, ObservableObject {
         anchor.name = "shared_diagram_\(diagram.filename)"
 
         // Apply scale to anchor (only once, not in the matrix above)
-        if let worldScale = diagram.worldScale {
-            anchor.scale = SIMD3<Float>(repeating: worldScale)
-            print("📏 Applying scale \(worldScale) to '\(diagram.filename)'")
+        if let anchorRelativeScale = diagram.anchorRelativeScale {
+            anchor.scale = SIMD3<Float>(repeating: anchorRelativeScale)
+            print("📏 Applying scale \(anchorRelativeScale) to '\(diagram.filename)'")
         }
         
         print("📱 Creating AR diagram '\(diagram.filename)' with \(diagram.elements.count) elements")
