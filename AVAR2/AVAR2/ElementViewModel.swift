@@ -20,35 +20,9 @@ import ARKit
 
 // Logger for ViewModel
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "ElementViewModel")
+private let renderSignposter = OSSignposter(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2",
+                                             category: "DiagramRendering")
 private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil
-
-/// Throttler for rate-limiting updates (e.g., collaborative sync)
-final class UpdateThrottler: @unchecked Sendable {
-    private var lastUpdateTime = ContinuousClock.now
-    private let updateInterval: Duration
-    private let lock = NSLock()
-
-    init(intervalMs: Int = Constants.collaborativeSyncIntervalMs) {
-        self.updateInterval = .milliseconds(intervalMs)
-    }
-
-    func shouldUpdate() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        let now = ContinuousClock.now
-        if lastUpdateTime.advanced(by: updateInterval) <= now {
-            lastUpdateTime = now
-            return true
-        }
-        return false
-    }
-
-    func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-        lastUpdateTime = ContinuousClock.now
-    }
-}
 
 @MainActor
 class ElementViewModel: ObservableObject {
@@ -90,21 +64,21 @@ class ElementViewModel: ObservableObject {
     /// This device's resolved transform for the session-origin anchor, mirrored from the
     /// collaboration session so `worldRoot` can be positioned at build time.
     private var sessionOriginTransform: simd_float4x4?
+    private var sessionOriginID: UUID?
+    private var appliedOriginTransform: simd_float4x4?
 
     /// Pushes a pose that must reach peers exactly once and must NOT be throttled.
     ///
-    /// `onTransformChanged` is rate-limited for drag streams, where dropping a frame is harmless
-    /// because another follows immediately. A pose correction after the session origin resolves
-    /// has no follow-up: if the throttle swallows it, peers keep the stale pre-origin coordinates
-    /// indefinitely. Hence a separate channel.
+    /// Final gesture poses and corrections after origin changes must reach peers.
     var onAuthoritativeTransform: ((SIMD3<Float>, simd_quatf, Float) -> Void)?
+    var onSceneReady: ((SIMD3<Float>, simd_quatf, Float) -> Void)?
 
     /// Forces a non-identity `worldRoot` so the reparenting can be validated on a single device.
     /// See `SharedWorldRoot.debugOffsetPose`. Always compiled — see `includesTestAffordances`.
     var debugWorldRootOffsetEnabled = false {
         didSet {
             guard debugWorldRootOffsetEnabled != oldValue else { return }
-            updateWorldRoot(originFromAnchor: sessionOriginTransform)
+            updateWorldRoot(originFromAnchor: sessionOriginTransform, anchorID: sessionOriginID)
         }
     }
 
@@ -165,13 +139,13 @@ class ElementViewModel: ObservableObject {
     ///
     /// - **Locally authored**: the user put this diagram at a physical place, and it must stay
     ///   there. Its parent-relative pose is only a derived value, so we preserve the world pose
-    ///   across the frame change and re-broadcast the recomputed anchor-relative pose to peers.
-    ///
-    /// Without the second branch, local content visibly jumped by the whole anchor transform the
-    /// moment a session origin was established (or slightly, on every ARKit refinement) — the
-    /// diagram would leave the table the user had just placed it on.
-    func updateWorldRoot(originFromAnchor: simd_float4x4?) {
+    ///   when entering or leaving a shared frame and publish its new anchor-relative pose.
+    /// Once a diagram is attached to an anchor, keep that pose as ARKit refines the same anchor.
+    /// This also lets the diagram follow a local ARKit origin change when the user recenters.
+    func updateWorldRoot(originFromAnchor: simd_float4x4?, anchorID: UUID?) {
+        let sameSharedAnchor = anchorID != nil && anchorID == sessionOriginID
         sessionOriginTransform = originFromAnchor
+        sessionOriginID = anchorID
 
         // A real origin always wins; the debug pose only stands in when there is none.
         var originFromAnchor = originFromAnchor
@@ -182,8 +156,11 @@ class ElementViewModel: ObservableObject {
         guard let root = rootEntity,
               let worldRoot = root.parent,
               worldRoot.name == SharedWorldRoot.name else { return }
+        let transformChanged = appliedOriginTransform != originFromAnchor
+        appliedOriginTransform = originFromAnchor
+        guard transformChanged || (anchorID != nil && !sameSharedAnchor) else { return }
 
-        guard !isPeerOriginated else {
+        guard !isPeerOriginated, !sameSharedAnchor else {
             SharedWorldRoot.apply(originFromAnchor: originFromAnchor, to: worldRoot)
             return
         }
@@ -212,8 +189,6 @@ class ElementViewModel: ObservableObject {
     
     /// Called when an individual element has been repositioned in container-local space
     var onElementMoved: ((String, SIMD3<Float>) -> Void)?
-    /// Callback for when diagram transform changes (for syncing)
-    var onTransformChanged: ((SIMD3<Float>, simd_quatf, Float) -> Void)?
     /// Pivot point in world space at zoom start
     private var zoomPivotWorld: SIMD3<Float>?
     /// Pivot point in container-local space (normalized, unscaled) at zoom start
@@ -389,6 +364,8 @@ class ElementViewModel: ObservableObject {
         }
         debugLog("All conditions met - proceeding with scene rebuild")
         rebuildPending = false
+        let interval = renderSignposter.beginInterval("Build diagram")
+        defer { renderSignposter.endInterval("Build diagram", interval) }
 
         if let existing = rootEntity {
             existing.removeFromParent()
@@ -413,6 +390,10 @@ class ElementViewModel: ObservableObject {
             initialAnchorRelativePose: initialPose
         )
 
+        // Install the origin before the builder converts a local spawn point from scene space.
+        let origin = sessionOriginTransform ?? (debugWorldRootOffsetEnabled ? SharedWorldRoot.debugOffsetPose : nil)
+        SharedWorldRoot.apply(originFromAnchor: origin, to: SharedWorldRoot.findOrCreate(in: content))
+        appliedOriginTransform = origin
         let buildResult = sceneBuilder.buildScene(
             in: content,
             normalizationContext: normalizationContext,
@@ -425,16 +406,15 @@ class ElementViewModel: ObservableObject {
         self.zoomHandleEntity = buildResult.zoomHandle
         self.rotationButtonEntity = buildResult.rotationButton
 
-        // Point worldRoot at the session origin before anything reads world coordinates.
-        SharedWorldRoot.apply(originFromAnchor: sessionOriginTransform,
-                              to: SharedWorldRoot.findOrCreate(in: content))
-
         updateBackgroundEntityCollisionShapes(scale: buildResult.container.scale.x)
         createAndPositionElements(container: buildResult.container, normalizationContext: normalizationContext)
-        updateConnections(in: content)
+        updateConnections()
         addOriginMarker()
 
         if initialPose != nil { pendingSharedTransform = nil }
+        if let transform = getSharedTransform() {
+            onSceneReady?(transform.position, transform.orientation, transform.scale)
+        }
         #else
         // No immersive scene on iOS.
         #endif
@@ -555,19 +535,104 @@ class ElementViewModel: ObservableObject {
         return SIMD3<Float>(Float(normX), yPos, Float(normZ))
     }
 
-    /// Draws lines for each edge specified by fromId/toId on edge elements.
-    /// Rebuilds all connection lines under the root container
-    func updateConnections(in content: RealityViewContent) {
+    // Preserve the original renderer for small groups and edges with transparency, waypoints
+    // or arrowheads. Only plain, opaque cylinders of the same color share an instance batch.
+    private static let minimumInstancedEdges = 32
+    private static let edgeCylinder = MeshResource.generateCylinder(height: 1, radius: 1)
+    private static let distantEdgeMesh = MeshResource.generateBox(size: [2, 1, 2])
+
+    private struct StraightEdge {
+        let start: SIMD3<Float>
+        let end: SIMD3<Float>
+        let radius: Float
+
+        var direction: SIMD3<Float> { end - start }
+        var length: Float { simd_length(direction) }
+
+        var transform: Transform {
+            Transform(scale: [radius, length, radius],
+                      rotation: simd_quatf(from: [0, 1, 0], to: direction / length),
+                      translation: (start + end) / 2)
+        }
+    }
+
+    /// Edges are children of the diagram root. Only loading a diagram or moving a node
+    /// changes the endpoints in that coordinate space.
+    func updateConnections() {
         guard let container = rootEntity else { return }
-        // Remove existing lines
+        let interval = renderSignposter.beginInterval("Rebuild diagram edges")
+        defer { renderSignposter.endInterval("Rebuild diagram edges", interval) }
         lineEntities.forEach { $0.removeFromParent() }
         lineEntities.removeAll()
-        // For each element that defines an edge, connect fromId -> toId
-        for edge in self.elements {
-            guard let connection = self.createConnectionEntity(for: edge) else { continue }
-            container.addChild(connection)
-            self.lineEntities.append(connection)
+
+        var batches: [UIColor: [(element: ElementDTO, geometry: StraightEdge)]] = [:]
+        for edge in elements {
+            if appModel?.optimizeDiagramEdges != false, edge.markerEnd == nil, (edge.points?.count ?? 0) < 2,
+               let geometry = straightEdge(for: edge) {
+                let color = straightEdgeColor(for: edge)
+                if color.cgColor.alpha == 1 {
+                    batches[color, default: []].append((edge, geometry))
+                    continue
+                }
+            }
+            if let connection = createConnectionEntity(for: edge) {
+                container.addChild(connection)
+                lineEntities.append(connection)
+            }
         }
+
+        for (color, edges) in batches {
+            if edges.count >= Self.minimumInstancedEdges,
+               let batch = try? makeEdgeBatch(edges.map(\.geometry), color: color) {
+                container.addChild(batch)
+                lineEntities.append(batch)
+            } else {
+                for edge in edges {
+                    if let connection = createConnectionEntity(for: edge.element) {
+                        container.addChild(connection)
+                        lineEntities.append(connection)
+                    }
+                }
+            }
+        }
+    }
+
+    private func makeEdgeBatch(_ edges: [StraightEdge], color: UIColor) throws -> Entity {
+        let instances = try LowLevelInstanceData(instanceCount: edges.count)
+        let padding = SIMD3<Float>(repeating: (edges.map(\.radius).max() ?? 0) * 2)
+        var minimum = SIMD3<Float>(repeating: .infinity)
+        var maximum = SIMD3<Float>(repeating: -.infinity)
+        instances.withMutableTransforms { transforms in
+            for (index, edge) in edges.enumerated() {
+                transforms[index] = edge.transform.matrix
+                minimum = simd_min(minimum, simd_min(edge.start, edge.end))
+                maximum = simd_max(maximum, simd_max(edge.start, edge.end))
+            }
+        }
+        let bounds = BoundingBox(min: minimum - padding, max: maximum + padding)
+        let material = SimpleMaterial(color: color, isMetallic: false)
+        let detailed = try instancedEdges(mesh: Self.edgeCylinder, material: material,
+                                         instances: instances, bounds: bounds)
+
+        if #available(visionOS 27.0, *),
+           let distant = try? instancedEdges(mesh: Self.distantEdgeMesh, material: material,
+                                             instances: instances, bounds: bounds) {
+            let batch = Entity()
+            // Both levels use identical centerlines and radii. Only the cross-section changes.
+            LevelOfDetailComponent.addByCameraDistance(to: batch, levels: [
+                (entities: [detailed], maxDistance: 4),
+                (entities: [distant], maxDistance: .infinity)
+            ])
+            return batch
+        }
+        return detailed
+    }
+
+    private func instancedEdges(mesh: MeshResource, material: SimpleMaterial,
+                                instances: LowLevelInstanceData, bounds: BoundingBox) throws -> ModelEntity {
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        entity.components.set(try MeshInstancesComponent(mesh: mesh, instances: instances, bounds: bounds))
+        return entity
     }
 
     /// Adds XYZ axes and optional grid lines under the root container
@@ -631,9 +696,7 @@ class ElementViewModel: ObservableObject {
             value.entity.position = start + offset
             selectedEntity = value.entity
             // Update connection lines immediately
-            if let content = sceneContent {
-                updateConnections(in: content)
-            }
+            updateConnections()
         }
     }
 
@@ -643,12 +706,10 @@ class ElementViewModel: ObservableObject {
         draggingStartPosition = nil
         selectedEntity = nil
         // Final update of connection lines
-        if let content = sceneContent {
-            updateConnections(in: content)
-        }
+        updateConnections()
         // Notify transform change
         if let transform = getSharedTransform() {
-            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+            onAuthoritativeTransform?(transform.position, transform.orientation, transform.scale)
         }
         // If the gesture ended on an element_*, report its new local position
         if value.entity.name.hasPrefix("element_") {
@@ -702,7 +763,7 @@ class ElementViewModel: ObservableObject {
         zoomPivotLocal = nil
         // Notify transform change
         if let transform = getSharedTransform() {
-            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+            onAuthoritativeTransform?(transform.position, transform.orientation, transform.scale)
         }
     }
 
@@ -769,52 +830,46 @@ class ElementViewModel: ObservableObject {
         let finalPosition = container.position(relativeTo: nil)
         let smoothedPosition = calculateFinalPanPosition(finalPosition)
         
-        animateToFinalPosition(container: container, position: smoothedPosition)
-        handleSurfaceSnappingOnPanEnd(container: container, position: smoothedPosition)
-        resetPanState()
-        updateConnectionsAfterPan()
-        
-        // Notify transform change
-        if let transform = getSharedTransform() {
-            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+        let position: SIMD3<Float>
+        let orientation: simd_quatf
+        let duration: TimeInterval
+        if let surface = findNearestSurfaceForSnapping(diagramPosition: smoothedPosition) {
+            let surfaceType = getSurfaceTypeName(surface)
+            (position, orientation) = calculateSnapPositionAndOrientation(
+                nearestPointOnSurface: findNearestPointOnSurface(diagramPosition: smoothedPosition, surface: surface),
+                surfaceRotation: simd_quatf(surface.originFromAnchorTransform),
+                surfaceType: surfaceType,
+                container: container,
+                isGraph2D: isGraph2D
+            )
+            duration = 0.4
+            finalizeSnap(surface: surface, surfaceType: surfaceType)
+        } else {
+            position = smoothedPosition
+            orientation = container.orientation(relativeTo: nil)
+            duration = 0.3
         }
+
+        let parent = container.parent
+        let sceneTarget = Transform(scale: container.scale, rotation: orientation, translation: position)
+        let target = parent?.convert(transform: sceneTarget, from: nil) ?? sceneTarget
+        container.move(to: target, relativeTo: parent, duration: duration, timingFunction: .easeOut)
+        resetPanState()
+
+        // Share the animation's destination. Sampling the entity here can read its old pose.
+        onAuthoritativeTransform?(target.translation, target.rotation, target.scale.x)
     }
-    
+
     private func calculateFinalPanPosition(_ finalPosition: SIMD3<Float>) -> SIMD3<Float> {
         let comfortPosition = applyComfortZoneSnapping(finalPosition)
         let dampingFactor: Float = 0.85
         return mix(finalPosition, comfortPosition, t: dampingFactor)
     }
     
-    private func animateToFinalPosition(container: Entity, position: SIMD3<Float>) {
-        container.move(
-            to: Transform(
-                scale: container.scale,
-                rotation: container.orientation(relativeTo: nil),
-                translation: position
-            ),
-            relativeTo: nil,
-            duration: 0.3,
-            timingFunction: .easeOut
-        )
-    }
-    
-    private func handleSurfaceSnappingOnPanEnd(container: Entity, position: SIMD3<Float>) {
-        if let snapTarget = findNearestSurfaceForSnapping(diagramPosition: position) {
-            performSnapToSurface(container: container, surface: snapTarget)
-        }
-    }
-    
     private func resetPanState() {
         panStartPosition = nil
         panStartOrientation = nil
         isPanActive = false
-    }
-    
-    private func updateConnectionsAfterPan() {
-        if let content = sceneContent {
-            updateConnections(in: content)
-        }
     }
     
     /// Handle zoom handle drag to scale the diagram
@@ -857,14 +912,9 @@ class ElementViewModel: ObservableObject {
         zoomHandleStartScale = nil
         zoomHandleStartDragPosition = nil
         
-        // Final update of connection lines
-        if let content = sceneContent {
-            updateConnections(in: content)
-        }
-        
         // Notify transform change
         if let transform = getSharedTransform() {
-            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+            onAuthoritativeTransform?(transform.position, transform.orientation, transform.scale)
         }
     }
     
@@ -917,16 +967,11 @@ class ElementViewModel: ObservableObject {
         rotationStartAngle = nil
         rotationStartDragPosition = nil
         
-        // Final update of connection lines
-        if let content = sceneContent {
-            updateConnections(in: content)
-        }
-        
         debugLog("🔄 Rotation gesture ended")
         
         // Notify transform change
         if let transform = getSharedTransform() {
-            onTransformChanged?(transform.position, transform.orientation, transform.scale)
+            onAuthoritativeTransform?(transform.position, transform.orientation, transform.scale)
         }
     }
     
@@ -1210,57 +1255,44 @@ class ElementViewModel: ObservableObject {
             return createPolylineEntity(for: edge, points: points)
         }
 
-        // Standard direct connection between two entities
-        guard let fromId = edge.fromId, let toId = edge.toId else { return nil }
-        self.debugLog("🔍 Looking for entities with keys: '\(fromId)' and '\(toId)'")
-        self.debugLog("🗂️ Available entity keys: \(Array(self.entityMap.keys).sorted())")
-        guard let fromEntity = self.entityMap[fromId], let toEntity = self.entityMap[toId] else {
-            logger.error("❌ Could not find entities for keys '\(fromId)' and/or '\(toId)'")
-            return nil
-        }
-
-        let pos1 = fromEntity.position
-        let pos2 = toEntity.position
-        let lineVector = pos2 - pos1
-        let length = simd_length(lineVector)
-        guard length > 0 else { return nil }
-
-        let radius = max(Float(edge.shape?.radius ?? 0.005), 0.0005)
-        let mesh = MeshResource.generateCylinder(height: length, radius: radius)
-        let materialColor: UIColor = {
-            let rgba = edge.color ?? edge.shape?.color
-            if let components = rgba, components.count >= 3 {
-                return UIColor(
-                    red: CGFloat(components[0]),
-                    green: CGFloat(components[1]),
-                    blue: CGFloat(components[2]),
-                    alpha: components.count > 3 ? CGFloat(components[3]) : 1.0
-                )
-            }
-            return .gray
-        }()
+        guard let geometry = straightEdge(for: edge) else { return nil }
+        let materialColor = straightEdgeColor(for: edge)
         let material = SimpleMaterial(color: materialColor, isMetallic: false)
-
+        let mesh = MeshResource.generateCylinder(height: geometry.length, radius: geometry.radius)
         let connectionEntity = ModelEntity(mesh: mesh, materials: [material])
-        connectionEntity.position = pos1 + (lineVector / 2)
-        if length > 0 {
-            let direction = lineVector / length
-            let quat = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: direction)
-            connectionEntity.orientation = quat
-        }
+        connectionEntity.position = geometry.transform.translation
+        connectionEntity.orientation = geometry.transform.rotation
 
         // Add arrow marker if markerEnd is present
         if let markerEnd = edge.markerEnd, let markerShape = markerEnd.shape {
             let arrowEntity = createArrowMarkerEntity(
                 markerShape: markerShape,
-                at: pos2,
-                direction: lineVector,
+                at: geometry.end,
+                direction: geometry.direction,
                 color: materialColor
             )
             connectionEntity.addChild(arrowEntity)
         }
 
         return connectionEntity
+    }
+
+    private func straightEdge(for edge: ElementDTO) -> StraightEdge? {
+        guard let fromID = edge.fromId, let toID = edge.toId,
+              let start = entityMap[fromID]?.position, let end = entityMap[toID]?.position else {
+            return nil
+        }
+        let radius = max(Float(edge.shape?.radius ?? 0.005), 0.0005)
+        let geometry = StraightEdge(start: start, end: end, radius: radius)
+        let length = geometry.length
+        guard length.isFinite, length > 0, radius.isFinite else { return nil }
+        return geometry
+    }
+
+    private func straightEdgeColor(for edge: ElementDTO) -> UIColor {
+        guard let rgba = edge.color ?? edge.shape?.color, rgba.count >= 3 else { return .gray }
+        return UIColor(red: CGFloat(rgba[0]), green: CGFloat(rgba[1]), blue: CGFloat(rgba[2]),
+                       alpha: rgba.count > 3 ? CGFloat(rgba[3]) : 1)
     }
 
     /// Creates a polyline entity from multiple waypoints (for RSPolyline)
@@ -1915,25 +1947,6 @@ class ElementViewModel: ObservableObject {
     }
     
     /// Perform smooth snap animation to any surface type
-    private func performSnapToSurface(container: Entity, surface: PlaneAnchor) {
-        let diagramPosition = container.position(relativeTo: nil)
-        let nearestPointOnSurface = self.findNearestPointOnSurface(diagramPosition: diagramPosition, surface: surface)
-        let surfaceWorldTransform = surface.originFromAnchorTransform
-        let surfaceRotation = simd_quatf(surfaceWorldTransform)
-        let surfaceType = self.getSurfaceTypeName(surface)
-        
-        let (snapPosition, diagramOrientation) = self.calculateSnapPositionAndOrientation(
-            nearestPointOnSurface: nearestPointOnSurface,
-            surfaceRotation: surfaceRotation,
-            surfaceType: surfaceType,
-            container: container,
-            isGraph2D: isGraph2D
-        )
-        
-        self.animateToSnapPosition(container: container, position: snapPosition, orientation: diagramOrientation)
-        self.finalizeSnap(surface: surface, surfaceType: surfaceType)
-    }
-    
     private func calculateSnapPositionAndOrientation(
         nearestPointOnSurface: SIMD3<Float>,
         surfaceRotation: simd_quatf,
@@ -2042,19 +2055,6 @@ class ElementViewModel: ObservableObject {
         } else {
             return offsetDistance
         }
-    }
-    
-    private func animateToSnapPosition(container: Entity, position: SIMD3<Float>, orientation: simd_quatf) {
-        container.move(
-            to: Transform(
-                scale: container.scale,
-                rotation: orientation,
-                translation: position
-            ),
-            relativeTo: nil,
-            duration: 0.4,
-            timingFunction: .easeOut
-        )
     }
     
     private func finalizeSnap(surface: PlaneAnchor, surfaceType: String) {

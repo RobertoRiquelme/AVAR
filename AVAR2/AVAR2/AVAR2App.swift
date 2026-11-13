@@ -186,7 +186,7 @@ private extension ServerLogsView {
 /// in the immersive space, so the marker needs no per-diagram plumbing.
 struct StaticSurfaceView: View {
     @Environment(AppModel.self) private var appModel
-    var collaborativeSession: CollaborativeSessionManager? = nil
+    @ObservedObject var collaborativeSession: CollaborativeSessionManager
 
     var body: some View {
         RealityView { content in
@@ -201,7 +201,7 @@ struct StaticSurfaceView: View {
             // if the triads coincide, alignment works — and that verdict is completely
             // independent of whether diagram rendering works.
             guard let root = content.entities.first(where: { $0.name == SessionOriginMarker.rootName }) else { return }
-            let transform = collaborativeSession?.sessionOriginTransform
+            let transform = collaborativeSession.sessionOriginTransform
             root.isEnabled = appModel.showSessionOriginMarker && transform != nil
             if let transform { root.transform = Transform(matrix: transform) }
         }
@@ -254,7 +254,7 @@ struct ImmersiveSpaceWrapper: View {
     @Binding var activeFiles: [String]
     let onClose: (String) -> Void
     @Environment(AppModel.self) private var appModel
-    var collaborativeSession: CollaborativeSessionManager? = nil
+    @ObservedObject var collaborativeSession: CollaborativeSessionManager
     @State private var immersionLevel: Double = 0.25
     @State private var showDebugInfo: Bool = false
     @State private var lastUpdateLevel: Double = -1.0 // Track last updated level
@@ -359,7 +359,7 @@ struct ImmersiveContentView: View {
     @Binding var immersionLevel: Double
     @Binding var showDebugInfo: Bool
     @Environment(AppModel.self) private var appModel
-    var collaborativeSession: CollaborativeSessionManager? = nil
+    @ObservedObject var collaborativeSession: CollaborativeSessionManager
 
     var body: some View {
         ZStack {
@@ -372,9 +372,9 @@ struct ImmersiveContentView: View {
             // Dynamic diagrams layer - updates when activeFiles changes
             Group {
                 ForEach(activeFiles, id: \.self) { file in
-                    ContentView(filename: file, onClose: {
+                    AlignedDiagramView(filename: file, session: collaborativeSession) {
                         onClose(file)
-                    }, collaborativeSession: collaborativeSession)
+                    }
                 }
             }
             .environment(appModel)
@@ -395,6 +395,32 @@ struct ImmersiveContentView: View {
                     }
                 }
         )
+    }
+
+}
+
+private struct AlignedDiagramView: View {
+    let filename: String
+    @ObservedObject var session: CollaborativeSessionManager
+    let onClose: () -> Void
+    @State private var hasDisplayed = false
+
+    private var canDisplay: Bool {
+        guard let diagram = session.sharedDiagrams.first(where: { $0.filename == filename }),
+              session.requiresSharedOrigin(for: diagram) else { return true }
+        return diagram.hasPose(relativeTo: session.currentPoseAnchorID)
+    }
+
+    var body: some View {
+        Group {
+            if hasDisplayed || canDisplay {
+                ContentView(filename: filename, onClose: onClose, collaborativeSession: session)
+                    .allowsHitTesting(canDisplay)
+            }
+        }
+        .onChange(of: canDisplay, initial: true) { _, ready in
+            if ready { hasDisplayed = true }
+        }
     }
 }
 

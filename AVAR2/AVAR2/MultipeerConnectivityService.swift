@@ -21,7 +21,6 @@ class MultipeerConnectivityService: NSObject, ObservableObject {
     @Published var isHosting = false
     @Published var isBrowsing = false
     @Published var availablePeers: [MCPeerID] = []
-    @Published var autoConnect = true // Automatically connect to first found host
     
     override init() {
         let deviceName = ProcessInfo.processInfo.hostName
@@ -138,12 +137,14 @@ extension MultipeerConnectivityService: MCSessionDelegate {
         print("📡 \(peerID.displayName): \(stateStr)")
 
         DispatchQueue.main.async {
+            guard self.session === session else { return }
             self.delegate?.multipeerService(self, peer: peerID, didChangeState: state)
         }
     }
 
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         DispatchQueue.main.async {
+            guard self.session === session else { return }
             self.delegate?.multipeerService(self, didReceiveData: data, from: peerID)
         }
     }
@@ -171,6 +172,7 @@ extension MultipeerConnectivityService: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
         print("❌ Advertising failed: \(error.localizedDescription)")
         DispatchQueue.main.async {
+            guard self.advertiser === advertiser else { return }
             self.isHosting = false
             self.delegate?.multipeerService(self, didEncounterError: error, context: "advertising")
         }
@@ -180,23 +182,20 @@ extension MultipeerConnectivityService: MCNearbyServiceAdvertiserDelegate {
 // MARK: - MCNearbyServiceBrowserDelegate
 extension MultipeerConnectivityService: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
-        print("🔍 Found: \(peerID.displayName)")
-
+        guard info?["platform"] == "visionOS" else { return }
         DispatchQueue.main.async {
+            guard self.browser === browser else { return }
             if !self.availablePeers.contains(peerID) {
                 self.availablePeers.append(peerID)
             }
             self.delegate?.multipeerService(self, didUpdateAvailablePeers: self.availablePeers)
 
-            if self.isBrowsing && self.autoConnect && !self.session.connectedPeers.contains(peerID) {
-                print("🤝 Auto-connecting to \(peerID.displayName)")
-                self.connectToPeer(peerID)
-            }
         }
     }
 
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         DispatchQueue.main.async {
+            guard self.browser === browser else { return }
             self.availablePeers.removeAll { $0 == peerID }
             self.delegate?.multipeerService(self, didUpdateAvailablePeers: self.availablePeers)
         }
@@ -205,6 +204,7 @@ extension MultipeerConnectivityService: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
         print("❌ Browsing failed: \(error.localizedDescription)")
         DispatchQueue.main.async {
+            guard self.browser === browser else { return }
             self.isBrowsing = false
             self.delegate?.multipeerService(self, didEncounterError: error, context: "browsing")
         }

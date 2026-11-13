@@ -35,7 +35,7 @@ struct iOS_ContentView: View {
             Menu {
                 Button {
                     showingCollaborativeSession = true
-                } label: { Label("Session", systemImage: "person.2.wave.2") }
+                } label: { Label("Connect to Vision Pro", systemImage: "person.2.wave.2") }
 
                 Section(header: Text("Alignment")) {
                     Button {
@@ -118,8 +118,8 @@ struct iOS_ContentView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("iOS Overlay Guide").font(.headline)
                     Group {
-                        Label("Session", systemImage: "person.2.wave.2").font(.subheadline)
-                        Text("Start/join a multi‑device session.").font(.caption).foregroundColor(.secondary)
+                        Label("Connect to Vision Pro", systemImage: "person.2.wave.2").font(.subheadline)
+                        Text("Connect to a Vision Pro on the local network to receive diagrams.").font(.caption).foregroundColor(.secondary)
                     }
                     Group {
                         Label("Alignment", systemImage: "person.3.sequence").font(.subheadline)

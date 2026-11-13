@@ -93,10 +93,6 @@ enum Constants {
         static let margin: Float = 0.02
     }
 
-    // MARK: - Throttling
-    /// Update interval for collaborative sync (milliseconds)
-    static let collaborativeSyncIntervalMs: Int = 16  // ~60 updates/sec
-
     // MARK: - HTTP Server
     /// Default HTTP server port
     static let httpServerPort: UInt16 = 8081

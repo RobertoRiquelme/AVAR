@@ -2,6 +2,7 @@
 import ARKit
 import Foundation
 import simd
+import Spatial
 import RealityKit
 import QuartzCore
 
@@ -60,7 +61,7 @@ final class SharedWorldAnchorManager: ObservableObject {
 
     /// Start the ARKit session with world tracking for shared anchors
     func start() async {
-        guard !isRunning else {
+        guard session == nil else {
             print("⚠️ SharedWorldAnchorManager already running")
             return
         }
@@ -82,6 +83,8 @@ final class SharedWorldAnchorManager: ObservableObject {
 
         do {
             try await session.run([provider])
+            guard self.session === session else { return }
+            lastError = nil
             isRunning = true
             print("✅ SharedWorldAnchorManager started")
 
@@ -98,6 +101,9 @@ final class SharedWorldAnchorManager: ObservableObject {
             }
 
         } catch {
+            guard self.session === session else { return }
+            self.session = nil
+            worldTrackingProvider = nil
             lastError = "Failed to start ARKit session: \(error.localizedDescription)"
             print("❌ \(lastError!)")
         }
@@ -118,6 +124,7 @@ final class SharedWorldAnchorManager: ObservableObject {
         sharedAnchors.removeAll()
         isRunning = false
         sharingAvailable = false
+        lastError = nil
 
         print("🛑 SharedWorldAnchorManager stopped")
     }
@@ -156,7 +163,8 @@ final class SharedWorldAnchorManager: ObservableObject {
             throw SharedAnchorError.notRunning
         }
 
-        guard let deviceAnchor = provider.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) else {
+        guard let deviceAnchor = provider.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()),
+              deviceAnchor.isTracked else {
             throw SharedAnchorError.deviceAnchorUnavailable
         }
 
@@ -173,11 +181,7 @@ final class SharedWorldAnchorManager: ObservableObject {
             throw SharedAnchorError.notRunning
         }
 
-        guard let anchor = sharedAnchors[anchorID] else {
-            throw SharedAnchorError.anchorNotFound
-        }
-
-        try await provider.removeAnchor(anchor)
+        try await provider.removeAnchor(forID: anchorID)
         print("🗑️ Removed shared anchor: \(anchorID)")
     }
 
@@ -187,12 +191,29 @@ final class SharedWorldAnchorManager: ObservableObject {
         return provider.queryDeviceAnchor(atTimestamp: CACurrentMediaTime())?.originFromAnchorTransform
     }
 
+    /// Local diagnostic only. A display correction can differ per viewer and is not a
+    /// measurement of the distance between two headsets' rendered anchors.
+    @available(visionOS 27.0, *)
+    func renderCorrectionSummary(for anchorID: UUID) -> String? {
+        guard let anchor = sharedAnchors[anchorID], anchor.isTracked else { return nil }
+        let metric = anchor.coordinateSpace(correction: .none)
+        let rendered = anchor.coordinateSpace(correction: .rendered)
+        let world = WorldReferenceCoordinateSpace.worldReference
+        guard let metricPose = try? world.transform(from: metric).matrix,
+              let renderedPose = try? world.transform(from: rendered).matrix else { return nil }
+        let delta = renderedPose.columns.3 - metricPose.columns.3
+        let centimeters = simd_length(SIMD3(delta.x, delta.y, delta.z)) * 100
+        guard centimeters.isFinite else { return nil }
+        return String(format: "%.2f cm", centimeters)
+    }
+
     // MARK: - Private Methods
 
     private func observeAnchorUpdates() async {
         guard let provider = worldTrackingProvider else { return }
 
         for await update in provider.anchorUpdates {
+            guard !Task.isCancelled else { return }
             let anchor = update.anchor
 
             // Only track anchors that are shared with nearby participants
@@ -221,6 +242,7 @@ final class SharedWorldAnchorManager: ObservableObject {
         guard let provider = worldTrackingProvider else { return }
 
         for await availability in provider.worldAnchorSharingAvailability {
+            guard !Task.isCancelled else { return }
             let wasAvailable = sharingAvailable
             sharingAvailable = (availability == .available)
 
@@ -238,7 +260,6 @@ enum SharedAnchorError: LocalizedError {
     case notRunning
     case sharingNotAvailable
     case deviceAnchorUnavailable
-    case anchorNotFound
 
     var errorDescription: String? {
         switch self {
@@ -248,8 +269,6 @@ enum SharedAnchorError: LocalizedError {
             return "World anchor sharing is not available. Ensure SharePlay is active with nearby participants."
         case .deviceAnchorUnavailable:
             return "Could not get device position"
-        case .anchorNotFound:
-            return "Anchor not found"
         }
     }
 }

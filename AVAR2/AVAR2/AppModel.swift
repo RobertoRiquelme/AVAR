@@ -33,6 +33,8 @@ class AppModel {
     /// validated with one headset. See `SharedWorldRoot.debugOffsetPose`.
     /// Always compiled — see `includesTestAffordances`.
     var debugWorldRootOffset = false
+    /// Lets device testing compare the same loaded diagram with and without edge instancing.
+    var optimizeDiagramEdges = true
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AVAR2", category: "AppModel")
     private let isVerboseLoggingEnabled = ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil

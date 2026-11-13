@@ -101,6 +101,73 @@ fails the tests rather than only misbehaving on hardware.
 - A local named `world*` in `ElementViewModel`/`WorldRootTests` genuinely *is* world space (see
   `preservedWorldPosition` in `updateWorldRoot`) — do not blanket-rename those.
 
+### Realignment
+When the two headsets end up on anchors that do not agree, **Realign Space** (launcher window →
+Collaboration) renegotiates the shared origin. The decision rules live in
+`AVAR2/RealignmentProtocol.swift` as a pure function; `CollaborativeSessionManager` performs the
+effects (minting anchors, adoption, pose resend, timeouts, status text).
+
+- One participant is the **coordinator**: `SessionOriginElection.owner` over the nearby
+  participants plus this device (`realignmentCoordinatorID`), so both devices compute the same
+  answer even when they disagree about the current anchor. Either side may *request* it; only the
+  coordinator services the request. Both entry points — the local button and an inbound
+  `request` — take the probe's anchor from `RealignmentProtocol.probeAnchor`.
+- The handshake is `request → probe → report → (commit | prepare → ready → commit) → applied`, with
+  `failed` available from the coordinator at any point. If both headsets already hold the same
+  tracked anchor, the `report` short-circuits straight to `commit` and **no new anchor is
+  created**. *Replace Shared Anchor* sets `replaceAnchor`, which forces a new one regardless.
+- Both sides can be waiting on ARKit: a peer that cannot yet see the replacement parks the message
+  and answers `ready` from `confirmRealignmentAnchor` once the anchor resolves, and the coordinator
+  does the same before `commit`. Adoption **fails closed** — a device that cannot track the anchor
+  keeps its previous origin rather than adopting one it cannot resolve.
+- Retired anchors go into `retiredOriginIDs`; a `sessionOrigin` announcement or a pose update
+  that names one is dropped.
+- **Commit is not atomic.** The coordinator adopts the anchor *before* it sends `commit`, and
+  `finishRealignment` does not restore the previous `sessionOriginID`. A peer that refuses the
+  commit (it lost tracking of the anchor after answering `ready`) sends no `applied`, so the
+  coordinator times out after 20 s and reports failure while staying on the new anchor — the two
+  headsets are on different origins for at least that long. `testCommitIsNotAtomic` pins this as
+  *current* behaviour, not as correct behaviour. By reading, it should then heal without user
+  action: the replacement is the coordinator's `ownedAnchorID`, the origin loop re-announces it
+  every second once `isRealigning` clears, and the peer's `handleSessionOriginAnnouncement`
+  yields to the coordinator (lowest UUID) and adopts it when it can track it. That recovery is
+  **untested and unverified on hardware**; if the status says realignment failed, compare the
+  origin markers before assuming either outcome.
+- Several guards are asymmetric (a phase the coordinator must act on is one the peer must refuse,
+  and vice versa). `Tests/RealignmentTests.swift` covers the table, and was checked by deleting or
+  loosening each condition in `RealignmentProtocol.swift` in turn and confirming a test fails.
+  Keep that property: when adding a guard, delete it again and make sure the suite goes red.
+- The tests cover the *decisions*. The manager's `perform(_:message:sender:)`, which turns a
+  decision into anchor adoption, sends and timeouts, has no automated coverage.
+- None of this has run on two headsets. The tests prove the decision table, not that ARKit
+  delivers a shared anchor to both devices.
+- It assumes **exactly two participants** (`canRealign` requires a single nearby participant). A
+  third headset needs more than loosening that guard.
+
+### Pairing and companion roles
+The iPhone companion no longer auto-connects to the first host it finds (`autoConnect` was
+removed from `MultipeerConnectivityService`), so the steps are explicit on both devices:
+- **visionOS ↔ visionOS**: Collaboration → *Invite Nearby Vision Pro* starts SharePlay.
+- **visionOS ↔ iPhone**: on Vision Pro, Collaboration → iPhone Companion → *Allow iPhone to
+  Connect*; then on iPhone, Controls → Connect to Vision Pro → *Find Vision Pro* and pick the
+  headset. The strings live in `CollaborativeSessionView.swift` and are the user-facing contract —
+  keep them in step with any change to the flow.
+
+### Diagram gating on the session origin
+`AlignedDiagramView` (in `AVAR2App.swift`) withholds a received diagram until its pose and this
+device's origin name the same anchor (`SharedDiagram.hasPose(relativeTo:)` vs
+`currentPoseAnchorID`), so it is not drawn at coordinates from a frame this device has not
+resolved. `hasDisplayed` latches: once shown, a diagram stays mounted when the anchors stop
+matching (during a realignment, say), but `.allowsHitTesting(canDisplay)` makes it
+non-interactive until they match again. `requiresSharedOrigin` restricts the gate to diagrams
+received over SharePlay while co-located; local and iOS-lane content is never withheld.
+
+`UpdateDiagramTransformMessage` and `RemoveDiagramMessage` carry an optional `diagramID` (the
+`SharedDiagram.id` of the instance they refer to) alongside the filename. Receivers match on
+filename **and** id when the id is present, and on filename alone when it is absent, so older
+senders still work. A remove also records the id in `closedDiagramIDs`, which stops a diagram
+snapshot that was already in flight from reopening what the sender just closed.
+
 ### Diagnostics
 `AVAR2/CollabDiagnosticsView.swift` is the panel to use when debugging a two-device session
 (launcher window → Collaboration → Diagnostics). It shows SharePlay state, elected owner vs local
@@ -109,8 +176,9 @@ per-envelope traffic counters with the last send error. Note the displayed
 `originFromAnchor` translation **must differ** between the two devices — identical values mean a
 transform leaked onto the wire. `showSessionOriginMarker` draws an axis triad at the origin on
 each device; if the two triads occupy the same physical point, alignment works, independently of
-whether diagram rendering works. In DEBUG there are loopback buttons that inject a local example
-through the real receive path, so "does a remote diagram render?" is answerable on one device.
+whether diagram rendering works. Loopback buttons inject a local example through the real receive
+path, so "does a remote diagram render?" is answerable on one device — they are gated on
+`includesTestAffordances`, **not** `#if DEBUG`, so they survive into the TestFlight build.
 
 ## Surface detection and snapping
 - `AVAR2/ARKitSurfaceDetector.swift` uses `PlaneDetectionProvider` on visionOS.
@@ -145,6 +213,7 @@ through the real receive path, so "does a remote diagram render?" is answerable 
 - `AVAR2/DiagramStorage.swift`: caches directory for HTTP-uploaded diagrams
 - `AVAR2/Constants.swift`: placement and interaction constants
 - `AVAR2/SessionOriginLogic.swift`: pure election + anchor-pose logic (tested)
+- `AVAR2/RealignmentProtocol.swift`: pure realignment decision logic (tested)
 - `AVAR2/SharedWorldRoot.swift`: shared session-origin frame for the scene graph
 - `AVAR2/CollabDiagnosticsView.swift`: two-device diagnostics panel
 - `Packages/RealityKitContent/`: RealityKit assets and materials
@@ -163,8 +232,18 @@ xcodebuild -project AVAR2.xcodeproj -scheme AVAR2 \
   -destination 'platform=visionOS Simulator,name=Apple Vision Pro' -configuration Debug build
 ```
 
-Also build `-destination 'generic/platform=iOS'` after touching shared collaboration code — that
-is what proves the iOS companion still compiles.
+Also build for iOS after touching shared collaboration code — that is what proves the iOS
+companion still compiles. `generic/platform=iOS` needs a provisioning profile, so an iOS Simulator
+destination is the one that works unattended:
+
+```
+xcodebuild -project AVAR2.xcodeproj -scheme AVAR2 \
+  -destination 'platform=iOS Simulator,id=<UDID>' -configuration Debug build
+```
+
+Take the UDID from `xcrun simctl list devices available | grep iPhone` — simulator names change
+with every Xcode release, so a hard-coded name goes stale. Confirm the log mentions
+`Debug-iphonesimulator`.
 
 **Hardware testing happens through TestFlight, which ships RELEASE builds.** Two consequences:
 - Do not put on-device test affordances behind `#if DEBUG` — that removes them from exactly the
@@ -187,6 +266,13 @@ against the app sources:
 - `Tests/WorldRootTests.swift` — the RealityKit `relativeTo:` semantics that keeping locally
   authored content stationary depends on, plus cross-device convergence. Single file, so it needs
   `-parse-as-library` (swiftc otherwise treats one file as script mode, conflicting with `@main`).
+- `Tests/RealignmentTests.swift` — the realignment handshake: both happy paths (same-anchor
+  confirm, replacement), the deferred transitions on each side, and the rejection table. Drives the
+  reducer from `RealignmentProtocol.swift` across two simulated devices, applying the state
+  changes each decision hands back (anchor adoption is the one piece modelled by hand). Built for
+  xrsimulator (it links `CollaborativeSessionManager.swift` for the message types).
+  **Any suite that compiles `CollaborativeSessionManager.swift` must now also be given
+  `AVAR2/RealignmentProtocol.swift`** — that includes `WireFormatTests` and `DataLoaderTests`.
 - `Tests/SurfaceClassificationTests.swift` — the snap-critical classification mapping.
 - `Tests/ResourceIntegrityTests.swift` — decodes all 37 bundled diagrams and builds a real mesh
   and material for **every** element (~8000), asserting finite geometry. Also reports the slowest
@@ -248,8 +334,9 @@ Asserts are the mechanism, so build with `-Onone` (release strips them).
   rather than a bare `.position =`, which would be interpreted in `worldRoot`'s frame.
 - `worldRoot` must stay rigid with unit scale; a few call sites pass parent-relative scale into
   `relativeTo: nil` transforms. `SharedWorldRoot.apply` asserts this in DEBUG.
-- **Pose ownership decides what happens when the session origin appears or is refined**, and the
-  two cases are opposites (`ElementViewModel.updateWorldRoot`):
+- **Pose ownership decides what happens when `worldRoot` moves** — the origin first appearing,
+  being replaced by a different anchor, or being lost — and the two cases are opposites
+  (`ElementViewModel.updateWorldRoot`):
   - *Peer-originated* (`DiagramDataLoader.isReceived(filename)`): the wire pose is authoritative,
     so the container keeps its parent-relative pose and moves with `worldRoot`. That movement is
     what lands it on the same physical spot as the owner's copy.
@@ -258,9 +345,18 @@ Asserts are the mechanism, so build with `-Onone` (release strips them).
     content jumped by the whole anchor transform the moment an origin was established.
   Ownership cannot be inferred from "did we receive a transform for it" — `shareDiagram` appends
   our own diagrams to `sharedDiagrams`, so the update handler fires for local ones too.
-- One-shot pose corrections go through `onAuthoritativeTransform`, **not** `onTransformChanged`.
-  The latter is throttled for drag streams, where a dropped frame is harmless; a correction with
-  no follow-up would be swallowed and peers would keep stale coordinates indefinitely.
+
+  The exception is `sameSharedAnchor`: when the update carries the *same* anchor UUID as before
+  and only its transform differs, locally authored content takes the peer branch too — it moves
+  with the frame and nothing is re-broadcast. Before this, every transform update re-pinned local
+  content in world space and sent a correction. That is the behaviour as traced in the code; the
+  apparent intent (content should follow an anchor ARKit has re-estimated) has **not** been
+  verified on two headsets.
+- Pose corrections go through `onAuthoritativeTransform`. The throttled `onTransformChanged`
+  drag-stream channel is **gone**: peers now learn a new pose only when a gesture ends or a
+  correction fires, so every remaining send must actually arrive. Do not reintroduce throttling on
+  this callback — the origin-resolved correction is one-shot and has no follow-up to cover for a
+  dropped frame.
 - Decoder logging in `ElementDTO.swift` is gated behind `AVAR_VERBOSE_LOGS` because it runs once
   per element (a 1000-node diagram otherwise emits ~5000 synchronous stdout writes per load).
   Keep new per-element logging behind that flag.

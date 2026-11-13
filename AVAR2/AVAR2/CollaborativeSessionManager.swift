@@ -2,6 +2,7 @@ import Foundation
 import RealityKit
 import MultipeerConnectivity
 import Combine
+import CoreTransferable
 import simd
 import OSLog
 #if canImport(GroupActivities)
@@ -53,6 +54,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         let position: SIMD3<Float>
         let orientation: simd_quatf
         let scale: Float
+        let anchorID: UUID?
     }
     // MARK: - Published State
     @Published var isSessionActive = false
@@ -74,12 +76,15 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published private(set) var anchorCreationFailure: String?
 
     private var multipeerSession: MultipeerConnectivityService?
-    #if os(iOS)
-    private var arSession: ARSession?
-    #endif
-
     // Current active diagrams that should be shared
     @Published var sharedDiagrams: [SharedDiagram] = []
+    let receivedDiagramRemoval = PassthroughSubject<String, Never>()
+    let receivedDiagramTransform = PassthroughSubject<SharedDiagram, Never>()
+    private var closedDiagramIDs: Set<UUID> = []
+    private var locallySharedDiagramIDs: Set<UUID> = []
+    #if os(visionOS)
+    private var sharePlayReceivedDiagramIDs: Set<UUID> = []
+    #endif
     /// The active anchor, in the legacy `SharedWorldAnchor` shape.
     ///
     /// Two different roles depending on platform, deliberately:
@@ -117,9 +122,12 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
     func noteEnvelopeSent(_ kind: String, bytes: Int, error: String? = nil) {
         var stat = envelopeStats[kind] ?? EnvelopeStat()
-        stat.sent += 1
-        stat.bytesSent += bytes
-        if let error { stat.lastError = error }
+        if let error {
+            stat.lastError = error
+        } else {
+            stat.sent += 1
+            stat.bytesSent += bytes
+        }
         envelopeStats[kind] = stat
     }
 
@@ -152,19 +160,33 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     /// transform rather than moving content.
     @Published private(set) var sessionOriginIsTracked = false
 
-    /// An origin UUID learned from a peer that our own ARKit has not resolved yet.
-    private var pendingSessionOriginID: UUID?
+    /// The participant responsible for the current session origin.
+    private var sessionOriginOwnerID: UUID?
+    private var isCreatingSessionOrigin = false
+    private var originGeneration = UUID()
     /// The anchor this device created, if it won the election. Used to drop ours on tie-break.
     private var ownedAnchorID: UUID?
     private var sessionOriginTask: Task<Void, Never>?
+    @Published private(set) var isRealigning = false
+    @Published private(set) var realignmentStatus: String?
+    private var realignment: SpaceRealignment?
+    private var realignmentTask: Task<Void, Never>?
+    private var realignmentTimeout: Task<Void, Never>?
+    private var replacementAnchorID: UUID?
+    private var supersededAnchorID: UUID?
+    private var retiredOriginIDs: Set<UUID> = []
+
+    var canRealign: Bool {
+        isSharePlayActive && sharePlayCoordinator?.nearbyParticipantIDs.count == 1
+    }
 
     /// True when this device should create the session-origin anchor.
     /// Election logic lives in `SessionOriginElection` so it can be tested exhaustively.
     var isSessionOriginOwner: Bool {
         #if canImport(GroupActivities)
         guard let coordinator = sharePlayCoordinator else { return false }
-        return SessionOriginElection.isOwner(localID: coordinator.localParticipantID,
-                                             participantIDs: coordinator.participantIDs)
+        guard let localID = coordinator.localParticipantID else { return false }
+        return localID == electedOriginOwnerID
         #else
         return false
         #endif
@@ -173,7 +195,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     /// The elected owner, for diagnostics. Both devices must display the same value.
     var electedOriginOwnerID: UUID? {
         #if canImport(GroupActivities)
-        return SessionOriginElection.owner(participantIDs: sharePlayCoordinator?.participantIDs ?? [])
+        guard let coordinator = sharePlayCoordinator, let local = coordinator.localParticipantID,
+              !coordinator.nearbyParticipantIDs.isEmpty else { return nil }
+        return sessionOriginOwnerID ?? SessionOriginElection.owner(
+            participantIDs: Array(coordinator.nearbyParticipantIDs.union([local]))
+        )
         #else
         return nil
         #endif
@@ -199,20 +225,22 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
         #if canImport(GroupActivities)
         let coordinator = SharePlayCoordinator()
-        coordinator.onDataReceived = { [weak self] data in
-            self?.handleIncomingPayload(data, source: "SharePlay")
+        coordinator.onDataReceived = { [weak self] data, senderID in
+            self?.handleIncomingPayload(data, source: "SharePlay", senderID: senderID)
         }
         coordinator.onSessionJoined = { [weak self] in
             guard let self else { return }
+            let sessionID = coordinator.sessionID
             Task { @MainActor in
+                guard coordinator.sessionID == sessionID, coordinator.isActive else { return }
                 print("✅ SharePlay session joined, isHost=\(coordinator.isHost)")
+                self.sharePlayStartError = nil
                 self.isSharePlayActive = true
                 self.isSessionActive = true
                 self.sessionState = "SharePlay active"
                 self.isHost = coordinator.isHost
 
                 #if os(visionOS)
-                await self.startSharedWorldAnchorManager()
                 self.startSessionOriginLoop()
                 #endif
 
@@ -220,27 +248,29 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             }
         }
         coordinator.onSessionEnded = { [weak self] in
-            Task { @MainActor in
-                guard let self else { return }
-                print("🛑 SharePlay session ended")
-                self.isSharePlayActive = false
-                self.sharePlayParticipantCount = 0
-                self.nearbyParticipantCount = 0
-                self.hasNearbyParticipants = false
+            guard let self else { return }
+            print("🛑 SharePlay session ended")
+            self.isSharePlayActive = false
+            self.sharePlaySendTask?.cancel()
+            self.sharePlaySendTask = nil
+            self.sharePlayParticipantCount = 0
+            self.nearbyParticipantCount = 0
+            self.hasNearbyParticipants = false
 
-                #if os(visionOS)
-                self.stopSessionOriginLoop()
-                self.sharedWorldAnchorManager.stop()
-                // Shared anchors die with the SharePlay session by design (ARKit: lifetime is
-                // the session), so clearing here is the normal path, not an error path.
-                self.clearSessionOrigin()
-                #endif
+            #if os(visionOS)
+            self.finishRealignment(nil)
+            self.retiredOriginIDs.removeAll()
+            self.stopSessionOriginLoop()
+            self.sharedWorldAnchorManager.stop()
+            self.worldAnchorSharingAvailable = false
+            self.discardSharePlayDiagrams()
+            // Shared anchors die with the SharePlay session by design (ARKit: lifetime is
+            // the session), so clearing here is the normal path, not an error path.
+            self.clearSessionOrigin()
+            #endif
 
-                if self.connectedPeers.isEmpty {
-                    self.isSessionActive = false
-                    self.sessionState = self.isHost ? "Hosting - Waiting for peers" : "Not Connected"
-                }
-            }
+            self.isSessionActive = self.companionMode != .idle
+            self.sessionState = self.isSessionActive ? "iPhone companion active" : "Not Connected"
         }
         coordinator.onParticipantsChanged = { [weak self] (count: Int) in
             guard let self else { return }
@@ -250,7 +280,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                 self.sessionState = "SharePlay: \(count) \(noun)"
                 self.isHost = coordinator.isHost
 
-                if self.isHost && count > 1 {
+                if count > 1 {
                     self.resendStateToSharePlay()
                 }
             }
@@ -260,6 +290,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             Task { @MainActor in
                 self.nearbyParticipantCount = participants.count
                 self.hasNearbyParticipants = !participants.isEmpty
+                #if os(visionOS)
+                if self.isRealigning && participants.count != 1 {
+                    self.finishRealignment("The nearby SharePlay participants changed. Try again once both headsets are connected.")
+                }
+                #endif
                 if !participants.isEmpty {
                     self.sessionState = "SharePlay: \(participants.count) nearby"
                 }
@@ -275,107 +310,316 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     private func startSharedWorldAnchorManager() async {
         let manager = sharedWorldAnchorManager
 
-        // Set up callbacks
-        // THE ONLY writer of `sessionOriginTransform`.
-        //
-        // Filtered by UUID: `onAnchorUpdated` fires for EVERY shared anchor in the session,
-        // including other participants'. The old code wrote whichever arrived last into a single
-        // global slot with no diagram↔anchor correlation, so the "shared anchor" was effectively
-        // random. The owner also reads its transform here rather than reusing the matrix it
-        // passed to `addSharedAnchor`, so both devices resolve it through one identical path.
         manager.onAnchorUpdated = { [weak self] anchor in
-            guard let self else { return }
-            Task { @MainActor in
-                guard anchor.id == (self.sessionOriginID ?? self.pendingSessionOriginID) else {
-                    print("↩️ Ignoring shared anchor \(anchor.id) — not the session origin")
-                    return
-                }
-                self.sessionOriginID = anchor.id
-                self.pendingSessionOriginID = nil
-                self.sessionOriginIsTracked = anchor.isTracked
-                if anchor.isTracked {
-                    // Keep the last good transform when tracking drops, rather than yanking
-                    // content to a stale pose.
-                    self.sessionOriginTransform = anchor.originFromAnchorTransform
-                }
-
-                // Mirror into the legacy fields the existing UI/iOS lane still reads.
-                self.sharedAnchor = SharedWorldAnchor(
-                    id: anchor.id.uuidString,
-                    transform: anchor.originFromAnchorTransform,
-                    confidence: 1.0,
-                    timestamp: Date(),
-                    worldMapData: nil
-                )
-                self.sharedAnchorUsesSharedWorld = true
-                self.anchorCreationFailure = nil
-            }
+            self?.resolveSessionOrigin(anchor)
+            self?.confirmRealignmentAnchor(anchor)
         }
-
         manager.onAnchorRemoved = { [weak self] anchorID in
-            print("🗑️ Shared anchor removed: \(anchorID)")
-            Task { @MainActor in
-                guard let self, anchorID == self.sessionOriginID else { return }
-                self.sessionOriginID = nil
-                self.sessionOriginTransform = nil
+            guard let self, anchorID == self.sessionOriginID else { return }
+            if self.isRealigning {
                 self.sessionOriginIsTracked = false
                 if self.ownedAnchorID == anchorID { self.ownedAnchorID = nil }
-                self.sharedAnchor = nil
-                self.sharedAnchorUsesSharedWorld = false
+            } else {
+                self.clearSessionOrigin()
             }
         }
-
         manager.onSharingAvailabilityChanged = { [weak self] available in
-            guard let self else { return }
-            Task { @MainActor in
-                self.worldAnchorSharingAvailable = available
-                print("🔄 World anchor sharing: \(available ? "available" : "unavailable")")
-            }
+            self?.worldAnchorSharingAvailable = available
         }
 
         await manager.start()
-        print("✅ SharedWorldAnchorManager started for SharePlay session")
+        if let error = manager.lastError { anchorCreationFailure = error }
     }
 
-    /// Create a shared anchor in front of the user
-    func createSharedAnchorInFrontOfUser(distance: Float = 1.5) async throws -> UUID {
-        let anchor = try await sharedWorldAnchorManager.createSharedAnchorInFrontOfUser(distance: distance)
-        return anchor.id
-    }
-
-    /// Ensure a shared world anchor exists for the current SharePlay session.
-    ///
-    /// Safe to call repeatedly — the retry loop below is the primary driver; this remains for the
-    /// manual "Create Shared Anchor" button.
-    func ensureSharedWorldAnchorInFrontOfUser(distance: Float = 1.5) async {
-        guard isSessionOriginOwner else { return }
-        guard sessionOriginID == nil, pendingSessionOriginID == nil else { return }
-        guard worldAnchorSharingAvailable else {
-            print("⚠️ Shared world anchors not available yet")
-            return
+    private func resolveSessionOrigin(_ anchor: WorldAnchor) {
+        guard anchor.id == sessionOriginID else { return }
+        if sessionOriginIsTracked != anchor.isTracked {
+            sessionOriginIsTracked = anchor.isTracked
         }
-        await createAndAnnounceSessionOrigin(distance: distance)
+        guard anchor.isTracked else { return }
+
+        // Use the transform from this device's ARKit, whether the update arrived before or
+        // after the SharePlay announcement. Repeated identical updates need no scene work.
+        let transform = anchor.originFromAnchorTransform
+        if sessionOriginTransform != transform {
+            sessionOriginTransform = transform
+        }
+        if sharedAnchor?.id != anchor.id.uuidString {
+            sharedAnchor = SharedWorldAnchor(id: anchor.id.uuidString,
+                                             transform: transform,
+                                             confidence: 1.0,
+                                             timestamp: Date(),
+                                             worldMapData: nil)
+            sharedAnchorUsesSharedWorld = true
+        }
+        anchorCreationFailure = nil
     }
 
-    private func createAndAnnounceSessionOrigin(distance: Float) async {
+    /// All creation paths share the same guard because adding an ARKit anchor suspends.
+    func ensureSharedWorldAnchorInFrontOfUser(distance: Float = 1.5) async {
+        guard isSharePlayActive, worldAnchorSharingAvailable,
+              sessionOriginID == nil, !isCreatingSessionOrigin, !isRealigning,
+              let ownerID = electedOriginOwnerID, isSessionOriginOwner else { return }
+        let generation = originGeneration
+        isCreatingSessionOrigin = true
+        defer {
+            if generation == originGeneration { isCreatingSessionOrigin = false }
+        }
         do {
-            let anchorID = try await createSharedAnchorInFrontOfUser(distance: distance)
-            ownedAnchorID = anchorID
-            // Adopt our own id so `onAnchorUpdated`'s UUID filter lets the transform through.
-            sessionOriginID = anchorID
+            let anchor = try await sharedWorldAnchorManager.createSharedAnchorInFrontOfUser(distance: distance)
+            guard generation == originGeneration, isSharePlayActive,
+                  isSessionOriginOwner, sessionOriginID == nil, !isRealigning else {
+                try? await sharedWorldAnchorManager.removeAnchor(anchor.id)
+                return
+            }
+            ownedAnchorID = anchor.id
+            sessionOriginOwnerID = ownerID
+            sessionOriginID = anchor.id
             anchorCreationFailure = nil
-            announceSessionOrigin(anchorID)
-            print("📍 Created + announced session origin anchor \(anchorID)")
+            if let tracked = sharedWorldAnchorManager.sharedAnchors[anchor.id] {
+                resolveSessionOrigin(tracked)
+            }
+            announceSessionOrigin(anchor.id)
         } catch {
+            guard generation == originGeneration else { return }
             anchorCreationFailure = error.localizedDescription
-            print("❌ Failed to create session origin anchor: \(error)")
+        }
+    }
+
+    // Use the same election on both devices even if they disagree about the current anchor.
+    private var realignmentCoordinatorID: UUID? {
+        guard let coordinator = sharePlayCoordinator, let local = coordinator.localParticipantID else { return nil }
+        return SessionOriginElection.owner(participantIDs: Array(coordinator.nearbyParticipantIDs.union([local])))
+    }
+
+    private var coordinatesRealignment: Bool {
+        guard let local = sharePlayCoordinator?.localParticipantID else { return false }
+        return local == realignmentCoordinatorID
+    }
+
+    func requestRealignment(replaceAnchor: Bool = false) {
+        guard canRealign, !isRealigning, !isCreatingSessionOrigin, let owner = realignmentCoordinatorID else { return }
+        let request = SpaceRealignment(id: UUID(), phase: .request, anchorID: nil,
+                                       replaceAnchor: replaceAnchor)
+        if coordinatesRealignment {
+            // Same rule as the inbound `.request` path, so the local and remote entry points
+            // cannot drift apart.
+            let probe = request.changing(to: .probe,
+                                         anchorID: RealignmentProtocol.probeAnchor(for: request,
+                                                                                   context: realignmentContext))
+            startRealignment(probe)
+            sendRealignment(probe)
+        } else {
+            startRealignment(request)
+            sendRealignment(request, to: owner)
+        }
+    }
+
+    private func startRealignment(_ message: SpaceRealignment) {
+        realignment = message
+        isRealigning = true
+        realignmentStatus = "Checking alignment with the other Vision Pro…"
+        realignmentTimeout?.cancel()
+        realignmentTimeout = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(20)) } catch { return }
+            guard let self, self.realignment?.id == message.id else { return }
+            if self.coordinatesRealignment {
+                self.sendRealignment(message.changing(to: .failed))
+            }
+            self.finishRealignment("The other Vision Pro didn’t confirm alignment. Try again with both visors in the same room.")
+        }
+    }
+
+    private func finishRealignment(_ status: String?, confirmed: Bool = false) {
+        realignmentTimeout?.cancel()
+        realignmentTimeout = nil
+        realignmentTask?.cancel()
+        realignmentTask = nil
+        if let candidate = replacementAnchorID, candidate != ownedAnchorID {
+            Task { try? await sharedWorldAnchorManager.removeAnchor(candidate) }
+        }
+        if confirmed, let supersededAnchorID {
+            Task { try? await sharedWorldAnchorManager.removeAnchor(supersededAnchorID) }
+        }
+        supersededAnchorID = nil
+        replacementAnchorID = nil
+        realignment = nil
+        isRealigning = false
+        realignmentStatus = status
+    }
+
+    private func prepareReplacement(for operation: SpaceRealignment) {
+        realignment = operation.changing(to: .prepare)
+        realignmentStatus = "Finding a new shared anchor…"
+        realignmentTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let anchor = try await self.sharedWorldAnchorManager.createSharedAnchorInFrontOfUser()
+                guard !Task.isCancelled, self.realignment?.id == operation.id else {
+                    try? await self.sharedWorldAnchorManager.removeAnchor(anchor.id)
+                    return
+                }
+                self.replacementAnchorID = anchor.id
+                let prepare = operation.changing(to: .prepare, anchorID: anchor.id)
+                self.realignment = prepare
+                self.sendRealignment(prepare)
+            } catch {
+                guard !Task.isCancelled, self.realignment?.id == operation.id else { return }
+                self.sendRealignment(operation.changing(to: .failed))
+                self.finishRealignment("Couldn’t create a shared anchor. Check tracking and try again.")
+            }
+        }
+    }
+
+    /// ARKit resolved an anchor locally; this is where the deferred transitions happen —
+    /// both sides can be parked waiting on tracking.
+    private func confirmRealignmentAnchor(_ anchor: WorldAnchor) {
+        guard let operation = realignment else { return }
+        let action = RealignmentProtocol.anchorResolved(anchor.id, isTracked: anchor.isTracked,
+                                                        context: realignmentContext)
+        // Called from every anchor update, so an unrelated anchor must stay silent rather than
+        // logging an "ignored" line per update.
+        if case .ignore = action { return }
+        perform(action, message: operation, sender: realignmentCoordinatorID ?? UUID())
+    }
+
+    /// Current protocol state as plain values, for `RealignmentProtocol`.
+    private var realignmentContext: RealignmentContext {
+        RealignmentContext(
+            canRealign: canRealign,
+            isCoordinator: coordinatesRealignment,
+            coordinatorID: realignmentCoordinatorID,
+            nearbyParticipantIDs: sharePlayCoordinator?.nearbyParticipantIDs ?? [],
+            current: realignment,
+            isRealigning: isRealigning,
+            sessionOriginID: sessionOriginID,
+            sessionOriginIsTracked: sessionOriginIsTracked,
+            replacementAnchorID: replacementAnchorID,
+            trackedAnchorIDs: Set(sharedWorldAnchorManager.sharedAnchors.filter { $0.value.isTracked }.keys)
+        )
+    }
+
+    /// Applies an incoming realignment message.
+    ///
+    /// All the guards live in `RealignmentProtocol.action(for:from:context:)` so the transition
+    /// table can be tested; the effects stay here.
+    private func receiveRealignment(_ message: SpaceRealignment, from sender: UUID) {
+        perform(RealignmentProtocol.action(for: message, from: sender, context: realignmentContext),
+                message: message, sender: sender)
+    }
+
+    private func perform(_ action: RealignmentAction, message: SpaceRealignment, sender: UUID) {
+        switch action {
+        case .ignore(let reason):
+            debugLogRealignment("ignored \(message.phase.rawValue): \(reason)")
+
+        case .startAndProbe(let probe):
+            // `probe` already carries the anchor `RealignmentProtocol.probeAnchor` chose.
+            startRealignment(probe)
+            sendRealignment(probe)
+
+        case .startAndReport(let store, let reply):
+            startRealignment(store)
+            sendRealignment(reply, to: sender)
+
+        case .commit(let commit, _):
+            commitRealignment(commit)
+
+        case .prepareReplacement(let basedOn):
+            prepareReplacement(for: basedOn)
+
+        case .holdForAnchor(let store, let probeLocalAnchor):
+            realignment = store
+            if probeLocalAnchor {
+                realignmentStatus = "Locating the new shared anchor…"
+                if let id = store.anchorID, let anchor = sharedWorldAnchorManager.sharedAnchors[id] {
+                    confirmRealignmentAnchor(anchor)
+                }
+            }
+
+        case .adoptAndAcknowledge(let anchorID, let reply):
+            guard adoptRealignmentAnchor(anchorID, owner: sender) else { return }
+            resendRealignedPoses(anchorID: anchorID)
+            sendRealignment(reply, to: sender)
+            finishRealignment(realignmentConfirmedStatus, confirmed: true)
+
+        case .sendReady(let store, let reply):
+            realignment = store
+            if let owner = realignmentCoordinatorID { sendRealignment(reply, to: owner) }
+
+        case .finishConfirmed:
+            finishRealignment(realignmentConfirmedStatus, confirmed: true)
+
+        case .finishFailed:
+            finishRealignment("Realignment couldn’t finish. Check the other Vision Pro and try again.")
+        }
+    }
+
+    private var realignmentConfirmedStatus: String {
+        "Both headsets confirmed the shared anchor. If diagrams still look offset, compare the origin markers in Diagnostics."
+    }
+
+    private func debugLogRealignment(_ text: String) {
+        if ProcessInfo.processInfo.environment["AVAR_VERBOSE_LOGS"] != nil { print("🔁 realignment: \(text)") }
+    }
+
+    private func commitRealignment(_ commit: SpaceRealignment) {
+        guard let anchorID = commit.anchorID, let owner = realignmentCoordinatorID,
+              adoptRealignmentAnchor(anchorID, owner: owner) else { return }
+        realignment = commit
+        sendRealignment(commit)
+        resendRealignedPoses(anchorID: anchorID)
+    }
+
+    private func adoptRealignmentAnchor(_ id: UUID, owner: UUID) -> Bool {
+        guard let anchor = sharedWorldAnchorManager.sharedAnchors[id], anchor.isTracked else { return false }
+        let previousOwnedAnchor = ownedAnchorID
+        if sessionOriginID != id {
+            if let previous = sessionOriginID { retiredOriginIDs.insert(previous) }
+            sessionOriginOwnerID = owner
+        }
+        sessionOriginID = id
+        if id == replacementAnchorID {
+            ownedAnchorID = id
+        } else if ownedAnchorID != id {
+            ownedAnchorID = nil
+        }
+        resolveSessionOrigin(anchor)
+        if let previousOwnedAnchor, previousOwnedAnchor != id {
+            supersededAnchorID = previousOwnedAnchor
+        }
+        return true
+    }
+
+    private func resendRealignedPoses(anchorID: UUID) {
+        // When the anchor changes, ContentView republishes its rebased pose as it updates.
+        // For the same anchor, resend the last authoritative pose of each locally shared diagram.
+        for diagram in sharedDiagrams where isLocallyShared(diagram) && diagram.hasPose(relativeTo: anchorID) {
+            let pose = UpdateDiagramTransformMessage(filename: diagram.filename,
+                                                      anchorRelativePosition: diagram.anchorRelativePosition,
+                                                      anchorRelativeOrientation: diagram.anchorRelativeOrientation,
+                                                      anchorRelativeScale: diagram.anchorRelativeScale,
+                                                      poseAnchorID: anchorID, diagramID: diagram.id)
+            sendSharePlayEnvelope(.transform(pose))
+        }
+    }
+
+    private func sendRealignment(_ message: SpaceRealignment, to participant: UUID? = nil) {
+        sendSharePlayEnvelope(.realignment(message), to: participant)
+    }
+
+    private func sendSharePlayEnvelope(_ envelope: SharedSpaceEnvelope, to participant: UUID? = nil) {
+        if let data = try? JSONEncoder().encode(envelope) {
+            noteEnvelopeSent(envelope.kind, bytes: data.count)
+            sendToSharePlay(data, kind: envelope.kind, to: participant)
         }
     }
 
     private func announceSessionOrigin(_ anchorID: UUID) {
         #if canImport(GroupActivities)
         guard let ownerID = sharePlayCoordinator?.localParticipantID else { return }
-        broadcast(.sessionOrigin(SessionOriginMessage(anchorID: anchorID, ownerParticipantID: ownerID)))
+        sendSharePlayEnvelope(.sessionOrigin(SessionOriginMessage(anchorID: anchorID,
+                                                                  ownerParticipantID: ownerID)))
         #endif
     }
 
@@ -391,18 +635,22 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             while !Task.isCancelled {
                 guard let self, self.isSharePlayActive else { break }
 
-                let participantCount = self.sharePlayCoordinator?.participantIDs.count ?? 0
-                let canCreate = self.worldAnchorSharingAvailable
-                    && self.isSpatialSession
-                    && participantCount >= 2
-
-                if self.sessionOriginID == nil, self.pendingSessionOriginID == nil,
-                   self.isSessionOriginOwner, canCreate {
-                    await self.createAndAnnounceSessionOrigin(distance: 1.5)
+                #if canImport(GroupActivities)
+                if let owner = self.sessionOriginOwnerID,
+                   let coordinator = self.sharePlayCoordinator,
+                   !coordinator.participantIDs.contains(owner) {
+                    self.clearSessionOrigin()
                 }
+                #endif
 
-                // Idempotent re-announce so late joiners learn the origin without extra plumbing.
-                if self.isSessionOriginOwner, let id = self.sessionOriginID {
+                if !self.sharedWorldAnchorManager.isRunning {
+                    await self.startSharedWorldAnchorManager()
+                }
+                guard !Task.isCancelled, self.isSharePlayActive else { break }
+                await self.ensureSharedWorldAnchorInFrontOfUser()
+
+                // Re-announce only an anchor created here, including to late joiners.
+                if !self.isRealigning, let id = self.ownedAnchorID {
                     self.announceSessionOrigin(id)
                 }
 
@@ -417,48 +665,41 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
 
     func clearSessionOrigin() {
-        sessionOriginID = nil
-        pendingSessionOriginID = nil
+        originGeneration = UUID()
+        isCreatingSessionOrigin = false
+        sessionOriginOwnerID = nil
         ownedAnchorID = nil
         sessionOriginTransform = nil
+        sessionOriginID = nil
         sessionOriginIsTracked = false
         sharedAnchor = nil
         sharedAnchorUsesSharedWorld = false
+        anchorCreationFailure = nil
     }
 
-    /// Handles a peer's origin announcement.
-    ///
-    /// Tie-break: if both devices raced and each created an anchor, the one owned by the
-    /// lower participant UUID wins and the other drops its anchor. This converges to a single
-    /// origin regardless of message ordering, which matters because a device briefly sees only
-    /// itself in `activeParticipants` while joining and can elect itself.
     func handleSessionOriginAnnouncement(_ message: SessionOriginMessage, source: String) {
-        guard message.anchorID != sessionOriginID else { return }
-
+        guard source == "SharePlay", isSharePlayActive else { return }
         #if canImport(GroupActivities)
-        if let mineOwner = sharePlayCoordinator?.localParticipantID,
-           ownedAnchorID != nil,
-           SessionOriginElection.shouldYield(toOwner: message.ownerParticipantID, localOwnerID: mineOwner) {
-            // Their owner id sorts lower: yield.
-            print("🤝 Yielding session origin to \(message.ownerParticipantID) (lower id)")
-            if let mine = ownedAnchorID {
-                Task { try? await sharedWorldAnchorManager.removeAnchor(mine) }
-            }
-            ownedAnchorID = nil
-            sessionOriginID = nil
-            sessionOriginTransform = nil
-            sessionOriginIsTracked = false
-        } else if ownedAnchorID != nil {
-            // We own the lower id — keep ours and let the re-announce loop assert it.
-            print("🤝 Keeping our session origin; ignoring announcement from \(message.ownerParticipantID)")
+        guard let coordinator = sharePlayCoordinator,
+              coordinator.nearbyParticipantIDs.contains(message.ownerParticipantID) else { return }
+        #endif
+        guard message.anchorID != sessionOriginID, !retiredOriginIDs.contains(message.anchorID),
+              !isRealigning else { return }
+
+        if let owner = sessionOriginOwnerID, message.ownerParticipantID != owner,
+           !SessionOriginElection.shouldYield(toOwner: message.ownerParticipantID, localOwnerID: owner) {
             return
         }
-        #endif
-
-        // Wait for OUR OWN anchorUpdates to resolve this UUID. We deliberately do not receive a
-        // transform here — see the invariant at the top of this file.
-        pendingSessionOriginID = message.anchorID
-        print("📡 Adopted session origin \(message.anchorID) from \(source); awaiting local resolve")
+        let oldOwnedAnchorID = ownedAnchorID
+        clearSessionOrigin()
+        sessionOriginOwnerID = message.ownerParticipantID
+        sessionOriginID = message.anchorID
+        if let anchor = sharedWorldAnchorManager.sharedAnchors[message.anchorID] {
+            resolveSessionOrigin(anchor)
+        }
+        if let oldOwnedAnchorID {
+            Task { try? await sharedWorldAnchorManager.removeAnchor(oldOwnedAnchorID) }
+        }
     }
     #endif
     
@@ -467,55 +708,61 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         multipeerSession?.delegate = self
     }
 
-/// Start hosting a collaborative session
-    func startHosting() async {
-        print("🤝 Starting host session on \(getCurrentPlatform())")
-        lastError = nil
-        isHost = true
-
-        #if os(iOS)
-        await startARSession()
-        #endif
-
-        #if canImport(GroupActivities)
-        sessionState = "Starting SharePlay session..."
-        await sharePlayCoordinator?.start()
-        #else
-        sessionState = "Hosting - Waiting for peers"
-        #endif
-
-        multipeerSession?.startHosting()
-        isSessionActive = true
+    enum CompanionMode {
+        case idle, advertising, browsing
     }
 
-    /// Join an existing collaborative session
-    func joinSession() async {
-        print("🤝 Joining session on \(getCurrentPlatform())")
+    @Published private(set) var companionMode: CompanionMode = .idle
+    @Published private(set) var connectingCompanion: MCPeerID?
+    @Published private(set) var isStartingSharePlay = false
+    @Published private(set) var sharePlayStartError: String?
+
+    func startCompanionConnection() {
+        guard companionMode == .idle else { return }
         lastError = nil
-        isHost = false
-
-        #if os(iOS)
-        await startARSession()
-        #endif
-
-        #if canImport(GroupActivities)
-        sessionState = "Requesting SharePlay access..."
-        await sharePlayCoordinator?.start()
-        #else
-        sessionState = "Searching for hosts..."
-        #endif
-
+        #if os(visionOS)
+        companionMode = .advertising
+        multipeerSession?.startHosting()
+        #elseif os(iOS)
+        companionMode = .browsing
         multipeerSession?.startBrowsing()
+        #endif
+        isSessionActive = isSharePlayActive || companionMode != .idle
+    }
+
+    func stopCompanionConnection() {
+        companionMode = .idle
+        connectingCompanion = nil
+        connectedPeers.removeAll()
+        availablePeers.removeAll()
+        multipeerSession?.stop()
+        isSessionActive = isSharePlayActive
+        #if os(iOS)
+        if !isSharePlayActive {
+            sharedDiagrams.removeAll()
+            closedDiagramIDs.removeAll()
+            sharedAnchor = nil
+        }
+        #endif
     }
 
     #if canImport(GroupActivities)
     func startSharePlay() async {
-        await sharePlayCoordinator?.start()
+        guard let coordinator = sharePlayCoordinator, !coordinator.isActive,
+              !isStartingSharePlay else { return }
+        isStartingSharePlay = true
+        sharePlayStartError = nil
+        defer { isStartingSharePlay = false }
+
+        do {
+            try await coordinator.start()
+        } catch {
+            sharePlayStartError = error.localizedDescription
+        }
     }
 
     func stopSharePlay() {
         sharePlayCoordinator?.stop()
-        isSharePlayActive = false
     }
     #endif
 
@@ -551,42 +798,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
     #endif
     
-    /// Stop the collaborative session on THIS device only.
-    ///
-    /// Deliberately does not broadcast `.sessionEnded`: this is a per-device button, and the
-    /// receive handler for that message wipes every peer's diagrams. One participant leaving
-    /// must not tear down everyone else's session.
-    func stopSession() {
-        print("🤝 Stopping collaborative session (this device only)")
-
-        multipeerSession?.stop()
-        
-        // Don't pause the ARSession - let the ARView manage it
-        // The AR camera should keep running for the main AR experience
-        
-        isSessionActive = false
-        isHost = false
-        connectedPeers.removeAll()
-        availablePeers.removeAll()
-        sessionState = "Not Connected"
-        lastError = nil
-        sharedAnchor = nil
-        sharedAnchorUsesSharedWorld = false
-#if canImport(GroupActivities)
-        sharePlayCoordinator?.stop()
-        isSharePlayActive = false
-#endif
-#if os(visionOS)
-        stopSessionOriginLoop()
-        sharedWorldAnchorManager.stop()
-        clearSessionOrigin()
-#endif
-    }
-    
     /// Share a diagram with all connected peers including position data
     func shareDiagram(filename: String, elements: [ElementDTO], is2D: Bool = false,
                       anchorRelativePosition: SIMD3<Float>? = nil,
-                      anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
+                      anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil,
+                      poseAnchorID: UUID? = nil) {
 
 #if os(iOS)
         // iOS is receive-only. Structured as #if/#else rather than an early `return` so the rest
@@ -594,52 +810,26 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         print("ℹ️ Ignoring shareDiagram request on iOS client; iOS is receive-only")
 #else
 
-        // `anchorRelativePosition` / `anchorRelativeOrientation` already arrive in the shared session-origin frame
-        // (see `ElementViewModel.getSharedTransform`), so there is nothing to convert here.
-        //
-        // This replaces a duplicated block that computed position via `anchor.transform.inverse`
-        // but orientation via `simd_quatf(anchor.transform).inverse` — inconsistent with each
-        // other, and both operating on a transform that was frequently the identity matrix or a
-        // stale value restored from disk.
-        let finalPosition = anchorRelativePosition
-        let finalOrientation = anchorRelativeOrientation
-
-        #if os(visionOS)
-        // No origin anchor yet? Ask for a real shared WorldAnchor. Never fabricate one from a
-        // head pose, and never broadcast a transform — see the invariant at the top of this file.
-        if sessionOriginID == nil {
-            Task { [weak self] in
-                await self?.ensureSharedWorldAnchorInFrontOfUser()
-            }
-        }
-        #endif
+        guard !sharedDiagrams.contains(where: { $0.filename == filename }) else { return }
 
         let sharedDiagram = SharedDiagram(
-            id: UUID(),
             filename: filename,
             elements: elements,
-            timestamp: Date(),
             is2D: is2D,
-            anchorRelativePosition: finalPosition,
-            anchorRelativeOrientation: finalOrientation,
-            anchorRelativeScale: anchorRelativeScale
+            anchorRelativePosition: anchorRelativePosition,
+            anchorRelativeOrientation: anchorRelativeOrientation,
+            anchorRelativeScale: anchorRelativeScale,
+            poseAnchorID: poseAnchorID
         )
 
+        locallySharedDiagramIDs.insert(sharedDiagram.id)
         sharedDiagrams.append(sharedDiagram)
 
         // Send to all peers
         broadcast(.diagram(sharedDiagram))
 
         print("📊 Shared diagram '\(filename)' with \(connectedPeers.count) peers")
-        if let pos = finalPosition {
-            print("   📍 Position: \(pos)")
-        }
-        if let orient = finalOrientation {
-            print("   🔄 Orientation: \(orient)")
-        }
-        if let scale = anchorRelativeScale {
-            print("   📏 Scale: \(scale)")
-        }
+
 #endif
     }
 
@@ -647,7 +837,8 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                                     position: SIMD3<Float>,
                                     orientation: simd_quatf,
                                     scale: Float) {
-        localDiagramTransforms[filename] = DiagramTransform(position: position, orientation: orientation, scale: scale)
+        localDiagramTransforms[filename] = DiagramTransform(position: position, orientation: orientation,
+                                                            scale: scale, anchorID: currentPoseAnchorID)
     }
 
     func cachedTransform(for filename: String) -> DiagramTransform? {
@@ -680,82 +871,85 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         }
     }
 
-    /// Whether a shared spatial origin is even achievable in this session.
-    ///
-    /// False when no participant can resolve a visionOS `WorldAnchor` — most importantly when the
-    /// peer is the **iOS companion**, which aligns via its own legacy `SharedAnchorMessage`
-    /// handshake instead. Callers must not block on the origin when this is false, or they wait
-    /// forever: `worldAnchorSharingAvailability` only reports `.available` for a SharePlay session
-    /// with nearby *visionOS* participants.
-    var isAlignmentAchievable: Bool {
-        #if os(visionOS)
-        return isSpatialSession || worldAnchorSharingAvailable
-        #else
-        return false
-        #endif
+    #if os(visionOS)
+    var currentPoseAnchorID: UUID? {
+        sessionOriginTransform == nil ? nil : sessionOriginID
     }
 
-    /// Whether participants are actually co-located, i.e. `localParticipantState.isSpatial`.
-    /// Shared world anchors can only ever become available when this is true.
-    var isSpatialSession: Bool {
-        #if canImport(GroupActivities)
-        return sharePlayCoordinator?.isSpatial ?? false
-        #else
-        return false
-        #endif
+    /// A spatial SharePlay diagram can appear once both its pose and this device's origin
+    /// refer to the same physical anchor. Remote and iOS sessions can use local placement.
+    func requiresSharedOrigin(for diagram: SharedDiagram) -> Bool {
+        isSharePlayActive && (hasNearbyParticipants || worldAnchorSharingAvailable) &&
+        sharePlayReceivedDiagramIDs.contains(diagram.id)
     }
-    
-    /// Remove a diagram from sharing
-    @MainActor
+
+    private func discardSharePlayDiagrams() {
+        let removed = sharedDiagrams.filter {
+            sharePlayReceivedDiagramIDs.contains($0.id) ||
+            (connectedPeers.isEmpty && isLocallyShared($0))
+        }
+        let received = removed.filter { !isLocallyShared($0) }
+        let removedIDs = Set(removed.map(\.id))
+        sharedDiagrams.removeAll { removedIDs.contains($0.id) }
+        locallySharedDiagramIDs.subtract(removedIDs)
+        sharePlayReceivedDiagramIDs.removeAll()
+        closedDiagramIDs.removeAll()
+        for diagram in received { receivedDiagramRemoval.send(diagram.filename) }
+    }
+    #else
+    private var currentPoseAnchorID: UUID? { nil }
+    #endif
+
+    func isLocallyShared(_ diagram: SharedDiagram) -> Bool {
+        locallySharedDiagramIDs.contains(diagram.id)
+    }
+
+    /// Remove a diagram from sharing and prevent in-flight snapshots from reopening it.
     func removeDiagram(filename: String) {
-        // Exact match only. The previous bidirectional `hasPrefix` matching meant removing
-        // "foo" also removed "foo_123" (and vice versa) on every peer.
-        let before = sharedDiagrams.count
-        sharedDiagrams.removeAll { $0.filename == filename }
-
-        // 🔔 Force a Combine publish even if the array mutates in-place
-        sharedDiagrams = sharedDiagrams
-
-        // Broadcast to peers
-        let removeMessage = RemoveDiagramMessage(filename: filename)
-        broadcast(.remove(removeMessage))
-
-        let after = sharedDiagrams.count
-        print("🗑️ removeDiagram('\(filename)'): \(before - after) removed; now \(after) remaining")
+        guard let diagram = sharedDiagrams.first(where: { $0.filename == filename }) else {
+            localDiagramTransforms.removeValue(forKey: filename)
+            return
+        }
+        forgetSharedDiagram(diagram)
+        broadcast(.remove(RemoveDiagramMessage(filename: filename, diagramID: diagram.id)))
     }
-    
+
+    private func forgetSharedDiagram(_ diagram: SharedDiagram) {
+        closedDiagramIDs.insert(diagram.id)
+        locallySharedDiagramIDs.remove(diagram.id)
+        #if os(visionOS)
+        sharePlayReceivedDiagramIDs.remove(diagram.id)
+        #endif
+        localDiagramTransforms.removeValue(forKey: diagram.filename)
+        sharedDiagrams.removeAll { $0.id == diagram.id }
+    }
+
     /// Update the transform of an existing shared diagram
     func updateDiagramTransform(filename: String, anchorRelativePosition: SIMD3<Float>? = nil,
                                 anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
-        // Update local copy
+        if let position = anchorRelativePosition, let orientation = anchorRelativeOrientation,
+           let scale = anchorRelativeScale {
+            cacheLocalDiagramTransform(filename: filename, position: position, orientation: orientation, scale: scale)
+        }
         guard let index = sharedDiagrams.firstIndex(where: { $0.filename == filename }) else {
             return
         }
 
-        // Already in the shared session-origin frame — see shareDiagram(...) above.
-        let finalPosition = anchorRelativePosition
-        let finalOrientation = anchorRelativeOrientation
+        let diagram = sharedDiagrams[index]
+        var updated = diagram
+        updated.anchorRelativePosition = anchorRelativePosition ?? diagram.anchorRelativePosition
+        updated.anchorRelativeOrientation = anchorRelativeOrientation ?? diagram.anchorRelativeOrientation
+        updated.anchorRelativeScale = anchorRelativeScale ?? diagram.anchorRelativeScale
+        updated.poseAnchorID = currentPoseAnchorID
+        sharedDiagrams[index] = updated
 
-        if let pos = finalPosition {
-            sharedDiagrams[index].anchorRelativePosition = pos
-        }
-        if let orient = finalOrientation {
-            sharedDiagrams[index].anchorRelativeOrientation = orient
-        }
-        if let scale = anchorRelativeScale {
-            sharedDiagrams[index].anchorRelativeScale = scale
-        }
-
-        if let pos = anchorRelativePosition, let orient = anchorRelativeOrientation, let scale = anchorRelativeScale {
-            localDiagramTransforms[filename] = DiagramTransform(position: pos, orientation: orient, scale: scale)
-        }
-
-        // Send update to peers (fast path - no error checking needed during drag)
         let updateMessage = UpdateDiagramTransformMessage(
             filename: filename,
-            anchorRelativePosition: finalPosition,
-            anchorRelativeOrientation: finalOrientation,
-            anchorRelativeScale: anchorRelativeScale
+            anchorRelativePosition: anchorRelativePosition,
+            anchorRelativeOrientation: anchorRelativeOrientation,
+            anchorRelativeScale: anchorRelativeScale,
+            poseAnchorID: updated.poseAnchorID,
+            diagramID: diagram.id
         )
 
         // Encode and broadcast (JSONEncoder is cached per thread by Swift)
@@ -800,7 +994,8 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
                 is2D: old.is2D,
                 anchorRelativePosition: old.anchorRelativePosition,
                 anchorRelativeOrientation: old.anchorRelativeOrientation,
-                anchorRelativeScale: old.anchorRelativeScale
+                anchorRelativeScale: old.anchorRelativeScale,
+                poseAnchorID: old.poseAnchorID
             )
             sharedDiagrams[dIndex] = newDiagram
             // 🔔 Force a publish
@@ -808,29 +1003,6 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         }
     }
     
-    #if os(iOS)
-        private func startARSession() async {
-            // Don't create a new ARSession - the ARView already has one running
-            // Just enable collaboration data sharing
-            print("🔧 AR collaboration enabled for \(getCurrentPlatform())")
-            print("ℹ️ Using existing ARSession from ARView - no new session needed")
-        }
-    #else
-        private func startARSession() async {
-            print("⚠️ AR not available on this platform")
-        }
-    #endif
-    
-    private func getCurrentPlatform() -> String {
-        #if os(visionOS)
-            return "visionOS"
-        #elseif os(iOS)
-            return "iOS"
-        #else
-            return "macOS"
-        #endif
-    }
-
     private func broadcast(_ envelope: SharedSpaceEnvelope, to peers: [MCPeerID]? = nil) {
         let data: Data
         do {
@@ -868,7 +1040,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             // Deliberately does NOT resend the anchor. Serializing our local
             // `originFromAnchorTransform` overwrote the peer's own (different, correct) value
             // for the same physical anchor — the single most destructive line in the old code.
-            for diagram in sharedDiagrams {
+            for diagram in sharedDiagrams where isLocallyShared(diagram) {
                 if let data = try? JSONEncoder().encode(SharedSpaceEnvelope.diagram(diagram)) {
                     sendToSharePlay(data, kind: "diagram")
                 }
@@ -877,15 +1049,20 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
 
     #if canImport(GroupActivities)
-        private func sendToSharePlay(_ data: Data, kind: String) {
+        private var sharePlaySendTask: Task<Void, Never>?
+        private func sendToSharePlay(_ data: Data, kind: String, to participant: UUID? = nil) {
             guard sharePlayCoordinator?.isActive == true else {
                 print("⚠️ sendToSharePlay skipped: SharePlay not active (isActive=\(sharePlayCoordinator?.isActive ?? false))")
                 return
             }
             print("📤 sendToSharePlay: Sending \(data.count) bytes via SharePlay")
-            Task { [weak self] in
-                guard let self else { return }
-                if let error = await self.sharePlayCoordinator?.send(data) {
+            guard let coordinator = sharePlayCoordinator,
+                  let sessionID = coordinator.sessionID else { return }
+            let previous = sharePlaySendTask
+            sharePlaySendTask = Task { [weak self, weak coordinator] in
+                await previous?.value
+                guard !Task.isCancelled, let self, let coordinator, coordinator.sessionID == sessionID else { return }
+                if let error = await coordinator.send(data, to: participant) {
                     // Record it rather than only printing — a 1.3 MB diagram silently failing
                     // here is exactly the failure mode the HUD needs to make visible.
                     self.noteEnvelopeSent(kind, bytes: 0, error: error)
@@ -905,11 +1082,11 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     // local ARKit transform onto the wire.
 
     @MainActor
-    private func handleIncomingPayload(_ data: Data, source: String) {
+    private func handleIncomingPayload(_ data: Data, source: String, senderID: UUID? = nil) {
         let decoder = JSONDecoder()
         if let envelope = try? decoder.decode(SharedSpaceEnvelope.self, from: data) {
             noteEnvelopeReceived(envelope.kind, bytes: data.count, source: source)
-            handleSharedEnvelope(envelope, source: source)
+            handleSharedEnvelope(envelope, source: source, senderID: senderID)
             return
         }
 
@@ -920,7 +1097,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
 
 @MainActor
 private extension CollaborativeSessionManager {
-    func handleSharedEnvelope(_ envelope: SharedSpaceEnvelope, source: String) {
+    func handleSharedEnvelope(_ envelope: SharedSpaceEnvelope, source: String, senderID: UUID? = nil) {
         switch envelope {
         case .anchor(let anchorMsg):
             #if os(iOS)
@@ -950,43 +1127,61 @@ private extension CollaborativeSessionManager {
                 print("ℹ️ Ignoring session-origin announcement on non-visionOS platform")
             #endif
 
+        case .realignment(let message):
+            #if os(visionOS)
+            if let senderID { receiveRealignment(message, from: senderID) }
+            #endif
+
         case .diagram(let sharedDiagram):
-            if !sharedDiagrams.contains(where: { $0.id == sharedDiagram.id }) {
-                sharedDiagrams.append(sharedDiagram)
-                print("📥 Received shared diagram '\(sharedDiagram.filename)' from \(source)")
-                if let pos = sharedDiagram.anchorRelativePosition {
-                    print("   📍 Position: \(pos)")
+            guard !closedDiagramIDs.contains(sharedDiagram.id) else { return }
+            // The same diagram can arrive over Multipeer before SharePlay. As soon as we
+            // know it is in SharePlay, require the shared frame without overwriting its pose.
+            if sharedDiagrams.contains(where: { $0.id == sharedDiagram.id }) {
+                #if os(visionOS)
+                if source == "SharePlay", sharePlayReceivedDiagramIDs.insert(sharedDiagram.id).inserted {
+                    objectWillChange.send()
                 }
-            } else if let index = sharedDiagrams.firstIndex(where: { $0.id == sharedDiagram.id }) {
-                sharedDiagrams[index] = sharedDiagram
-                sharedDiagrams = sharedDiagrams
+                #endif
+                return
             }
+            guard !sharedDiagrams.contains(where: { $0.filename == sharedDiagram.filename }) else { return }
+            #if os(visionOS)
+            if source == "SharePlay" { sharePlayReceivedDiagramIDs.insert(sharedDiagram.id) }
+            #endif
+            sharedDiagrams.append(sharedDiagram)
 
         case .transform(let updateMessage):
-            if let index = sharedDiagrams.firstIndex(where: { $0.filename == updateMessage.filename }) {
-                if let pos = updateMessage.anchorRelativePosition {
-                    sharedDiagrams[index].anchorRelativePosition = pos
-                }
-                if let orient = updateMessage.anchorRelativeOrientation {
-                    sharedDiagrams[index].anchorRelativeOrientation = orient
-                }
-                if let scale = updateMessage.anchorRelativeScale {
-                    sharedDiagrams[index].anchorRelativeScale = scale
-                }
-                print("🔄 Updated transform for diagram '\(updateMessage.filename)' from \(source)")
-                sharedDiagrams = sharedDiagrams
+            guard let index = sharedDiagrams.firstIndex(where: {
+                $0.filename == updateMessage.filename &&
+                (updateMessage.diagramID == nil || $0.id == updateMessage.diagramID)
+            }) else { return }
+            #if os(visionOS)
+            if let poseAnchorID = updateMessage.poseAnchorID,
+               retiredOriginIDs.contains(poseAnchorID) { return }
+            #endif
+            var diagram = sharedDiagrams[index]
+            diagram.anchorRelativePosition = updateMessage.anchorRelativePosition ?? diagram.anchorRelativePosition
+            diagram.anchorRelativeOrientation = updateMessage.anchorRelativeOrientation ?? diagram.anchorRelativeOrientation
+            diagram.anchorRelativeScale = updateMessage.anchorRelativeScale ?? diagram.anchorRelativeScale
+            diagram.poseAnchorID = updateMessage.poseAnchorID
+            sharedDiagrams[index] = diagram
+            if let position = diagram.anchorRelativePosition, let orientation = diagram.anchorRelativeOrientation,
+               let scale = diagram.anchorRelativeScale, isLocallyShared(diagram) {
+                localDiagramTransforms[diagram.filename] = DiagramTransform(
+                    position: position, orientation: orientation, scale: scale, anchorID: diagram.poseAnchorID
+                )
             }
+            receivedDiagramTransform.send(diagram)
 
         case .remove(let removeMessage):
-            let target = removeMessage.filename
-            let before = sharedDiagrams.count
-            // Exact match only — see removeDiagram(filename:).
-            sharedDiagrams.removeAll { $0.filename == target }
-            // 🔔 Force a Combine publish so all subscribers refresh
-            sharedDiagrams = sharedDiagrams
-            let after = sharedDiagrams.count
-            print("🗑️ Received remove for '\(target)' from \(source). Removed \(before - after); now \(after).")
-            
+            if let id = removeMessage.diagramID { closedDiagramIDs.insert(id) }
+            guard let diagram = sharedDiagrams.first(where: {
+                $0.filename == removeMessage.filename &&
+                (removeMessage.diagramID == nil || $0.id == removeMessage.diagramID)
+            }) else { return }
+            forgetSharedDiagram(diagram)
+            receivedDiagramRemoval.send(diagram.filename)
+
         case .arCollaboration(let blob):
             #if os(iOS)
                 onCollaborationDataReceived?(blob)
@@ -1014,7 +1209,8 @@ private extension CollaborativeSessionManager {
                         is2D: old.is2D,
                         anchorRelativePosition: old.anchorRelativePosition,
                         anchorRelativeOrientation: old.anchorRelativeOrientation,
-                        anchorRelativeScale: old.anchorRelativeScale
+                        anchorRelativeScale: old.anchorRelativeScale,
+                        poseAnchorID: old.poseAnchorID
                     )
                     sharedDiagrams[dIndex] = newDiagram
                     // 🔔 Force a Combine publish so all subscribers refresh
@@ -1069,30 +1265,35 @@ extension CollaborativeSessionManager: @preconcurrency MultipeerConnectivityDele
             sessionState = "Connection Failed"
         }
         
-        // Stop the session on critical errors
-        if nsError.code == -72008 {
-            isSessionActive = false
-            isHost = false
+        if context == "advertising" || context == "browsing" || nsError.code == -72008 {
+            stopCompanionConnection()
         }
         
         print("🔴 Multipeer error in \(context): \(lastError ?? "unknown")")
     }
     
     func multipeerService(_ service: MultipeerConnectivityService, didUpdateAvailablePeers peers: [MCPeerID]) {
+        guard companionMode == .browsing else { return }
         availablePeers = peers
         print("📋 Available peers updated: \(peers.map { $0.displayName }.joined(separator: ", "))")
     }
     
     /// Manually connect to a specific peer
     func connectToPeer(_ peer: MCPeerID) {
+        guard companionMode == .browsing, connectingCompanion == nil,
+              availablePeers.contains(peer) else { return }
+        lastError = nil
+        connectingCompanion = peer
         multipeerSession?.connectToPeer(peer)
     }
     
     func multipeerService(_ service: MultipeerConnectivityService, peer: MCPeerID, didChangeState state: MCSessionState) {
+        guard companionMode != .idle else { return }
         print("🎯 CollaborativeSessionManager received state change: \(peer.displayName) → \(state)")
         
         switch state {
         case .connected:
+            if connectingCompanion == peer { connectingCompanion = nil }
             if !connectedPeers.contains(peer) {
                 connectedPeers.append(peer)
             }
@@ -1115,16 +1316,14 @@ extension CollaborativeSessionManager: @preconcurrency MultipeerConnectivityDele
             print("🔄 Connecting to \(peer.displayName)")
             
         case .notConnected:
+            if connectingCompanion == peer {
+                connectingCompanion = nil
+                lastError = "Could not connect to \(peer.displayName). Check that it is still allowing iPhone connections and try again."
+            }
             connectedPeers.removeAll { $0 == peer }
             
-            let msg = ParticipantLeftMessage(peerName: peer.displayName, at: Date())
-            broadcast(.participantLeft(msg))
-            // Optional: local pop-up too
-            pendingAlert = SessionAlert(title: "Participant Left",
-                                            message: "\(peer.displayName) left the session.")
-            
-            if connectedPeers.isEmpty {
-                sessionState = isHost ? "Hosting - Waiting for peers" : "Searching for hosts..."
+            if connectedPeers.isEmpty && !isSharePlayActive {
+                sessionState = companionMode == .advertising ? "Waiting for iPhone" : "Looking for Vision Pro"
             } else {
                 sessionState = "Connected to \(connectedPeers.count) peer(s)"
             }
@@ -1166,10 +1365,16 @@ struct SharedDiagram: Codable, Identifiable {
     var anchorRelativePosition: SIMD3<Float>?
     var anchorRelativeOrientation: simd_quatf?
     var anchorRelativeScale: Float?
+    var poseAnchorID: UUID?
+
+    func hasPose(relativeTo anchorID: UUID?) -> Bool {
+        guard let anchorID else { return false }
+        return poseAnchorID == anchorID && anchorRelativePosition != nil
+    }
 
     // Encode/decode helpers for SIMD types
     enum CodingKeys: String, CodingKey {
-        case id, filename, elements, timestamp, is2D
+        case id, filename, elements, timestamp, is2D, poseAnchorID
         case worldPositionX, worldPositionY, worldPositionZ
         case worldOrientationX, worldOrientationY, worldOrientationZ, worldOrientationW
         case worldScale
@@ -1177,7 +1382,8 @@ struct SharedDiagram: Codable, Identifiable {
 
     init(id: UUID = UUID(), filename: String, elements: [ElementDTO], timestamp: Date = Date(),
          is2D: Bool = false,
-         anchorRelativePosition: SIMD3<Float>? = nil, anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
+         anchorRelativePosition: SIMD3<Float>? = nil, anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil,
+         poseAnchorID: UUID? = nil) {
         self.id = id
         self.filename = filename
         self.elements = elements
@@ -1186,6 +1392,7 @@ struct SharedDiagram: Codable, Identifiable {
         self.anchorRelativePosition = anchorRelativePosition
         self.anchorRelativeOrientation = anchorRelativeOrientation
         self.anchorRelativeScale = anchorRelativeScale
+        self.poseAnchorID = poseAnchorID
     }
 
     init(from decoder: Decoder) throws {
@@ -1213,6 +1420,7 @@ struct SharedDiagram: Codable, Identifiable {
         }
         
         anchorRelativeScale = try container.decodeIfPresent(Float.self, forKey: .worldScale)
+        poseAnchorID = try container.decodeIfPresent(UUID.self, forKey: .poseAnchorID)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -1222,6 +1430,7 @@ struct SharedDiagram: Codable, Identifiable {
         try container.encode(elements, forKey: .elements)
         try container.encode(timestamp, forKey: .timestamp)
         try container.encode(is2D, forKey: .is2D)
+        try container.encodeIfPresent(poseAnchorID, forKey: .poseAnchorID)
 
         // Encode world position if present
         if let pos = anchorRelativePosition {
@@ -1339,6 +1548,21 @@ struct SessionOriginMessage: Codable {
     let ownerParticipantID: UUID
 }
 
+struct SpaceRealignment: Codable, Equatable {
+    enum Phase: String, Codable {
+        case request, probe, report, prepare, ready, commit, applied, failed
+    }
+
+    let id: UUID
+    let phase: Phase
+    let anchorID: UUID?
+    let replaceAnchor: Bool
+
+    func changing(to phase: Phase, anchorID: UUID? = nil) -> Self {
+        Self(id: id, phase: phase, anchorID: anchorID, replaceAnchor: replaceAnchor)
+    }
+}
+
 struct SessionEndedMessage: Codable {
     let byHost: String
     let reason: String?
@@ -1361,6 +1585,7 @@ enum SharedSpaceEnvelope: Codable {
     case anchor(SharedAnchorMessage)
     /// visionOS session-origin announcement: anchor UUID only, never a transform.
     case sessionOrigin(SessionOriginMessage)
+    case realignment(SpaceRealignment)
     case diagram(SharedDiagram)
     case transform(UpdateDiagramTransformMessage)
     case remove(RemoveDiagramMessage)
@@ -1379,6 +1604,7 @@ enum SharedSpaceEnvelope: Codable {
         switch self {
         case .anchor: return "anchor"
         case .sessionOrigin: return "sessionOrigin"
+        case .realignment: return "realignment"
         case .diagram: return "diagram"
         case .transform: return "transform"
         case .remove: return "remove"
@@ -1392,6 +1618,7 @@ enum SharedSpaceEnvelope: Codable {
     private enum EnvelopeType: String, Codable {
         case anchor
         case sessionOrigin
+        case realignment
         case diagram
         case transform
         case remove
@@ -1409,6 +1636,9 @@ enum SharedSpaceEnvelope: Codable {
             try container.encode(message, forKey: .payload)
         case .sessionOrigin(let message):
             try container.encode(EnvelopeType.sessionOrigin, forKey: .type)
+            try container.encode(message, forKey: .payload)
+        case .realignment(let message):
+            try container.encode(EnvelopeType.realignment, forKey: .type)
             try container.encode(message, forKey: .payload)
         case .diagram(let diagram):
             try container.encode(EnvelopeType.diagram, forKey: .type)
@@ -1444,6 +1674,8 @@ enum SharedSpaceEnvelope: Codable {
         case .sessionOrigin:
             let msg = try container.decode(SessionOriginMessage.self, forKey: .payload)
             self = .sessionOrigin(msg)
+        case .realignment:
+            self = .realignment(try container.decode(SpaceRealignment.self, forKey: .payload))
         case .diagram:
             let diagram = try container.decode(SharedDiagram.self, forKey: .payload)
             self = .diagram(diagram)
@@ -1472,10 +1704,13 @@ enum SharedSpaceEnvelope: Codable {
 
 struct RemoveDiagramMessage: Codable {
     let filename: String
+    var diagramID: UUID? = nil
 }
 
 struct UpdateDiagramTransformMessage: Codable {
     let filename: String
+    var poseAnchorID: UUID?
+    var diagramID: UUID?
     // Anchor-relative, like `SharedDiagram`'s pose fields. JSON keys remain `world*` for wire
     // compatibility — see `CodingKeys` below.
     var anchorRelativePosition: SIMD3<Float>?
@@ -1484,15 +1719,18 @@ struct UpdateDiagramTransformMessage: Codable {
     
     // Encode/decode helpers for SIMD types
     enum CodingKeys: String, CodingKey {
-        case filename
+        case filename, poseAnchorID, diagramID
         case worldPositionX, worldPositionY, worldPositionZ
         case worldOrientationX, worldOrientationY, worldOrientationZ, worldOrientationW
         case worldScale
     }
     
     init(filename: String, anchorRelativePosition: SIMD3<Float>? = nil,
-         anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil) {
+         anchorRelativeOrientation: simd_quatf? = nil, anchorRelativeScale: Float? = nil,
+         poseAnchorID: UUID? = nil, diagramID: UUID? = nil) {
         self.filename = filename
+        self.poseAnchorID = poseAnchorID
+        self.diagramID = diagramID
         self.anchorRelativePosition = anchorRelativePosition
         self.anchorRelativeOrientation = anchorRelativeOrientation
         self.anchorRelativeScale = anchorRelativeScale
@@ -1501,6 +1739,8 @@ struct UpdateDiagramTransformMessage: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         filename = try container.decode(String.self, forKey: .filename)
+        poseAnchorID = try container.decodeIfPresent(UUID.self, forKey: .poseAnchorID)
+        diagramID = try container.decodeIfPresent(UUID.self, forKey: .diagramID)
         
         // Decode world position if present
         if let x = try container.decodeIfPresent(Float.self, forKey: .worldPositionX),
@@ -1523,6 +1763,8 @@ struct UpdateDiagramTransformMessage: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(filename, forKey: .filename)
+        try container.encodeIfPresent(poseAnchorID, forKey: .poseAnchorID)
+        try container.encodeIfPresent(diagramID, forKey: .diagramID)
         
         // Encode world position if present
         if let pos = anchorRelativePosition {
@@ -1601,7 +1843,7 @@ struct ParticipantInfo: Identifiable, Equatable {
 @MainActor
 final class SharePlayCoordinator: ObservableObject {
     // MARK: - Callbacks
-    var onDataReceived: ((Data) -> Void)?
+    var onDataReceived: ((Data, UUID) -> Void)?
     var onSessionJoined: (() -> Void)?
     var onSessionEnded: (() -> Void)?
     var onParticipantsChanged: ((Int) -> Void)?
@@ -1626,12 +1868,12 @@ final class SharePlayCoordinator: ObservableObject {
     @Published private(set) var participantIDs: [UUID] = []
     /// Ids of participants that are physically nearby (co-located).
     @Published private(set) var nearbyParticipantIDs: Set<UUID> = []
-    /// `SystemCoordinator.localParticipantState.isSpatial` — the best "are we actually in the
-    /// same room" signal. Shared world anchors can never become available when this is false.
+    /// Whether the system has made the local participant spatial, including remote spatial Personas.
     @Published private(set) var isSpatial: Bool = false
 
     // MARK: - Public Properties
     var isActive: Bool { currentSession != nil }
+    var sessionID: UUID? { currentSession?.id }
     var hasNearbyParticipants: Bool { !nearbyParticipants.isEmpty }
 
     // MARK: - Private Properties
@@ -1661,25 +1903,8 @@ final class SharePlayCoordinator: ObservableObject {
 
     // MARK: - Public API
 
-    func start() async {
-        let activity = SharedSpaceActivity()
-        let result = await activity.prepareForActivation()
-
-        switch result {
-        case .activationPreferred:
-            do {
-                _ = try await activity.activate()
-                print("✅ SharePlay activated")
-            } catch {
-                print("❌ SharePlay activation failed: \(error.localizedDescription)")
-            }
-        case .activationDisabled:
-            print("⚠️ SharePlay disabled (not in FaceTime?)")
-        case .cancelled:
-            print("ℹ️ SharePlay cancelled")
-        @unknown default:
-            break
-        }
+    func start() async throws {
+        _ = try await SharedSpaceActivity().activate()
     }
 
     func stop() {
@@ -1723,13 +1948,19 @@ final class SharePlayCoordinator: ObservableObject {
     /// Returning the error instead of only printing it is what lets the diagnostics HUD show
     /// *why* a large `.diagram` payload never arrived.
     @discardableResult
-    func send(_ data: Data) async -> String? {
+    func send(_ data: Data, to participantID: UUID? = nil) async -> String? {
         guard let messenger else {
             print("❌ SharePlay send failed: messenger is nil")
             return "messenger is nil"
         }
         do {
-            try await messenger.send(data)
+            if let participantID {
+                guard let participant = currentSession?.activeParticipants.first(where: { $0.id == participantID })
+                else { return "SharePlay participant is no longer connected" }
+                try await messenger.send(data, to: .only([participant]))
+            } else {
+                try await messenger.send(data)
+            }
             print("✅ SharePlay message sent successfully (\(data.count) bytes)")
             return nil
         } catch {
@@ -1750,10 +1981,10 @@ final class SharePlayCoordinator: ObservableObject {
     private func configureSession(_ session: GroupSession<SharedSpaceActivity>) async {
         // Clean up previous session. leave() only — end() would terminate the previous
         // activity for everyone, including the peer who just invited us.
-        currentSession?.leave()
+        if currentSession != nil { stop() }
 
         currentSession = session
-        messenger = GroupSessionMessenger(session: session)
+        messenger = GroupSessionMessenger(session: session, deliveryMode: .reliable)
 
         // Configure SystemCoordinator for visionOS 26+
         #if os(visionOS)
@@ -1776,10 +2007,11 @@ final class SharePlayCoordinator: ObservableObject {
         messageTask = Task { [weak self] in
             guard let messenger = self?.messenger else { return }
             print("📡 SharePlay: Started listening for messages")
-            for await (data, _) in messenger.messages(of: Data.self) {
+            for await (data, context) in messenger.messages(of: Data.self) {
                 print("📥 SharePlay: Received message (\(data.count) bytes)")
                 await MainActor.run { [weak self] in
-                    self?.onDataReceived?(data)
+                    guard let self, self.currentSession?.id == session.id else { return }
+                    self.onDataReceived?(data, context.source.id)
                 }
             }
             print("📡 SharePlay: Message listener ended")
@@ -1795,7 +2027,7 @@ final class SharePlayCoordinator: ObservableObject {
         stateTask = Task { [weak self] in
             for await state in session.$state.values {
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.currentSession?.id == session.id else { return }
                     switch state {
                     case .waiting:
                         self.sessionStateDescription = "waiting"
@@ -1803,13 +2035,9 @@ final class SharePlayCoordinator: ObservableObject {
                         self.sessionStateDescription = "joined"
                         self.onSessionJoined?()
                     case .invalidated(let reason):
-                        self.sessionStateDescription = "invalidated (\(reason.localizedDescription))"
-                        self.messenger = nil
                         self.currentSession = nil
-                        #if os(visionOS)
-                        self.systemCoordinator = nil
-                        #endif
-                        self.onSessionEnded?()
+                        self.stop()
+                        self.sessionStateDescription = "invalidated (\(reason.localizedDescription))"
                     @unknown default:
                         self.sessionStateDescription = "unknown"
                     }
@@ -1823,7 +2051,7 @@ final class SharePlayCoordinator: ObservableObject {
         participantsTask = Task { [weak self] in
             for await participants in session.$activeParticipants.values {
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.currentSession?.id == session.id else { return }
                     self.totalParticipantCount = participants.count
                     let local = session.localParticipant
                     self.localParticipantID = local.id
@@ -1868,8 +2096,6 @@ final class SharePlayCoordinator: ObservableObject {
         for await localState in coordinator.localParticipantStates {
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                // `isSpatial` distinguishes "SharePlay over FaceTime from another room" (where
-                // shared world anchors can never become available) from genuine co-location.
                 self.isSpatial = localState.isSpatial
                 if let pose = localState.pose {
                     // Convert Pose3D to simd_float4x4
@@ -1884,7 +2110,7 @@ final class SharePlayCoordinator: ObservableObject {
 
 // MARK: - SharedSpaceActivity
 
-struct SharedSpaceActivity: GroupActivity {
+struct SharedSpaceActivity: GroupActivity, Transferable {
     static var activityIdentifier: String { "org.riquelme.avar2.sharedspace" }
 
     var metadata: GroupActivityMetadata {

@@ -12,12 +12,8 @@
 //  yet" from "anchor created but our device hasn't resolved it" is on screen, and
 //  "Copy diagnostics" produces a text blob you can diff between the two devices afterwards.
 //
-//  THE ONE COUNTERINTUITIVE READING
-//  The session-origin transform MUST DIFFER between the two devices. It is each device's own
-//  `originFromAnchorTransform` for the same physical anchor, expressed in that device's own
-//  private ARKit origin. If the two devices ever show the SAME translation here, a transform
-//  leaked onto the wire and alignment is broken. The panel says so inline.
-//
+//  Compare the UUID and physical marker across devices. ARKit expresses each reported pose
+//  in that device's own coordinate system.
 
 import SwiftUI
 import simd
@@ -51,8 +47,8 @@ enum AlignmentDiagnostic: Equatable {
     var label: String {
         switch self {
         case .noSession: return "No session"
-        case .notSpatial: return "NOT co-located"
-        case .alignmentNotAchievable: return "Shared, not aligned"
+        case .notSpatial: return "No nearby participant"
+        case .alignmentNotAchievable: return "Waiting for a participant"
         case .waitingForAvailability: return "Waiting for anchor sharing"
         case .waitingForOwnerAnnounce: return "Waiting for origin anchor"
         case .waitingForLocalResolve: return "Resolving origin locally"
@@ -66,11 +62,11 @@ enum AlignmentDiagnostic: Equatable {
     var detail: String {
         switch self {
         case .noSession:
-            return "Start SharePlay from a FaceTime call with the other device."
+            return "Start SharePlay and invite the other Vision Pro as a nearby participant."
         case .notSpatial:
-            return "Participants are not in the same room — shared world anchors are unavailable, so diagrams cannot align. Each device places them independently."
+            return "SharePlay has not detected a nearby participant. Join the same nearby SharePlay activity on both Vision Pro devices."
         case .alignmentNotAchievable:
-            return "This peer cannot resolve a visionOS world anchor (e.g. the iPhone companion), so spatial alignment is not possible. Diagrams are still shared and visible — useful for checking content, transforms and 2D/3D handling, but not physical alignment."
+            return "A nearby Vision Pro participant is needed for physical alignment."
         case .waitingForAvailability:
             return "Co-located. Look around the room so tracking settles; sharing usually becomes available within a few seconds."
         case .waitingForOwnerAnnounce:
@@ -101,8 +97,14 @@ enum AlignmentDiagnostic: Equatable {
 #if os(visionOS)
 struct CollabDiagnosticsView: View {
     @ObservedObject var session: CollaborativeSessionManager
+    @ObservedObject private var anchorManager: SharedWorldAnchorManager
     @Environment(AppModel.self) private var appModel
     @State private var didCopy = false
+
+    init(session: CollaborativeSessionManager) {
+        self.session = session
+        self.anchorManager = session.sharedWorldAnchorManager
+    }
 
     var body: some View {
         ScrollView {
@@ -128,6 +130,14 @@ struct CollabDiagnosticsView: View {
                     // session means geometry keys are churning (e.g. many distinct HTTP diagrams
                     // or label strings) and meshes are being regenerated rather than reused.
                     DiagRow(label: "Cached meshes", value: "\(MeshCache.shared.count) / 512")
+                    Toggle("Optimize diagram edges", isOn: Binding(
+                        get: { appModel.optimizeDiagramEdges },
+                        set: { appModel.optimizeDiagramEdges = $0 }
+                    ))
+                    .font(.caption)
+                    Text("Compare with this off and on while viewing the same diagram.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
 
                 if includesTestAffordances { loopbackSection }
@@ -184,8 +194,13 @@ struct CollabDiagnosticsView: View {
                         value: session.sessionOriginTransform.map(Self.formatTranslation) ?? "unresolved",
                         mono: true,
                         tint: session.sessionOriginTransform == nil ? .orange : .primary)
-                // The whole point, stated where it will be read:
-                Text("⚠️ This translation MUST DIFFER between the two devices. It is this device's own transform for the same physical anchor. Identical values on both devices mean a transform leaked onto the wire.")
+                if #available(visionOS 27.0, *), let correction = anchorManager.renderCorrectionSummary(for: originID) {
+                    DiagRow(label: "Local render correction", value: correction, mono: true)
+                    Text("Difference between this headset’s corrected and uncorrected anchor positions.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Compare the anchor UUID and the physical origin marker across devices. The translation is expressed in this device's local coordinates.")
                     .font(.caption2)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -365,7 +380,7 @@ private struct SharePlayDiagnosticsSection: View {
             DiagRow(label: "Active", value: session.isSharePlayActive ? "yes" : "no",
                     tint: session.isSharePlayActive ? .green : .secondary)
             DiagRow(label: "Activity", value: SharedSpaceActivity.activityIdentifier, mono: true)
-            DiagRow(label: "Co-located (isSpatial)",
+            DiagRow(label: "Spatial experience (isSpatial)",
                     value: coordinator.isSpatial ? "yes" : "NO",
                     tint: coordinator.isSpatial ? .green : .red)
 
@@ -449,22 +464,16 @@ private struct DiagRow: View {
 extension CollaborativeSessionManager {
     /// Current alignment state, derived from the signals available on this device.
     var alignmentDiagnostic: AlignmentDiagnostic {
-        if let failure = anchorCreationFailure { return .creationFailed(failure) }
-
-        #if canImport(GroupActivities)
         guard isSharePlayActive, let coordinator = sharePlayCoordinator else { return .noSession }
-        // Only meaningful once there is somebody else in the session.
-        if coordinator.participantIDs.count > 1 && !coordinator.isSpatial { return .notSpatial }
-        #else
-        guard isSessionActive else { return .noSession }
-        #endif
-
-        // Distinguish "alignment is pending" from "alignment is impossible in this session".
-        // Without this, an iPhone peer looks like a broken visionOS pairing.
-        if !isAlignmentAchievable { return .alignmentNotAchievable }
+        guard hasNearbyParticipants || worldAnchorSharingAvailable else {
+            return coordinator.participantIDs.count > 1 ? .notSpatial : .alignmentNotAchievable
+        }
+        #if os(visionOS)
+        if let failure = sharedWorldAnchorManager.lastError ?? anchorCreationFailure {
+            return .creationFailed(failure)
+        }
         guard worldAnchorSharingAvailable else { return .waitingForAvailability }
 
-        #if os(visionOS)
         // Distinguish "no origin announced yet" from "origin UUID known but our own ARKit
         // hasn't resolved it" — very different user actions (wait vs. look around).
         guard sessionOriginID != nil else { return .waitingForOwnerAnnounce }
@@ -483,6 +492,7 @@ extension CollaborativeSessionManager {
         var lines: [String] = []
         lines.append("=== AVAR2 collaboration diagnostics ===")
         lines.append("platform: \(deviceModelDescription)")
+        lines.append("osVersion: \(ProcessInfo.processInfo.operatingSystemVersionString)")
         lines.append("alignment: \(alignmentDiagnostic.label) — \(alignmentDiagnostic.detail)")
         lines.append("sessionActive: \(isSessionActive)  sharePlayActive: \(isSharePlayActive)")
         lines.append("worldAnchorSharingAvailable: \(worldAnchorSharingAvailable)")
@@ -492,20 +502,23 @@ extension CollaborativeSessionManager {
             lines.append("sharePlayState: \(c.sessionStateDescription)")
             lines.append("isSpatial: \(c.isSpatial)")
             lines.append("localParticipant: \(c.localParticipantID?.uuidString ?? "—")")
-            lines.append("electedOriginOwner: \(c.participantIDs.first?.uuidString ?? "—")")
             lines.append("participants (sorted): \(c.participantIDs.map(\.uuidString).joined(separator: ", "))")
             lines.append("nearby: \(c.nearbyParticipantIDs.map(\.uuidString).joined(separator: ", "))")
         }
         #endif
 
         #if os(visionOS)
+        lines.append("electedOriginOwner: \(electedOriginOwnerID?.uuidString ?? "—")")
         lines.append("isSessionOriginOwner: \(isSessionOriginOwner)")
         if let originID = sessionOriginID {
             lines.append("originAnchorID: \(originID)")
             lines.append("originTracked: \(sessionOriginIsTracked)")
+            if #available(visionOS 27.0, *),
+               let correction = sharedWorldAnchorManager.renderCorrectionSummary(for: originID) {
+                lines.append("localRenderCorrection: \(correction)")
+            }
             if let t = sessionOriginTransform?.columns.3 {
-                // Expected to DIFFER between devices — see the note in the panel.
-                lines.append(String(format: "originFromAnchor.translation: [%.4f, %.4f, %.4f]  (MUST DIFFER between devices)", t.x, t.y, t.z))
+                lines.append(String(format: "originFromAnchor.translation (local): [%.4f, %.4f, %.4f]", t.x, t.y, t.z))
             } else {
                 lines.append("originFromAnchor.translation: unresolved locally")
             }
@@ -520,7 +533,7 @@ extension CollaborativeSessionManager {
         for d in sharedDiagrams {
             let p = d.anchorRelativePosition
             let pos = p.map { String(format: "[%.4f, %.4f, %.4f]", $0.x, $0.y, $0.z) } ?? "—"
-            lines.append("  \(d.filename)  elements=\(d.elements.count)  anchorRelPos=\(pos)  scale=\(d.anchorRelativeScale.map { String(format: "%.3f", $0) } ?? "—")")
+            lines.append("  \(d.filename)  elements=\(d.elements.count)  poseAnchorID=\(d.poseAnchorID?.uuidString ?? "—")  anchorRelPos=\(pos)  scale=\(d.anchorRelativeScale.map { String(format: "%.3f", $0) } ?? "—")")
         }
 
         lines.append("--- traffic ---")

@@ -14,15 +14,50 @@ struct WireFormatTests {
     static func main() {
         testSessionOriginMessageCarriesNoTransform()
         testSessionOriginRoundTrip()
+        testRealignmentRoundTrip()
         testEnvelopeRoundTripForEveryCase()
         testEnvelopeKindsAreUniqueAndStable()
         testSharedDiagramPreservesIs2D()
         testSharedDiagramIs2DBackCompatWhenKeyAbsent()
         testWireKeysAreUnchangedByTheRename()
         testSharedDiagramTransformRoundTrip()
+        testPoseRequiresTheMatchingAnchor()
+        testRemoveIdentifiesTheDiagramInstance()
         testScriptOutputMemberwiseInit()
         testScriptOutputDecodesAllFourFormats()
         print("WireFormatTests ✅")
+    }
+
+    static func testPoseRequiresTheMatchingAnchor() {
+        let origin = UUID()
+        let id = UUID()
+        let diagram = SharedDiagram(id: id, filename: "diagram", elements: [],
+                                    anchorRelativePosition: [1, 2, 3], poseAnchorID: origin)
+        let data = try! JSONEncoder().encode(diagram)
+        let received = try! JSONDecoder().decode(SharedDiagram.self, from: data)
+        assert(received.hasPose(relativeTo: origin))
+        assert(!received.hasPose(relativeTo: UUID()))
+        assert(!received.hasPose(relativeTo: nil))
+
+        var unplaced = received
+        unplaced.anchorRelativePosition = nil
+        assert(!unplaced.hasPose(relativeTo: origin))
+
+        let correction = UpdateDiagramTransformMessage(filename: diagram.filename,
+                                                       anchorRelativePosition: [4, 5, 6],
+                                                       poseAnchorID: origin, diagramID: id)
+        let updateData = try! JSONEncoder().encode(correction)
+        let decoded = try! JSONDecoder().decode(UpdateDiagramTransformMessage.self, from: updateData)
+        assert(decoded.diagramID == id && decoded.poseAnchorID == origin)
+    }
+
+    static func testRemoveIdentifiesTheDiagramInstance() {
+        let id = UUID()
+        let data = try! JSONEncoder().encode(RemoveDiagramMessage(filename: "diagram", diagramID: id))
+        assert(try! JSONDecoder().decode(RemoveDiagramMessage.self, from: data).diagramID == id)
+
+        let legacy = Data(#"{"filename":"diagram"}"#.utf8)
+        assert(try! JSONDecoder().decode(RemoveDiagramMessage.self, from: legacy).diagramID == nil)
     }
 
     // MARK: - The invariant
@@ -61,6 +96,28 @@ struct WireFormatTests {
         assert(decoded.ownerParticipantID == ownerID, "ownerParticipantID lost in round trip")
     }
 
+    static func testRealignmentRoundTrip() {
+        let request = SpaceRealignment(id: UUID(), phase: .request, anchorID: nil, replaceAnchor: true)
+        let anchor = UUID()
+        // Every phase, not only the ones that happen to carry an anchor today: `.probe`, `.report`
+        // and `.failed` all cross the wire, and a phase that fails to decode strands the handshake
+        // mid-flight on the receiving headset with no error anywhere.
+        let phases: [SpaceRealignment.Phase] = [.request, .probe, .report, .prepare,
+                                                .ready, .commit, .applied, .failed]
+        for phase in phases {
+            for anchorID in [anchor, nil] {
+                let envelope = SharedSpaceEnvelope.realignment(request.changing(to: phase, anchorID: anchorID))
+                let data = try! JSONEncoder().encode(envelope)
+                guard case let .realignment(decoded) = try! JSONDecoder().decode(SharedSpaceEnvelope.self, from: data)
+                else { preconditionFailure("Expected a realignment message") }
+                assert(decoded.id == request.id && decoded.phase == phase)
+                assert(decoded.anchorID == anchorID && decoded.replaceAnchor)
+                let json = String(decoding: data, as: UTF8.self).lowercased()
+                assert(!json.contains("transform") && !json.contains("matrix"))
+            }
+        }
+    }
+
     // MARK: - Envelope
 
     /// Every envelope case must survive encode → decode as the same case. A mismatch means peers
@@ -69,6 +126,7 @@ struct WireFormatTests {
         let cases: [SharedSpaceEnvelope] = [
             .anchor(SharedAnchorMessage(transform: matrix_identity_float4x4)),
             .sessionOrigin(SessionOriginMessage(anchorID: UUID(), ownerParticipantID: UUID())),
+            .realignment(SpaceRealignment(id: UUID(), phase: .request, anchorID: nil, replaceAnchor: false)),
             .diagram(SharedDiagram(filename: "d", elements: [], is2D: true)),
             .transform(UpdateDiagramTransformMessage(filename: "d",
                                                      anchorRelativePosition: SIMD3<Float>(1, 2, 3),
@@ -96,11 +154,13 @@ struct WireFormatTests {
     /// `kind` labels the diagnostics traffic counters. Duplicates would silently merge two message
     /// types into one row and hide a failure.
     static func testEnvelopeKindsAreUniqueAndStable() {
-        let expected: Set<String> = ["anchor", "sessionOrigin", "diagram", "transform", "remove",
+        let expected: Set<String> = ["anchor", "sessionOrigin", "realignment", "diagram", "transform", "remove",
                                      "arCollaboration", "elementMoved", "sessionEnded", "participantLeft"]
         let actual: Set<String> = [
             SharedSpaceEnvelope.anchor(SharedAnchorMessage(transform: matrix_identity_float4x4)).kind,
             SharedSpaceEnvelope.sessionOrigin(SessionOriginMessage(anchorID: UUID(), ownerParticipantID: UUID())).kind,
+            SharedSpaceEnvelope.realignment(SpaceRealignment(id: UUID(), phase: .request,
+                                                             anchorID: nil, replaceAnchor: false)).kind,
             SharedSpaceEnvelope.diagram(SharedDiagram(filename: "d", elements: [])).kind,
             SharedSpaceEnvelope.transform(UpdateDiagramTransformMessage(filename: "d")).kind,
             SharedSpaceEnvelope.remove(RemoveDiagramMessage(filename: "d")).kind,

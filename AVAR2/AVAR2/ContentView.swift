@@ -27,23 +27,36 @@ struct ContentView: View {
     @Environment(AppModel.self) private var appModel
     var collaborativeSession: CollaborativeSessionManager? = nil
 
+    private struct SceneOrigin: Equatable {
+        let id: UUID?
+        let transform: simd_float4x4?
+    }
+
     var body: some View {
         if let session = collaborativeSession {
             mainContent
-                .onReceive(session.$sharedDiagrams) { diagrams in
-                    guard let shared = diagrams.first(where: { $0.filename == filename }) else { return }
-                    // Poses are already in the shared session-origin frame — applied directly
-                    // against worldRoot, no anchor matrix math.
+                .onReceive(session.receivedDiagramTransform) { diagram in
+                    guard diagram.filename == filename else { return }
+                    if session.requiresSharedOrigin(for: diagram), !diagram.hasPose(relativeTo: session.currentPoseAnchorID) {
+                        return
+                    }
+                    viewModel.updateWorldRoot(originFromAnchor: session.sessionOriginTransform,
+                                              anchorID: session.currentPoseAnchorID)
                     viewModel.applySharedDiagramTransform(
-                        position: shared.anchorRelativePosition,
-                        orientation: shared.anchorRelativeOrientation,
-                        scale: shared.anchorRelativeScale
+                        position: diagram.anchorRelativePosition,
+                        orientation: diagram.anchorRelativeOrientation,
+                        scale: diagram.anchorRelativeScale
                     )
                 }
-                .onReceive(session.$sessionOriginTransform) { originTransform in
-                    // One assignment moves every diagram coherently when ARKit refines or
-                    // re-acquires the anchor.
-                    viewModel.updateWorldRoot(originFromAnchor: originTransform)
+                .onChange(of: SceneOrigin(id: session.currentPoseAnchorID,
+                                          transform: session.sessionOriginTransform), initial: true) { _, origin in
+                    if let diagram = session.sharedDiagrams.first(where: { $0.filename == filename }),
+                       session.requiresSharedOrigin(for: diagram),
+                       !diagram.hasPose(relativeTo: origin.id) {
+                        // Keep the last placement until a pose arrives in the replacement frame.
+                        return
+                    }
+                    viewModel.updateWorldRoot(originFromAnchor: origin.transform, anchorID: origin.id)
                 }
                 .onChange(of: appModel.debugWorldRootOffset, initial: true) { _, enabled in
                     viewModel.debugWorldRootOffsetEnabled = enabled
@@ -56,35 +69,25 @@ struct ContentView: View {
     private var mainContent: some View {
         RealityView { content in
             logger.debug("RealityView make block called for: \(filename)")
+            if let session = collaborativeSession {
+                viewModel.updateWorldRoot(originFromAnchor: session.sessionOriginTransform,
+                                          anchorID: session.currentPoseAnchorID)
+                if let shared = session.sharedDiagrams.first(where: { $0.filename == filename }),
+                   !session.isLocallyShared(shared) {
+                    viewModel.applySharedDiagramTransform(position: shared.anchorRelativePosition,
+                                                          orientation: shared.anchorRelativeOrientation,
+                                                          scale: shared.anchorRelativeScale)
+                }
+            }
             viewModel.loadElements(in: content, onClose: onClose)
-        } update: { content in
-            logger.debug("RealityView update block called for: \(filename)")
-            viewModel.updateConnections(in: content)
+        }
+        .onChange(of: appModel.optimizeDiagramEdges) { _, _ in
+            viewModel.updateConnections()
         }
         .task {
             logger.debug("ContentView task started for: \(filename)")
             viewModel.setAppModel(appModel)
             logger.debug("About to load data for: \(filename)")
-            await viewModel.loadData(from: filename)
-            logger.debug("Data load completed for: \(filename)")
-
-            // Use shared throttler for collaborative sync
-            let throttler = UpdateThrottler()
-
-            // Set up transform change callback for collaborative sync
-            viewModel.onTransformChanged = { position, orientation, scale in
-                // Throttle updates to avoid lag during drag
-                guard throttler.shouldUpdate() else { return }
-                guard let session = collaborativeSession else { return }
-
-                session.updateDiagramTransform(
-                    filename: filename,
-                    anchorRelativePosition: position,
-                    anchorRelativeOrientation: orientation,
-                    anchorRelativeScale: scale
-                )
-            }
-
             // Authoritative, one-shot pose pushes (e.g. the correction issued when the session
             // origin resolves). Deliberately NOT throttled — there is no follow-up update to
             // cover for a dropped one.
@@ -108,41 +111,25 @@ struct ContentView: View {
                 )
             }
 
-            // Cache and share the pose in the SHARED frame (relative to worldRoot), not world
-            // space. Being anchor-relative by construction is what removed the conversion math.
-            if let transform = viewModel.getSharedTransform() {
-                collaborativeSession?.cacheLocalDiagramTransform(
-                    filename: filename,
-                    position: transform.position,
-                    orientation: transform.orientation,
-                    scale: transform.scale
-                )
-
-                if collaborativeSession?.isSessionActive == true,
-                   !collaborativeSession!.sharedDiagrams.contains(where: { $0.filename == filename }) {
-                    do {
-                        let output = try DiagramDataLoader.loadScriptOutput(from: filename)
-
-                        collaborativeSession?.shareDiagram(
-                            filename: filename,
-                            elements: output.elements,
-                            is2D: output.is2D,
-                            anchorRelativePosition: transform.position,
-                            anchorRelativeOrientation: transform.orientation,
-                            anchorRelativeScale: transform.scale
-                        )
-                        logger.info("Shared diagram '\(filename)' at device-relative position: \(String(describing: transform.position))")
-                    } catch {
-                        logger.error("Failed to share diagram on initial load: \(error.localizedDescription)")
-                    }
+            // RealityView and the data task can start in either order. Share only once the
+            // scene builder has produced the actual pose in this device's current frame.
+            viewModel.onSceneReady = { position, orientation, scale in
+                guard let session = collaborativeSession,
+                      !DiagramDataLoader.isReceived(filename) else { return }
+                session.cacheLocalDiagramTransform(filename: filename, position: position,
+                                                   orientation: orientation, scale: scale)
+                guard session.isSessionActive else { return }
+                do {
+                    let output = try DiagramDataLoader.loadScriptOutput(from: filename)
+                    session.shareDiagram(filename: filename, elements: output.elements, is2D: output.is2D,
+                                         anchorRelativePosition: position,
+                                         anchorRelativeOrientation: orientation, anchorRelativeScale: scale,
+                                         poseAnchorID: session.currentPoseAnchorID)
+                } catch {
+                    logger.error("Failed to share diagram on initial load: \(error.localizedDescription)")
                 }
             }
-
-            // NOTE: the duplicate "apply shared transform after initial load" block that used to
-            // live here is gone. It existed only to paper over `applySharedDiagramTransform`
-            // silently dropping updates that arrived before `rootEntity` existed. That is now
-            // handled properly by `pendingSharedTransform`, which the scene builder consumes at
-            // construction time — so either arrival order converges without a second apply.
+            await viewModel.loadData(from: filename)
 
             logger.debug("ContentView task completed for: \(filename)")
         }

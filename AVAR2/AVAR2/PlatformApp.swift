@@ -5,6 +5,9 @@
 
 import SwiftUI
 import simd
+#if canImport(GroupActivities)
+import GroupActivities
+#endif
 
 #if os(visionOS)
 import RealityKit
@@ -19,6 +22,12 @@ import UIKit
 class VisionOSAppState: ObservableObject {
     @Published var activeFiles: [String] = []
     @Published var appModel = AppModel()
+
+    func closeDiagram(_ filename: String) {
+        activeFiles.removeAll { $0 == filename }
+        appModel.freeDiagramPosition(filename: filename)
+        DiagramDataLoader.forgetReceived(filename)
+    }
 }
 
 /// Platform-aware app entry point that adapts UI for visionOS and iOS
@@ -120,9 +129,7 @@ struct VisionOSMainView: View {
     @State private var showingCollaborativeSession = false
 
     @State private var showingDiagramChooser = false
-    @State private var didShareExistingOnSharePlay = false
 
-    @Environment(\.scenePhase) private var scenePhase
 
     init(collaborativeSession: CollaborativeSessionManager, sharedState: VisionOSAppState) {
         self.collaborativeSession = collaborativeSession
@@ -144,18 +151,9 @@ struct VisionOSMainView: View {
                 .font(.title)
                 .padding(.top, 6)
 
-            // ✅ Collaboration (expandable, fixed height so the UI doesn't resize)
             CollaborationCard(
-                collaborativeSession: collaborativeSession,
-                onOpenCollabSession: { showingCollaborativeSession = true },
-                onStartShareSpace: {
-                    Task { await startSharePlayForImmersiveSpace() }
-                },
-                onCreateSharedAnchor: {
-                    Task { @MainActor in
-                        await collaborativeSession.ensureSharedWorldAnchorInFrontOfUser()
-                    }
-                }
+                session: collaborativeSession,
+                openCompanionConnection: { showingCollaborativeSession = true }
             )
             .padding(.horizontal)
 
@@ -204,17 +202,8 @@ struct VisionOSMainView: View {
                                         try? jsonInput.write(to: tempURL, atomically: true, encoding: .utf8)
                                     }
 
-                                    sharedState.activeFiles.append(newFile)
-
-                                    if collaborativeSession.isSessionActive {
-                                        do {
-                                            let output = try DiagramDataLoader.loadScriptOutput(from: newFile)
-                                            collaborativeSession.shareDiagram(filename: newFile,
-                                                                              elements: output.elements,
-                                                                              is2D: output.is2D)
-                                        } catch {
-                                            print("❌ Failed to share diagram: \(error)")
-                                        }
+                                    if !sharedState.activeFiles.contains(newFile) {
+                                        sharedState.activeFiles.append(newFile)
                                     }
 
                                     sharedState.appModel.showPlaneVisualization = false
@@ -261,8 +250,8 @@ struct VisionOSMainView: View {
         .sheet(isPresented: $showingCollaborativeSession) {
             CollaborativeSessionView(sessionManager: collaborativeSession)
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background { exit(0) }
+        .onChange(of: collaborativeSession.companionMode) { _, mode in
+            if mode == .advertising { shareExistingDiagrams() }
         }
         .onAppear {
             print("🔧 VisionOSMainView.onAppear called!")
@@ -278,7 +267,6 @@ struct VisionOSMainView: View {
                     if let diagramId = scriptOutput.id {
                         if let existingInfo = self.sharedState.appModel.getDiagramInfo(for: diagramId) {
                             print("🔄 Updating existing diagram with ID: \(diagramId)")
-                            self.sharedState.activeFiles.removeAll { $0 == existingInfo.filename }
                             let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
 
                             do {
@@ -289,6 +277,8 @@ struct VisionOSMainView: View {
                                 let tempURL = try DiagramStorage.fileURL(for: newFile, withExtension: "txt")
                                 try data.write(to: tempURL)
                                 print("🔄 Redrawing diagram with ID: \(diagramId)")
+                                self.sharedState.closeDiagram(existingInfo.filename)
+                                self.collaborativeSession.removeDiagram(filename: existingInfo.filename)
                                 self.sharedState.activeFiles.append(newFile)
                                 self.sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
                             } catch {
@@ -366,7 +356,6 @@ struct VisionOSMainView: View {
                     if let diagramId = scriptOutput.id {
                         if let existingInfo = sharedState.appModel.getDiagramInfo(for: diagramId) {
                             print("🔄 Updating existing diagram with ID: \(diagramId)")
-                            sharedState.activeFiles.removeAll { $0 == existingInfo.filename }
                             let newFile = "http_diagram_\(diagramId)_\(Date().timeIntervalSince1970)"
 
                             do {
@@ -378,6 +367,8 @@ struct VisionOSMainView: View {
                                 try data.write(to: tempURL)
 
                                 print("🔄 Redrawing diagram with ID: \(diagramId)")
+                                sharedState.closeDiagram(existingInfo.filename)
+                                collaborativeSession.removeDiagram(filename: existingInfo.filename)
                                 sharedState.activeFiles.append(newFile)
                                 sharedState.appModel.registerDiagram(id: diagramId, filename: newFile, index: existingInfo.index)
                             } catch {
@@ -432,64 +423,32 @@ struct VisionOSMainView: View {
             Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
         }
         #if os(visionOS)
-        .onChange(of: collaborativeSession.isSharePlayActive) { _, isActive in
-            if isActive {
-                print("🔧 SharePlay became active - ensuring plane visualization is disabled")
-                sharedState.appModel.showPlaneVisualization = false
-                sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
-                Task { @MainActor in
-                    _ = await ensureImmersiveSpaceActive()
-                }
-                if !didShareExistingOnSharePlay {
-                    Task { @MainActor in
-                        await collaborativeSession.ensureSharedWorldAnchorInFrontOfUser()
-                        let shared = await shareExistingDiagrams()
-                        if shared {
-                            didShareExistingOnSharePlay = true
-                        }
-                    }
-                }
-            } else {
-                didShareExistingOnSharePlay = false
-            }
+        .background {
+            ShareLink(item: SharedSpaceActivity(), preview: SharePreview("AVAR2 Shared Space"))
+                .hidden()
         }
-        .onChange(of: collaborativeSession.sharedAnchorUsesSharedWorld) { _, usesShared in
-            guard usesShared,
-                  collaborativeSession.isSharePlayActive,
-                  !didShareExistingOnSharePlay else { return }
-            Task { @MainActor in
-                let shared = await shareExistingDiagrams()
-                if shared {
-                    didShareExistingOnSharePlay = true
-                }
-            }
+        .onChange(of: collaborativeSession.isSharePlayActive, initial: true) { _, isActive in
+            guard isActive else { return }
+            sharedState.appModel.showPlaneVisualization = false
+            sharedState.appModel.surfaceDetector.setVisualizationVisible(false)
+            shareExistingDiagrams()
+            Task { @MainActor in _ = await ensureImmersiveSpaceActive() }
         }
-        // Materialize diagrams received from peers.
-        //
-        // This lives HERE, in the always-alive WindowGroup, not inside VisionOSImmersiveView.
-        // Previously it was attached inside the immersive space, so any diagram that arrived
-        // before the space opened was published to nobody and lost forever.
-        //
-        // It is also ADDITIVE-ONLY and role-free. The old version bailed out entirely for
-        // whichever device happened to be `isHost` (a coin flip off an unordered Set), so the
-        // host never rendered anything from its peer and sharing was one-directional at best.
-        // Removal now comes only from explicit `.remove` envelopes and the local close button —
-        // never from set-differencing against the shared list, which raced with local additions.
+        // The launcher stays mounted while the immersive space opens or closes.
         .onReceive(collaborativeSession.$sharedDiagrams) { diagrams in
-            for diagram in diagrams {
-                // Hand the elements straight to the renderer. No JSON round-trip through disk:
-                // that lost `is2D`, silently dropped the position, and let the bundle shadow
-                // the received data.
+            for diagram in diagrams where !collaborativeSession.isLocallyShared(diagram) {
                 DiagramDataLoader.registerReceived(
                     ScriptOutput(elements: diagram.elements, is2D: diagram.is2D),
                     for: diagram.filename
                 )
                 if !sharedState.activeFiles.contains(diagram.filename) {
-                    print("📥 Materializing shared diagram '\(diagram.filename)' (\(diagram.elements.count) elements, is2D=\(diagram.is2D))")
                     sharedState.activeFiles.append(diagram.filename)
                     Task { @MainActor in _ = await ensureImmersiveSpaceActive() }
                 }
             }
+        }
+        .onReceive(collaborativeSession.receivedDiagramRemoval) { filename in
+            sharedState.closeDiagram(filename)
         }
         #endif
     }
@@ -772,318 +731,91 @@ struct VisionOSMainView: View {
         }
     }
 
-    // MARK: - Collaboration Card (Expandable, fixed size)
-
     private struct CollaborationCard: View {
-        @ObservedObject var collaborativeSession: CollaborativeSessionManager
-        let onOpenCollabSession: () -> Void
-        let onStartShareSpace: () -> Void
-        let onCreateSharedAnchor: () -> Void
-
-        @State private var isExpanded: Bool = false
-
-        private var badgeState: ConnectionBadge.State {
-            if collaborativeSession.isSharePlayActive { return .shareplay }
-            if collaborativeSession.isSessionActive { return .connected }
-            return .offline
-        }
-
-        private var anchorCode: String {
-            if let anchor = collaborativeSession.sharedAnchor {
-                return String(anchor.id.prefix(6))
-            }
-            return "------"
-        }
-
-        private var anchorReady: Bool {
-            collaborativeSession.sharedAnchor != nil
-        }
-
-        private var anchorStatusText: String {
-            if collaborativeSession.sharedAnchorUsesSharedWorld {
-                return "Shared World Anchor"
-            }
-            if collaborativeSession.sharedAnchor != nil {
-                return "Manual Anchor"
-            }
-            return "No Anchor"
-        }
-
-        private var anchorStatusColor: Color {
-            if collaborativeSession.sharedAnchorUsesSharedWorld {
-                return .green
-            }
-            if collaborativeSession.sharedAnchor != nil {
-                return .blue
-            }
-            return .secondary
-        }
+        @ObservedObject var session: CollaborativeSessionManager
+        let openCompanionConnection: () -> Void
 
         var body: some View {
             GroupBox {
-                VStack(spacing: 10) {
-                    headerRow
-
-                    if isExpanded {
-                        Divider()
-                            .opacity(0.6)
-                            .transition(.opacity)
-
-                        expandedControls
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity
-                                        .combined(with: .move(edge: .top))
-                                        .combined(with: .scale(scale: 0.98, anchor: .top)),
-                                    removal: .opacity
-                                        .combined(with: .move(edge: .top))
-                                )
-                            )
-
-                        sharedAnchorControls
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-
-                        #if os(visionOS)
-                        if collaborativeSession.isSharePlayActive {
-                            nearbyStatusRow
-                                .transition(.opacity.combined(with: .move(edge: .top)))
+                VStack(alignment: .leading, spacing: 12) {
+                    if session.isSharePlayActive {
+                        let status = session.alignmentDiagnostic
+                        HStack {
+                            Label(status.label, systemImage: status.isHealthy ? "checkmark.circle.fill" : "person.2")
+                                .foregroundStyle(status.color)
+                                .accessibilityLabel("SharePlay alignment: \(status.label)")
+                            Spacer()
+                            Button("Leave SharePlay") { session.stopSharePlay() }
+                                .buttonStyle(.bordered)
                         }
-
-                        // Full diagnostics. Deliberately in the launcher WINDOW, not the
-                        // immersive space: this text has to be readable, scrollable and
-                        // copyable, which is impossible for someone wearing a headset next to
-                        // another person wearing one.
-                        DisclosureGroup("Diagnostics") {
-                            CollabDiagnosticsView(session: collaborativeSession)
-                                .frame(maxHeight: 420)
+                        Text(status.detail)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        if session.canRealign || session.isRealigning {
+                            Button {
+                                session.requestRealignment()
+                            } label: {
+                                Label(session.isRealigning ? "Realigning…" : "Realign Space",
+                                      systemImage: "arrow.trianglehead.clockwise.rotate.90")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(session.isRealigning)
                         }
-                        .font(.caption)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                        #endif
+                        if let result = session.realignmentStatus {
+                            Text(result)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Button {
+                            Task { await session.startSharePlay() }
+                        } label: {
+                            Label(session.isStartingSharePlay ? "Opening SharePlay…" : "Invite Nearby Vision Pro",
+                                  systemImage: "shareplay")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(session.isStartingSharePlay)
+
+                        Text("On one Vision Pro, choose the other person under Share with Nearby People. On the second Vision Pro, tap Join in the invitation.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        if let error = session.sharePlayStartError {
+                            Label(error, systemImage: "exclamationmark.circle")
+                                .font(.callout)
+                                .foregroundStyle(.orange)
+                        }
+                        DisclosureGroup("Can’t find the invitation?") {
+                            Text("On the second Vision Pro, open Control Center → Share Windows. If nearby people don’t appear, check Settings → General → Share Windows → Allow Nearby People.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
+                    Divider()
+
+                    Button(action: openCompanionConnection) {
+                        Label("iPhone Companion", systemImage: "iphone")
+                    }
+                    .buttonStyle(.bordered)
+
+                    DisclosureGroup("Diagnostics") {
+                        if session.canRealign {
+                            Button("Replace Shared Anchor") {
+                                session.requestRealignment(replaceAnchor: true)
+                            }
+                            .disabled(session.isRealigning)
+                            Text("Use this if the two origin markers appear in different places.")
+                                .foregroundStyle(.secondary)
+                        }
+                        CollabDiagnosticsView(session: session)
+                            .frame(maxHeight: 420)
+                    }
+                    .font(.caption)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
                 Label("Collaboration", systemImage: "person.2.wave.2")
             }
-        }
-
-        private var headerRow: some View {
-            Button {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Text("Verify Anchor")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    AnchorCodeBadge(code: anchorCode, isReady: anchorReady)
-
-                    Spacer()
-
-                    // Show nearby count if SharePlay is active
-                    if collaborativeSession.isSharePlayActive && collaborativeSession.nearbyParticipantCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.2.fill")
-                                .font(.caption2)
-                            Text("\(collaborativeSession.nearbyParticipantCount) nearby")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.green.opacity(0.15), in: Capsule())
-                    }
-
-                    ConnectionBadge(state: badgeState)
-
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(8)
-                        .background(.thinMaterial, in: Circle())
-                        .allowsHitTesting(false)
-                }
-                .contentShape(Rectangle())
-                .padding(.vertical, 2)
-            }
-            .buttonStyle(.plain)
-        }
-
-        private var expandedControls: some View {
-            HStack(spacing: 10) {
-                Button {
-                    onOpenCollabSession()
-                } label: {
-                    Label("Session", systemImage: "person.2")
-                }
-                .buttonStyle(.bordered)
-
-                // The "Broadcast Anchor" button was removed: it transmitted a head pose (in
-                // practice the identity matrix) as a shared anchor, destroying alignment.
-
-                Spacer()
-
-                #if os(visionOS) && canImport(GroupActivities)
-                // SharePlay activation button
-                Button {
-                    onStartShareSpace()
-                } label: {
-                    Label("Share", systemImage: "shareplay")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-                #endif
-            }
-        }
-
-        private var sharedAnchorControls: some View {
-            HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: collaborativeSession.sharedAnchorUsesSharedWorld ? "checkmark.seal.fill" : "link")
-                        .foregroundStyle(anchorStatusColor)
-                    Text(anchorStatusText)
-                        .font(.caption2)
-                        .foregroundStyle(anchorStatusColor)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.thinMaterial, in: Capsule())
-
-                Spacer()
-
-                #if os(visionOS)
-                if collaborativeSession.isSharePlayActive && collaborativeSession.isHost {
-                    Button {
-                        onCreateSharedAnchor()
-                    } label: {
-                        Label("Create Shared Anchor", systemImage: "link.badge.plus")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!collaborativeSession.worldAnchorSharingAvailable
-                              || collaborativeSession.sharedAnchorUsesSharedWorld)
-                    .help(collaborativeSession.worldAnchorSharingAvailable
-                          ? "Create a shared world anchor for spatial alignment"
-                          : "Waiting for world anchor sharing to become available")
-                }
-                #endif
-            }
-        }
-
-        #if os(visionOS)
-        private var nearbyStatusRow: some View {
-            HStack(spacing: 12) {
-                // Nearby participants indicator
-                HStack(spacing: 6) {
-                    Image(systemName: collaborativeSession.hasNearbyParticipants ? "person.2.fill" : "person.2")
-                        .foregroundStyle(collaborativeSession.hasNearbyParticipants ? .green : .secondary)
-
-                    if collaborativeSession.hasNearbyParticipants {
-                        Text("\(collaborativeSession.nearbyParticipantCount) nearby")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    } else {
-                        Text("No nearby users")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                // World anchor sharing availability
-                HStack(spacing: 6) {
-                    Image(systemName: collaborativeSession.worldAnchorSharingAvailable ? "checkmark.circle.fill" : "xmark.circle")
-                        .foregroundStyle(collaborativeSession.worldAnchorSharingAvailable ? .green : .orange)
-
-                    Text(collaborativeSession.worldAnchorSharingAvailable ? "Anchors ready" : "Anchors pending")
-                        .font(.caption)
-                        .foregroundStyle(collaborativeSession.worldAnchorSharingAvailable ? .green : .orange)
-                }
-            }
-            .padding(.top, 4)
-        }
-        #endif
-    }
-
-    private struct ConnectionBadge: View {
-        enum State { case offline, connected, shareplay }
-        let state: State
-
-        var body: some View {
-            HStack(spacing: 8) {
-                Circle()
-                    .frame(width: 8, height: 8)
-                    .foregroundStyle(dotStyle)
-
-                Image(systemName: icon)
-                    .font(.caption)
-
-                Text(label)
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.thinMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(borderStyle, lineWidth: 1))
-            .foregroundStyle(.primary)
-        }
-
-        private var label: String {
-            switch state {
-            case .offline: return "Offline"
-            case .connected: return "Connected"
-            case .shareplay: return "SharePlay"
-            }
-        }
-
-        private var icon: String {
-            switch state {
-            case .offline: return "person.2"
-            case .connected: return "person.2.fill"
-            case .shareplay: return "shareplay"
-            }
-        }
-
-        private var dotStyle: AnyShapeStyle {
-            switch state {
-            case .offline: return AnyShapeStyle(Color.secondary.opacity(0.7))
-            case .connected: return AnyShapeStyle(Color.cyan)
-            case .shareplay: return AnyShapeStyle(Color.green)
-            }
-        }
-
-        private var borderStyle: Color {
-            switch state {
-            case .offline: return Color.secondary.opacity(0.35)
-            case .connected: return Color.cyan.opacity(0.55)
-            case .shareplay: return Color.green.opacity(0.55)
-            }
-        }
-    }
-
-    private struct AnchorCodeBadge: View {
-        let code: String
-        let isReady: Bool
-
-        var body: some View {
-            Text(code.uppercased())
-                .font(.system(.callout, design: .monospaced))
-                .fontWeight(.bold)
-                .tracking(1.5)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(
-                    Capsule().strokeBorder(
-                        isReady ? Color.blue.opacity(0.75) : Color.secondary.opacity(0.35),
-                        lineWidth: isReady ? 2 : 1
-                    )
-                )
-                .shadow(color: isReady ? Color.blue.opacity(0.20) : .clear, radius: 8, x: 0, y: 2)
         }
     }
 
@@ -1181,12 +913,8 @@ struct VisionOSImmersiveView: View {
         ImmersiveSpaceWrapper(
             activeFiles: $sharedState.activeFiles,
             onClose: { file in
-                sharedState.activeFiles.removeAll { $0 == file }
-                sharedState.appModel.freeDiagramPosition(filename: file)
+                sharedState.closeDiagram(file)
                 collaborativeSession.removeDiagram(filename: file)
-                // Drop any received copy so re-opening this filename locally loads the real
-                // bundle/HTTP file instead of stale network data.
-                DiagramDataLoader.forgetReceived(file)
             },
             collaborativeSession: collaborativeSession,
             showBackgroundOverlay: showBackgroundOverlay
@@ -1218,13 +946,21 @@ struct VisionOSImmersiveView: View {
         .overlay(alignment: .topTrailing) {
             if collaborativeSession.isSessionActive || collaborativeSession.isSharePlayActive {
                 HStack(spacing: 12) {
-                    dot(collaborativeSession.sharedAnchorUsesSharedWorld,
+                    dot(collaborativeSession.sessionOriginIsTracked,
                         label: collaborativeSession.sharedAnchor
                             .map { String($0.id.prefix(6)) } ?? "no origin")
-                    dot(collaborativeSession.isSpatialSession, label: "co-located")
-                    Text("\(sharedState.activeFiles.count) diagrams")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    dot(collaborativeSession.hasNearbyParticipants, label: "nearby")
+                    if collaborativeSession.sharedDiagrams.contains(where: {
+                        collaborativeSession.requiresSharedOrigin(for: $0) &&
+                        !$0.hasPose(relativeTo: collaborativeSession.currentPoseAnchorID)
+                    }) {
+                        Text("Waiting for diagram alignment")
+                            .font(.caption2)
+                    } else {
+                        Text("\(sharedState.activeFiles.count) diagrams")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -1256,64 +992,25 @@ struct VisionOSImmersiveView: View {
 #if os(visionOS)
 private extension VisionOSMainView {
     @MainActor
-    func startSharePlayForImmersiveSpace() async {
-        if !hasEnteredImmersive {
-            let opened = await ensureImmersiveSpaceActive()
-            if !opened {
-                print("❌ Cannot start SharePlay without immersive space")
-                return
-            }
-        }
-
-        // Route through the coordinator so there is exactly ONE activation path. This used to
-        // build and activate a second `SharedSpaceActivity()` directly, racing the
-        // coordinator's own activation and producing two competing sessions.
-        await collaborativeSession.startSharePlay()
-    }
-
-    @MainActor
-    func shareExistingDiagrams() async -> Bool {
-        guard !sharedState.activeFiles.isEmpty else {
-            print("📊 No existing diagrams to share")
-            return false
-        }
-
-        // Deliberately NOT gated on the shared origin existing yet.
-        //
-        // This used to `return false` whenever `!sharedAnchorUsesSharedWorld`, which meant that
-        // with a peer who can never produce a shared WorldAnchor — notably the iOS companion,
-        // whose ARKit has no such API — existing diagrams were never shared at all and the peer
-        // sat looking at an empty scene forever.
-        //
-        // Withholding buys nothing anyway. The transmitted pose is
-        // `position(relativeTo: worldRoot)`; while no origin is resolved `worldRoot` is identity,
-        // so that value is world space. When an origin later resolves, every participant's
-        // `worldRoot` moves to the same physical anchor while each diagram's parent-relative pose
-        // is unchanged — so both ends interpret the same number in now-aligned frames and agree
-        // on the physical location, with no re-broadcast needed. Content simply settles into the
-        // shared frame once, which is the correct outcome. Unaligned-but-visible beats invisible,
-        // and `alignmentDiagnostic` reports the state honestly meanwhile.
-
-        print("📤 Sharing \(sharedState.activeFiles.count) existing diagrams with session...")
-
-        for filename in sharedState.activeFiles {
+    func shareExistingDiagrams() {
+        for filename in sharedState.activeFiles where !DiagramDataLoader.isReceived(filename) {
+            guard let cached = collaborativeSession.cachedTransform(for: filename) else { continue }
             do {
                 let output = try DiagramDataLoader.loadScriptOutput(from: filename)
-                let cached = collaborativeSession.cachedTransform(for: filename)
                 collaborativeSession.shareDiagram(
                     filename: filename,
                     elements: output.elements,
                     is2D: output.is2D,
-                    anchorRelativePosition: cached?.position,
-                    anchorRelativeOrientation: cached?.orientation,
-                    anchorRelativeScale: cached?.scale
+                    anchorRelativePosition: cached.position,
+                    anchorRelativeOrientation: cached.orientation,
+                    anchorRelativeScale: cached.scale,
+                    poseAnchorID: cached.anchorID
                 )
                 print("📤 Shared diagram: \(filename)")
             } catch {
                 print("❌ Failed to share existing diagram '\(filename)': \(error)")
             }
         }
-        return true
     }
 
     @MainActor
