@@ -41,6 +41,14 @@ struct ContentView: View {
                         scale: diagram.anchorRelativeScale
                     )
                 }
+                // A node dragged on another device: move the live node here too. Applies whether
+                // this device owns the diagram or received it.
+                .onReceive(session.receivedElementMove) { move in
+                    guard move.filename == filename else { return }
+                    viewModel.applyRemoteElementMove(elementId: move.elementId,
+                                                     localPosition: move.localPosition,
+                                                     dataPosition: move.dataPosition)
+                }
                 // The forced offset puts this device in a private frame, so it must never be on
                 // while anything is shared: poses would be sent and applied in the wrong frame.
                 .onChange(of: appModel.debugWorldRootOffset && !session.isSessionActive, initial: true) { _, enabled in
@@ -85,12 +93,13 @@ struct ContentView: View {
             }
 
             // Send per-element edits to peers when a node drag ends
-            viewModel.onElementMoved = { elementId, localPos in
+            viewModel.onElementMoved = { elementId, localPos, dataPosition in
                 guard let session = collaborativeSession else { return }
                 session.updateElementPosition(
                     filename: filename,
                     elementId: elementId,
-                    localPosition: localPos
+                    localPosition: localPos,
+                    dataPosition: dataPosition
                 )
             }
 

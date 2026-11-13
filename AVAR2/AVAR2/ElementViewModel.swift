@@ -191,7 +191,8 @@ class ElementViewModel: ObservableObject {
     private var zoomStartScale: Float?
     
     /// Called when an individual element has been repositioned in container-local space
-    var onElementMoved: ((String, SIMD3<Float>) -> Void)?
+    /// (element id, container-local position, position in data coordinates).
+    var onElementMoved: ((String, SIMD3<Float>, [Double]?) -> Void)?
     /// Pivot point in world space at zoom start
     private var zoomPivotWorld: SIMD3<Float>?
     /// Pivot point in container-local space (normalized, unscaled) at zoom start
@@ -500,14 +501,7 @@ class ElementViewModel: ObservableObject {
             }
 
             let entity = createEntity(for: element)
-            var localPos = calculateElementPosition(coords: coords, normalizationContext: normalizationContext)
-
-            // Push back elements that have borderColor but no fill color (noPaint/hollow)
-            // to avoid z-fighting with other elements
-            let hasNoPaint = element.color == nil && element.borderColor != nil
-            if hasNoPaint {
-                localPos.z -= 0.003
-            }
+            let localPos = containerPosition(of: element, coords: coords, normalizationContext: normalizationContext)
 
             debugLog("📍 Element \(element.id ?? "unknown") positioned at \(localPos)")
 
@@ -523,19 +517,59 @@ class ElementViewModel: ObservableObject {
         logger.info("✅ Successfully created \(validElements) out of \(self.elements.count) elements")
     }
     
-    private func calculateElementPosition(coords: [Double], normalizationContext: NormalizationContext) -> SIMD3<Float> {
-        let dims = normalizationContext.positionCenters.count
-        let rawX = coords.count > 0 ? coords[0] : 0
-        let rawY = coords.count > 1 ? coords[1] : 0
-        let rawZ = dims > 2 && coords.count > 2 ? coords[2] : 0
-        let globalRange = normalizationContext.globalRange
-        let normX = (rawX - normalizationContext.positionCenters[0]) / globalRange * 2
-        let normY = (rawY - normalizationContext.positionCenters[1]) / globalRange * 2
-        let normZ = dims > 2
-            ? (rawZ - normalizationContext.positionCenters[2]) / globalRange * 2
-            : 0
-        let yPos = normalizationContext.is2D ? -Float(normY) : Float(normY)
-        return SIMD3<Float>(Float(normX), yPos, Float(normZ))
+    /// Hollow elements (border, no fill) sit slightly behind the rest to avoid z-fighting.
+    private static let hollowElementZOffset: Float = 0.003
+
+    private func isHollow(_ element: ElementDTO) -> Bool {
+        element.color == nil && element.borderColor != nil
+    }
+
+    /// Where `element` sits in the container for the given data coordinates.
+    private func containerPosition(of element: ElementDTO, coords: [Double],
+                                   normalizationContext: NormalizationContext) -> SIMD3<Float> {
+        var position = normalizationContext.containerPosition(forData: coords)
+        if isHollow(element) { position.z -= Self.hollowElementZOffset }
+        return position
+    }
+
+    /// The inverse of `containerPosition(of:coords:normalizationContext:)`, keeping any trailing
+    /// components of the element's original coordinates that the diagram's dimensionality ignores.
+    private func dataCoordinates(of element: ElementDTO, containerPosition: SIMD3<Float>,
+                                 normalizationContext: NormalizationContext) -> [Double] {
+        var position = containerPosition
+        if isHollow(element) { position.z += Self.hollowElementZOffset }
+        var coords = normalizationContext.dataPosition(forContainer: position)
+        if let original = element.position, original.count > coords.count {
+            coords.append(contentsOf: original[coords.count...])
+        }
+        return coords
+    }
+
+    /// Applies a node move made on another device.
+    ///
+    /// Moves the live entity, refreshes its edges and updates this view model's element, so a
+    /// later rebuild agrees with what is on screen. Never re-broadcasts — the sender already told
+    /// everyone.
+    ///
+    /// - Parameters:
+    ///   - localPosition: the sender's container-local position; used as-is when the message has
+    ///     no data coordinates.
+    ///   - dataPosition: the node's position in data coordinates, when the sender provided it.
+    ///     Preferred, because it is converted through *this* device's normalisation.
+    func applyRemoteElementMove(elementId: String, localPosition: SIMD3<Float>, dataPosition: [Double]?) {
+        // Elements without an id get a different random name on each device and cannot be matched.
+        guard let index = elements.firstIndex(where: { $0.id == elementId }) else { return }
+        var target = localPosition
+        if let dataPosition {
+            if let normalizationContext {
+                target = containerPosition(of: elements[index], coords: dataPosition,
+                                           normalizationContext: normalizationContext)
+            }
+            elements[index].position = dataPosition
+        }
+        guard let entity = entityMap[elementId] else { return }
+        entity.position = target
+        updateConnections()
     }
 
     // Preserve the original renderer for small groups and edges with transparency, waypoints
@@ -714,12 +748,23 @@ class ElementViewModel: ObservableObject {
         if let transform = getSharedTransform() {
             onAuthoritativeTransform?(transform.position, transform.orientation, transform.scale)
         }
-        // If the gesture ended on an element_*, report its new local position
+        // If the gesture ended on an element_*, report its new position.
         if value.entity.name.hasPrefix("element_") {
             let raw = value.entity.name
             let elementId = String(raw.dropFirst("element_".count))
+            // An element without an id has a random per-device name, so no peer could match it.
+            guard let index = elements.firstIndex(where: { $0.id == elementId }) else { return }
             let localPos = value.entity.position                   // local to the diagram container
-            onElementMoved?(elementId, localPos)
+            // Also in data coordinates: that is the unit the shared model is kept in, and what
+            // any renderer that rebuilds from the model (the iPhone, a late joiner) normalises.
+            var dataPosition: [Double]?
+            if let normalizationContext {
+                let coords = dataCoordinates(of: elements[index], containerPosition: localPos,
+                                             normalizationContext: normalizationContext)
+                elements[index].position = coords
+                dataPosition = coords
+            }
+            onElementMoved?(elementId, localPos, dataPosition)
         }
     }
 
@@ -1308,7 +1353,7 @@ class ElementViewModel: ObservableObject {
         var positions: [SIMD3<Float>] = []
         for point in points {
             let coords = point + [0.0] // Add Z coordinate if missing
-            let pos = calculateElementPosition(coords: coords, normalizationContext: normContext)
+            let pos = normContext.containerPosition(forData: coords)
             positions.append(pos)
         }
 

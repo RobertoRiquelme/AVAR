@@ -143,6 +143,37 @@ struct NormalizationContext {
         self.positionCenters = centers
         self.positionRanges = ranges
     }
+
+    // MARK: Data ↔ container coordinates
+    //
+    // The two directions live side by side on purpose. A node's position exists in two units:
+    // the diagram's own data coordinates (what the JSON, the shared model and every renderer
+    // that rebuilds from the model use) and container-local metres (where the entity sits). A
+    // dragged node is read in container units and must be written back in data units, or the next
+    // rebuild re-normalises a value that was already normalised.
+
+    /// Where an element with these data coordinates sits inside the diagram container.
+    func containerPosition(forData coords: [Double]) -> SIMD3<Float> {
+        let dims = positionCenters.count
+        let rawX = coords.count > 0 ? coords[0] : 0
+        let rawY = coords.count > 1 ? coords[1] : 0
+        let rawZ = dims > 2 && coords.count > 2 ? coords[2] : 0
+        let normX = (rawX - positionCenters[0]) / globalRange * 2
+        let normY = (rawY - positionCenters[1]) / globalRange * 2
+        let normZ = dims > 2 ? (rawZ - positionCenters[2]) / globalRange * 2 : 0
+        return SIMD3<Float>(Float(normX), is2D ? -Float(normY) : Float(normY), Float(normZ))
+    }
+
+    /// The exact inverse: data coordinates for a point in the diagram container. Returns one
+    /// value per data dimension (two for a 2D diagram, three otherwise).
+    func dataPosition(forContainer position: SIMD3<Float>) -> [Double] {
+        let dims = positionCenters.count
+        let normY = is2D ? -Double(position.y) : Double(position.y)
+        var coords = [Double(position.x) / 2 * globalRange + positionCenters[0],
+                      normY / 2 * globalRange + positionCenters[1]]
+        if dims > 2 { coords.append(Double(position.z) / 2 * globalRange + positionCenters[2]) }
+        return coords
+    }
 }
 
 /// Extension on ElementDTO to produce a MeshResource and Material based on shapeDescription.

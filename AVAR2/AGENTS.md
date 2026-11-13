@@ -195,6 +195,56 @@ filename **and** id when the id is present, and on filename alone when it is abs
 senders still work. A remove also records the id in `closedDiagramIDs`, which stops a diagram
 snapshot that was already in flight from reopening what the sender just closed.
 
+### Removing diagrams
+- The close button removes a diagram for **everyone**, whoever shared it (`removeDiagram`).
+- *Exit Immersive Space* withdraws only what **this device** shared (`withdrawLocalDiagrams`) and
+  awaits `flushSharePlaySends()` before leaving SharePlay. Both halves matter: using
+  `removeDiagram` there would let one participant's exit delete everybody else's diagrams, and
+  leaving first cancels the send queue, so the removals never go out. The wait is capped (3 s) and
+  happens after the space is dismissed, so a stalled send cannot make the button look dead.
+- Two exits still tell nobody: **Quit App** (`exit(0)`) and the system dismissing the immersive
+  space (Digital Crown). After the latter `hasEnteredImmersive` is also stale. Not fixed.
+
+### Node moves
+A dragged node exists in two units: container-local metres (where its entity sits) and the
+diagram's own **data coordinates** (what the JSON, the shared model, the iPhone renderer and any
+rebuild normalise). `NormalizationContext.containerPosition(forData:)` and
+`dataPosition(forContainer:)` are the two directions and must stay exact inverses.
+
+- **The shared model holds data coordinates only** (`recordElementPosition`). It used to be given
+  the container-local value, which put one already-normalised node among raw ones and misplaced it
+  on every rebuild — on the iPhone, for a late joiner, and in the received-diagram registry.
+- `ElementPositionMessage.dataPosition` is optional on the wire. A message without it (an older
+  build) still moves the live node but leaves the model alone.
+- A received move is published on `receivedElementMove`; `ContentView` hands it to
+  `ElementViewModel.applyRemoteElementMove`, which moves the entity, refreshes edges and updates
+  the view model's element. It never re-broadcasts. This runs on the owner as well as on receivers.
+- Elements without an `id` get a different random name on each device and are skipped.
+- **Known limit:** normalisation is recomputed from the positions whenever a diagram is rebuilt, so
+  a node dragged outside the original bounds rescales the diagram on any device that builds it
+  afterwards — and the iPhone rebuilds on every update. Fixing that means sharing the
+  normalisation context, not the positions.
+- 2D diagrams do not support node dragging at all (`ContentView` routes the gesture only when
+  `!isGraph2D`).
+
+### Large diagrams
+SharePlay messages are limited to 256 KB and a 1000-node diagram encodes to about 660 KB.
+`AVAR2/PayloadFraming.swift` handles this in `sendToSharePlay` / `handleIncomingPayload`:
+
+- A payload of up to 96 KB is sent **exactly as before**, so ordinary traffic is unchanged.
+- A larger one is zlib-compressed (about 6× for diagram JSON) and split into frames of at most
+  96 KB, each starting with the magic bytes `AVF1`. `PayloadReassembler` puts them back together:
+  keyed by sender and message id, tolerant of reordering and duplicates, bounded in count and
+  bytes, and strict about anything inconsistent.
+- 96 KB, not 256, because the limit is on the *encoded* message and the messenger's encoding of
+  `Data` is undocumented; base64 alone would add a third.
+- Multipeer never sees a frame — it has no such limit and its sends do not pass through here.
+- **This is not `GroupSessionJournal`**, which is what Apple recommends for large data. The journal
+  cannot be exercised without a live session; framing can be tested exhaustively. If frames turn
+  out to be rate-limited or dropped on hardware, the journal is the next thing to try.
+- The traffic panel shows `frame` and `frame (large diagram)` rows, and a `frame rejected: …` row
+  when one is refused.
+
 ### Diagnostics
 `AVAR2/CollabDiagnosticsView.swift` is the panel to use when debugging a session (launcher window
 → Collaboration → Diagnostics). In reading order:
@@ -218,8 +268,8 @@ snapshot that was already in flight from reopening what the sender just closed.
   under one live hypothesis identical values are correct.) The yellow-hubbed marker shows the
   anchor's raw pose.
 - **SharePlay**, **shared diagrams**, and per-envelope **traffic** with the last send error. A
-  `.diagram` larger than SharePlay's 256 KB message limit fails here: `Ejemplo03-1000` encodes to
-  about 660 KB.
+  large `.diagram` goes out in frames (see *Large diagrams*); a send error or a rejected frame
+  shows here.
 - **Single-device frame test** (*Force offset worldRoot*) and **loopback** injection, both gated on
   `includesTestAffordances`, **not** `#if DEBUG`, so they survive into the TestFlight build. The
   offset is unavailable and forced off while anything is shared: it would put that headset in a
@@ -262,6 +312,7 @@ snapshot that was already in flight from reopening what the sender just closed.
 - `AVAR2/SessionOriginLogic.swift`: pure election + anchor-pose logic (tested)
 - `AVAR2/RealignmentProtocol.swift`: pure realignment decision logic (tested)
 - `AVAR2/FrameDiagnostics.swift`: displacement and ARKit → scene offset measurement
+- `AVAR2/PayloadFraming.swift`: compression and framing for large SharePlay payloads (tested)
 - `AVAR2/SharedWorldRoot.swift`: shared session-origin frame for the scene graph
 - `AVAR2/CollabDiagnosticsView.swift`: two-device diagnostics panel
 - `Packages/RealityKitContent/`: RealityKit assets and materials
@@ -320,7 +371,21 @@ against the app sources:
   changes each decision hands back (anchor adoption is the one piece modelled by hand). Built for
   xrsimulator (it links `CollaborativeSessionManager.swift` for the message types).
   **Any suite that compiles `CollaborativeSessionManager.swift` must now also be given
-  `AVAR2/RealignmentProtocol.swift`** — that includes `WireFormatTests` and `DataLoaderTests`.
+  `AVAR2/RealignmentProtocol.swift` and `AVAR2/PayloadFraming.swift`** — that includes
+  `WireFormatTests`, `ReceivePathTests` and `DataLoaderTests`.
+- `Tests/ReceivePathTests.swift` — drives `CollaborativeSessionManager` through its real receive
+  path by calling the Multipeer delegate method, the same door a live peer uses. Covers adding,
+  removing and re-adding a diagram (including a removal that overtakes its diagram), a client-side
+  close, withdrawal on exit, node moves in both directions, the old-build warning, and a large
+  diagram arriving as out-of-order frames. It also frames **every bundled diagram plus a synthetic
+  3000-node one** and checks each message stays far below the SharePlay limit. Needs
+  `AVAR2_RESOURCES`. It cannot show delivery — that needs two devices.
+- `Tests/PayloadFramingTests.swift` — the framing itself: size boundaries, incompressible data,
+  reordering, duplicates, interleaved senders, a tail with no head, and damaged frames. Pure; runs
+  natively on macOS.
+- `Tests/NormalizationTests.swift` — the data ↔ container mapping a dragged node goes through:
+  exact round trip in 3D, the 2D Y flip, zero range, and positions outside the original bounds.
+  Built for xrsimulator with `ElementDTO.swift` and `ShapeFactory.swift`.
 - `Tests/FrameOffsetTests.swift` — the arithmetic behind the ARKit → scene offset: a known offset
   is recovered whichever anchor is used as the probe, and a conversion that silently did nothing
   is reported as unavailable rather than as a large offset. Pure; runs natively on macOS with

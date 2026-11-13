@@ -79,6 +79,8 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     @Published var sharedDiagrams: [SharedDiagram] = []
     let receivedDiagramRemoval = PassthroughSubject<String, Never>()
     let receivedDiagramTransform = PassthroughSubject<SharedDiagram, Never>()
+    /// A node moved on another device. Views apply it to the live entity.
+    let receivedElementMove = PassthroughSubject<ElementPositionMessage, Never>()
     private var closedDiagramIDs: Set<UUID> = []
     private var locallySharedDiagramIDs: Set<UUID> = []
     #if os(visionOS)
@@ -267,6 +269,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             self.finishRealignment(nil)
             self.retiredOriginIDs.removeAll()
             self.peerUsesAnchorFrame = false
+            self.payloadReassembler.reset()
             self.stopSessionOriginLoop()
             self.sharedWorldAnchorManager.stop()
             self.worldAnchorSharingAvailable = false
@@ -929,6 +932,47 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         broadcast(.remove(RemoveDiagramMessage(filename: filename, diagramID: diagram.id)))
     }
 
+    /// Withdraws every diagram **this device** shared and tells peers to close them.
+    ///
+    /// For leaving the immersive space: the diagrams are gone here, so they must go everywhere.
+    /// Deliberately limited to locally shared diagrams — `removeDiagram` also broadcasts for a
+    /// received one (closing it is a shared action), and using that here would let one
+    /// participant's exit delete everybody else's diagrams.
+    func withdrawLocalDiagrams() {
+        for diagram in sharedDiagrams.filter({ isLocallyShared($0) }) {
+            forgetSharedDiagram(diagram)
+            broadcast(.remove(RemoveDiagramMessage(filename: diagram.filename, diagramID: diagram.id)))
+        }
+    }
+
+    /// Returns once everything queued for SharePlay has been handed to the messenger, or after
+    /// `timeout`, whichever comes first.
+    ///
+    /// Leaving the session cancels the send queue, so anything that must reach peers first —
+    /// the removals above — has to be given a chance before `stopSharePlay()`. The wait is
+    /// bounded because those removals sit behind whatever was queued earlier (a framed diagram
+    /// is several sends), and a stalled network must not leave the Exit button looking dead.
+    func flushSharePlaySends(timeout: Duration = .seconds(3)) async {
+        #if canImport(GroupActivities)
+        guard let pending = sharePlaySendTask else { return }
+        await Self.wait(for: pending, upTo: timeout)
+        #endif
+    }
+
+    /// Waits for `task`, giving up after `timeout`. The task itself is left running.
+    static func wait(for task: Task<Void, Never>, upTo timeout: Duration) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            var resumed = false
+            let finish: @MainActor () -> Void = {
+                guard !resumed else { return }
+                resumed = true
+                continuation.resume()
+            }
+            Task { @MainActor in await task.value; finish() }
+            Task { @MainActor in try? await Task.sleep(for: timeout); finish() }
+        }
+    }
+
     private func forgetSharedDiagram(_ diagram: SharedDiagram) {
         closedDiagramIDs.insert(diagram.id)
         locallySharedDiagramIDs.remove(diagram.id)
@@ -974,50 +1018,55 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         // print("🔄 Updated and shared transform for diagram '\(filename)'")
     }
 
-    // MARK: 2c — Public API to send per-element edits and update local state
-    @MainActor
+    // MARK: Per-element edits
+
+    /// Sends a node move to peers and records it in the shared model.
+    ///
+    /// - Parameters:
+    ///   - localPosition: the node's position inside the diagram container, for peers that
+    ///     predate `dataPosition`.
+    ///   - dataPosition: the same position in the diagram's own data coordinates. This is what
+    ///     the model stores — see `recordElementPosition`.
     func updateElementPosition(filename: String,
                                elementId: String,
-                               localPosition: SIMD3<Float>) {
-        // 1) Broadcast to all peers
-        let payload = ElementPositionMessage(filename: filename,
-                                             elementId: elementId,
-                                             localPosition: localPosition)
-        broadcast(.elementMoved(payload))
-
-        // 2) Update our authoritative local model (rebuild diagram with edited elements)
-        guard let dIndex = sharedDiagrams.firstIndex(where: { $0.filename == filename }) else {
-            return
-        }
-        let old = sharedDiagrams[dIndex]
-
-        // SharedDiagram.elements is 'let', so rebuild a new array then a new diagram
-        var newElements = old.elements
-        if let eIndex = newElements.firstIndex(where: { $0.id == elementId }) {
-            var updated = newElements[eIndex]
-            // Store local (container) coords as Doubles for consistency with other fields.
-            updated.position = [Double(localPosition.x),
-                                Double(localPosition.y),
-                                Double(localPosition.z)]
-            newElements[eIndex] = updated
-
-            let newDiagram = SharedDiagram(
-                id: old.id,
-                filename: old.filename,
-                elements: newElements,
-                timestamp: Date(),                      // refresh timestamp on edit
-                is2D: old.is2D,
-                anchorRelativePosition: old.anchorRelativePosition,
-                anchorRelativeOrientation: old.anchorRelativeOrientation,
-                anchorRelativeScale: old.anchorRelativeScale,
-                poseAnchorID: old.poseAnchorID
-            )
-            sharedDiagrams[dIndex] = newDiagram
-            // 🔔 Force a publish
-            sharedDiagrams = sharedDiagrams
-        }
+                               localPosition: SIMD3<Float>,
+                               dataPosition: [Double]? = nil) {
+        broadcast(.elementMoved(ElementPositionMessage(filename: filename,
+                                                       elementId: elementId,
+                                                       localPosition: localPosition,
+                                                       dataPosition: dataPosition)))
+        recordElementPosition(filename: filename, elementId: elementId, dataPosition: dataPosition)
     }
-    
+
+    /// Writes a moved node into the shared model, in **data coordinates**.
+    ///
+    /// The model is what the iPhone renders from, what a late joiner receives and what a
+    /// received diagram is rebuilt from, and all of them normalise `position` as data. The
+    /// container-local value must therefore never be stored here: it used to be, which put one
+    /// already-normalised node among raw ones and misplaced it on every rebuild. Without data
+    /// coordinates (a message from an older build) the model is left alone.
+    private func recordElementPosition(filename: String, elementId: String, dataPosition: [Double]?) {
+        guard let dataPosition,
+              let dIndex = sharedDiagrams.firstIndex(where: { $0.filename == filename }) else { return }
+        let old = sharedDiagrams[dIndex]
+        guard let eIndex = old.elements.firstIndex(where: { $0.id == elementId }) else { return }
+
+        // `SharedDiagram.elements` is a `let`, so rebuild the diagram around the edited array.
+        var newElements = old.elements
+        newElements[eIndex].position = dataPosition
+        sharedDiagrams[dIndex] = SharedDiagram(
+            id: old.id,
+            filename: old.filename,
+            elements: newElements,
+            timestamp: Date(),
+            is2D: old.is2D,
+            anchorRelativePosition: old.anchorRelativePosition,
+            anchorRelativeOrientation: old.anchorRelativeOrientation,
+            anchorRelativeScale: old.anchorRelativeScale,
+            poseAnchorID: old.poseAnchorID
+        )
+    }
+
     private func broadcast(_ envelope: SharedSpaceEnvelope, to peers: [MCPeerID]? = nil) {
         let data: Data
         do {
@@ -1073,14 +1122,30 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             print("📤 sendToSharePlay: Sending \(data.count) bytes via SharePlay")
             guard let coordinator = sharePlayCoordinator,
                   let sessionID = coordinator.sessionID else { return }
+            // A payload that fits goes out as the single message it always was. A larger one —
+            // a big diagram — is compressed and split; see `PayloadFraming`. Multipeer never
+            // comes through here, so it never sees a frame.
+            let frames = PayloadFraming.frames(for: data)
+            if frames.isEmpty {
+                noteEnvelopeSent(kind, bytes: 0, error: "payload of \(data.count) bytes is too large to send")
+                return
+            }
+            let isFramed = frames.count > 1 || PayloadFraming.isFrame(frames[0])
+            if isFramed {
+                noteEnvelopeSent("frame (large \(kind))", bytes: frames.reduce(0) { $0 + $1.count })
+            }
             let previous = sharePlaySendTask
             sharePlaySendTask = Task { [weak self, weak coordinator] in
                 await previous?.value
-                guard !Task.isCancelled, let self, let coordinator, coordinator.sessionID == sessionID else { return }
-                if let error = await coordinator.send(data, to: participant) {
-                    // Record it rather than only printing — a 1.3 MB diagram silently failing
-                    // here is exactly the failure mode the HUD needs to make visible.
-                    self.noteEnvelopeSent(kind, bytes: 0, error: error)
+                for frame in frames {
+                    guard !Task.isCancelled, let self, let coordinator, coordinator.sessionID == sessionID else { return }
+                    if let error = await coordinator.send(frame, to: participant) {
+                        // Record it rather than only printing — a large diagram silently failing
+                        // here is exactly the failure mode the HUD needs to make visible. The
+                        // rest of a framed payload is useless without this frame, so stop.
+                        self.noteEnvelopeSent(kind, bytes: 0, error: error)
+                        return
+                    }
                 }
             }
         }
@@ -1096,8 +1161,27 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     // `makeSharedAnchorMessage` was deleted with it: its only remaining callers serialized a
     // local ARKit transform onto the wire.
 
+    /// Reassembles payloads that were too large for one SharePlay message.
+    private var payloadReassembler = PayloadReassembler()
+
     @MainActor
     private func handleIncomingPayload(_ data: Data, source: String, senderID: UUID? = nil) {
+        var data = data
+        if PayloadFraming.isFrame(data) {
+            noteEnvelopeReceived("frame", bytes: data.count, source: source)
+            switch payloadReassembler.receive(data, from: senderID ?? PayloadReassembler.unknownSender) {
+            case .incomplete:
+                return
+            case .rejected(let reason):
+                // Visible in the traffic panel: a large diagram that never appears otherwise
+                // gives no hint why.
+                noteEnvelopeReceived("frame rejected: \(reason)", bytes: data.count, source: source)
+                return
+            case .complete(let payload):
+                data = payload
+            }
+        }
+
         let decoder = JSONDecoder()
         if let envelope = try? decoder.decode(SharedSpaceEnvelope.self, from: data) {
             noteEnvelopeReceived(envelope.kind, bytes: data.count, source: source)
@@ -1208,38 +1292,15 @@ private extension CollaborativeSessionManager {
             #endif
 
         case .elementMoved(let p):
-            if let dIndex = sharedDiagrams.firstIndex(where: { $0.filename == p.filename }) {
-                let old = sharedDiagrams[dIndex]
-                var newElements = old.elements
-                if let eIndex = newElements.firstIndex(where: { $0.id == p.elementId }) {
-                    var updated = newElements[eIndex]
-                    updated.position = [Double(p.localPosition.x),
-                                        Double(p.localPosition.y),
-                                        Double(p.localPosition.z)]
-                    newElements[eIndex] = updated
-
-                    let newDiagram = SharedDiagram(
-                        id: old.id,
-                        filename: old.filename,
-                        elements: newElements,
-                        timestamp: Date(),
-                        is2D: old.is2D,
-                        anchorRelativePosition: old.anchorRelativePosition,
-                        anchorRelativeOrientation: old.anchorRelativeOrientation,
-                        anchorRelativeScale: old.anchorRelativeScale,
-                        poseAnchorID: old.poseAnchorID
-                    )
-                    sharedDiagrams[dIndex] = newDiagram
-                    // 🔔 Force a Combine publish so all subscribers refresh
-                    sharedDiagrams = sharedDiagrams
-                    print("✏️ Element '\(p.elementId)' moved in '\(p.filename)' from \(source)")
-                } else {
-                    print("⚠️ Received elementMoved for unknown element '\(p.elementId)' in '\(p.filename)'")
-                }
-            } else {
+            guard sharedDiagrams.contains(where: { $0.filename == p.filename }) else {
                 print("⚠️ Received elementMoved for unknown diagram '\(p.filename)'")
+                return
             }
-            
+            recordElementPosition(filename: p.filename, elementId: p.elementId, dataPosition: p.dataPosition)
+            // The open view moves the live node; updating the model alone changed nothing on
+            // screen, which is why a peer's node drag never showed up on a Vision Pro.
+            receivedElementMove.send(p)
+
         case .sessionEnded(let info):
             // Clear all shared state so AR views will remove content
             sharedDiagrams.removeAll()
@@ -1805,22 +1866,28 @@ struct UpdateDiagramTransformMessage: Codable {
     }
 }
 
-/// Lightweight per-element position update (container-local coordinates)
+/// A node moved inside a diagram.
 struct ElementPositionMessage: Codable {
     let filename: String
     let elementId: String
+    /// Position inside the sender's diagram container. Kept for peers that predate `dataPosition`.
     var localPosition: SIMD3<Float>
+    /// The same position in the diagram's own data coordinates — the unit the shared model is
+    /// kept in. Optional on the wire so an older peer's message still decodes.
+    var dataPosition: [Double]?
 
     enum CodingKeys: String, CodingKey {
         case filename
         case elementId
         case localPosX, localPosY, localPosZ
+        case dataPosition
     }
 
-    init(filename: String, elementId: String, localPosition: SIMD3<Float>) {
+    init(filename: String, elementId: String, localPosition: SIMD3<Float>, dataPosition: [Double]? = nil) {
         self.filename = filename
         self.elementId = elementId
         self.localPosition = localPosition
+        self.dataPosition = dataPosition
     }
 
     init(from decoder: Decoder) throws {
@@ -1831,6 +1898,7 @@ struct ElementPositionMessage: Codable {
         let y = try c.decode(Float.self, forKey: .localPosY)
         let z = try c.decode(Float.self, forKey: .localPosZ)
         localPosition = SIMD3<Float>(x, y, z)
+        dataPosition = try c.decodeIfPresent([Double].self, forKey: .dataPosition)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1840,6 +1908,7 @@ struct ElementPositionMessage: Codable {
         try c.encode(localPosition.x, forKey: .localPosX)
         try c.encode(localPosition.y, forKey: .localPosY)
         try c.encode(localPosition.z, forKey: .localPosZ)
+        try c.encodeIfPresent(dataPosition, forKey: .dataPosition)
     }
 }
 

@@ -653,10 +653,21 @@ struct VisionOSMainView: View {
         HStack {
             Button("Exit Immersive Space") {
                 Task {
+                    // Queue the removals first: without them the iPhone companion (and any
+                    // headset that stays) kept showing diagrams that no longer exist here.
+                    collaborativeSession.withdrawLocalDiagrams()
+
                     await dismissImmersiveSpace()
                     hasEnteredImmersive = false
-                    sharedState.activeFiles.removeAll()
+                    // Per file, so each one also releases its layout slot and any
+                    // received-diagram entry held under its name.
+                    for file in sharedState.activeFiles { sharedState.closeDiagram(file) }
                     sharedState.appModel.resetDiagramPositioning()
+
+                    // Leaving SharePlay below cancels whatever is still queued, so give the
+                    // removals a bounded chance to go out. The space is already closed, so a
+                    // slow network delays only the leave, not what the user sees.
+                    await collaborativeSession.flushSharePlaySends()
 
                     #if canImport(GroupActivities)
                     if collaborativeSession.isSharePlayActive {
