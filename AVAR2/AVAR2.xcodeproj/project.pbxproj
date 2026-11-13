@@ -215,6 +215,8 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect surfaces for anchoring 3D content in your environment.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app uses the local network to discover and connect to other AVAR2 devices for collaborative diagram viewing.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "This app uses world sensing to detect tables, walls, and other surfaces for positioning diagrams in your space.";
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -249,6 +251,8 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to detect surfaces for anchoring 3D content in your environment.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app uses the local network to discover and connect to other AVAR2 devices for collaborative diagram viewing.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "This app uses world sensing to detect tables, walls, and other surfaces for positioning diagrams in your space.";
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
