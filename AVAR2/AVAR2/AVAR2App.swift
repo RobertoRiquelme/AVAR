@@ -182,8 +182,8 @@ private extension ServerLogsView {
 #if os(visionOS)
 /// Static surface detection view that never changes.
 ///
-/// Also hosts the session-origin axis triad: this is the one RealityView that is always present
-/// in the immersive space, so the marker needs no per-diagram plumbing.
+/// Also hosts the two test markers and the frame measurement: this is the one RealityView that
+/// is always present in the immersive space, so none of them needs per-diagram plumbing.
 struct StaticSurfaceView: View {
     @Environment(AppModel.self) private var appModel
     @ObservedObject var collaborativeSession: CollaborativeSessionManager
@@ -191,30 +191,66 @@ struct StaticSurfaceView: View {
     var body: some View {
         RealityView { content in
             content.add(appModel.surfaceDetector.rootEntity)
+            content.add(SharedSpaceMarker.makeRoot())
             content.add(SessionOriginMarker.makeRoot())
         } update: { content in
             // THE ALIGNMENT TEST INSTRUMENT.
             //
-            // The triad is placed at this device's own resolved `originFromAnchorTransform` for
-            // the shared anchor. Two co-located devices should therefore draw it at the SAME
-            // PHYSICAL POINT even though the numeric transforms differ. Both users point at it;
-            // if the triads coincide, alignment works — and that verdict is completely
-            // independent of whether diagram rendering works.
+            // A triad at a fixed pose in scene coordinates — the same frame diagrams are shared
+            // in. In a SharePlay session with a group immersive space, every participant should
+            // see it at the same place. If two headsets' triads coincide, diagram alignment works,
+            // and that verdict needs neither ARKit nor a diagram.
+            if let marker = content.entities.first(where: { $0.name == SharedSpaceMarker.rootName }) {
+                marker.isEnabled = appModel.showSharedSpaceMarker
+            }
+
+            // A second, differently coloured triad at the shared room anchor's RAW ARKit pose.
+            // It answers a narrower question: are raw ARKit transforms valid scene transforms
+            // while sharing? Diagrams no longer depend on the answer.
             guard let root = content.entities.first(where: { $0.name == SessionOriginMarker.rootName }) else { return }
             let transform = collaborativeSession.sessionOriginTransform
             root.isEnabled = appModel.showSessionOriginMarker && transform != nil
             if let transform { root.transform = Transform(matrix: transform) }
         }
+        .task {
+            // Lives exactly as long as the immersive space, which is the scene being measured.
+            let detector = appModel.surfaceDetector
+            await appModel.frameDiagnostics.run(
+                scene: { detector.rootEntity.scene },
+                roomAnchor: {
+                    collaborativeSession.sessionOriginID.flatMap {
+                        collaborativeSession.sharedWorldAnchorManager.sharedAnchors[$0]
+                    }
+                }
+            )
+        }
     }
 }
 
-/// A labelled RGB axis triad marking the session origin.
+/// An axis triad at a fixed pose in the shared space: one metre above the scene origin.
+///
+/// One metre up because the scene origin is at floor level, and a shared window may be placed
+/// there. The pose is a constant, so two headsets disagreeing about where it is can only mean
+/// their scene frames disagree.
+enum SharedSpaceMarker {
+    static let rootName = "sharedSpaceMarker"
+    static let position = SIMD3<Float>(0, 1, 0)
+
+    static func makeRoot() -> Entity {
+        let root = SessionOriginMarker.makeRoot(name: rootName, hubColor: .white)
+        root.position = position
+        return root
+    }
+}
+
+/// A labelled RGB axis triad. Used for the shared room anchor (yellow hub) and, via
+/// `SharedSpaceMarker`, for the fixed shared-space point (white hub).
 enum SessionOriginMarker {
     static let rootName = "sessionOriginMarker"
 
-    static func makeRoot() -> Entity {
+    static func makeRoot(name: String = rootName, hubColor: UIColor = .yellow) -> Entity {
         let root = Entity()
-        root.name = rootName
+        root.name = name
         root.isEnabled = false
 
         let axisLength: Float = 0.15
@@ -226,7 +262,7 @@ enum SessionOriginMarker {
         // Small sphere exactly at the origin — the thing both users actually point at.
         let hub = ModelEntity(
             mesh: .generateSphere(radius: 0.012),
-            materials: [SimpleMaterial(color: .white, isMetallic: false)]
+            materials: [SimpleMaterial(color: hubColor, isMetallic: false)]
         )
         root.addChild(hub)
         return root
@@ -372,9 +408,12 @@ struct ImmersiveContentView: View {
             // Dynamic diagrams layer - updates when activeFiles changes
             Group {
                 ForEach(activeFiles, id: \.self) { file in
-                    AlignedDiagramView(filename: file, session: collaborativeSession) {
-                        onClose(file)
-                    }
+                    // Shown as soon as it exists. A received diagram's pose is in the shared
+                    // scene frame, which every participant already has — there is nothing to
+                    // wait for, and waiting on the room anchor used to hide diagrams entirely
+                    // whenever that anchor failed to resolve.
+                    ContentView(filename: file, onClose: { onClose(file) },
+                                collaborativeSession: collaborativeSession)
                 }
             }
             .environment(appModel)
@@ -397,31 +436,6 @@ struct ImmersiveContentView: View {
         )
     }
 
-}
-
-private struct AlignedDiagramView: View {
-    let filename: String
-    @ObservedObject var session: CollaborativeSessionManager
-    let onClose: () -> Void
-    @State private var hasDisplayed = false
-
-    private var canDisplay: Bool {
-        guard let diagram = session.sharedDiagrams.first(where: { $0.filename == filename }),
-              session.requiresSharedOrigin(for: diagram) else { return true }
-        return diagram.hasPose(relativeTo: session.currentPoseAnchorID)
-    }
-
-    var body: some View {
-        Group {
-            if hasDisplayed || canDisplay {
-                ContentView(filename: filename, onClose: onClose, collaborativeSession: session)
-                    .allowsHitTesting(canDisplay)
-            }
-        }
-        .onChange(of: canDisplay, initial: true) { _, ready in
-            if ready { hasDisplayed = true }
-        }
-    }
 }
 
 final class FPSMonitor: ObservableObject {

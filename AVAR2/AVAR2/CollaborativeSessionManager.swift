@@ -21,27 +21,26 @@ private let collabLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AV
 
 /// Manages collaborative sessions for multi-device diagram viewing.
 ///
-/// ## Alignment invariant (visionOS 26+)
+/// ## The shared frame
 ///
-/// **A `WorldAnchor`'s `originFromAnchorTransform` must NEVER be transmitted between
-/// visionOS devices. Only its UUID crosses the wire.**
+/// Diagram poses cross the wire as plain RealityKit **scene coordinates**. The SharePlay session
+/// is configured with `supportsGroupImmersiveSpace`, so the system gives every spatial
+/// participant — a nearby Vision Pro or a FaceTime spatial Persona — one shared immersive-space
+/// frame in which identical transforms land in the same place. No ARKit value is involved in
+/// placing a diagram. See `currentPoseAnchorID` for the single seam.
 ///
-/// Every device has a private, unrelated ARKit world origin. The system's shared-anchor
-/// mechanism guarantees that the *same anchor UUID resolves to the same physical point on
-/// every nearby participant, expressed in that participant's own origin*. The transform is
-/// therefore already correct and already **different** on each device. Sending one device's
-/// value and applying it on another is not "syncing" — it overwrites a correct local value
-/// with a meaningless foreign one, which is what made diagrams appear scattered and
-/// unaligned.
+/// ## The room anchor (diagnostic only)
 ///
-/// So what actually crosses the wire is:
-/// - the session-origin anchor **UUID** (see `SharedWorldAnchorManager`), and
-/// - diagram transforms expressed **relative to that anchor**.
+/// A shared `WorldAnchor` is still created between nearby headsets, and the realignment
+/// handshake still runs, but nothing they produce reaches content. They are instruments for
+/// `FrameDiagnostics`, which measures whether raw ARKit transforms are valid scene transforms
+/// while sharing.
 ///
-/// Each device resolves the anchor's transform locally from its own
-/// `WorldTrackingProvider.anchorUpdates`. Shared anchors are also never persisted — per the
-/// ARKit headers their lifetime is limited to the SharePlay session — so re-creating one per
-/// session is the normal path, not an error path.
+/// One rule about that anchor still holds: **its `originFromAnchorTransform` must never be
+/// transmitted between visionOS devices — only its UUID.** Each device resolves the transform
+/// from its own `WorldTrackingProvider.anchorUpdates`; a peer's value is in the peer's frame.
+/// Shared anchors are never persisted (ARKit: lifetime == the SharePlay session), so creating
+/// one per session is the normal path.
 ///
 /// ## Transports
 /// - SharePlay (GroupActivities) for visionOS↔visionOS.
@@ -140,6 +139,13 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
 
     private var localDiagramTransforms: [String: DiagramTransform] = [:]
+
+    /// Set when a peer sends a pose relative to a room anchor, which only builds before the
+    /// shared-space frame do. Those poses are not scene coordinates, so that peer's diagrams land
+    /// in the wrong place here — and this build's diagrams never appear there. Surfaced in the
+    /// status so a mixed-build session is recognised instead of debugged.
+    @Published private(set) var peerUsesAnchorFrame = false
+    private var coordinatorObservation: AnyCancellable?
 
     // Shared world anchors. Deployment target is visionOS 26.0, so no availability gate.
     // Note: shared anchors are never persisted (ARKit: lifetime == the SharePlay session),
@@ -260,6 +266,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             #if os(visionOS)
             self.finishRealignment(nil)
             self.retiredOriginIDs.removeAll()
+            self.peerUsesAnchorFrame = false
             self.stopSessionOriginLoop()
             self.sharedWorldAnchorManager.stop()
             self.worldAnchorSharingAvailable = false
@@ -301,6 +308,12 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
             }
         }
         sharePlayCoordinator = coordinator
+        // `sharedSpaceStatus` reads the coordinator, but the launcher and the immersive HUD
+        // observe only this manager. Without this, a session that becomes spatial after joining
+        // (FaceTime, where nothing else republishes) would keep showing "not spatial".
+        coordinatorObservation = coordinator.$isSpatial.removeDuplicates().sink { [weak self] _ in
+            Task { @MainActor in self?.objectWillChange.send() }
+        }
         #endif
     }
 
@@ -556,7 +569,7 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
     }
 
     private var realignmentConfirmedStatus: String {
-        "Both headsets confirmed the shared anchor. If diagrams still look offset, compare the origin markers in Diagnostics."
+        "Both headsets confirmed the room anchor. This does not move diagrams; they are placed in the shared space."
     }
 
     private func debugLogRealignment(_ text: String) {
@@ -871,18 +884,22 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         }
     }
 
+    /// The anchor that diagram poses on the wire are relative to. **Always `nil`.**
+    ///
+    /// Poses are plain RealityKit scene coordinates. With `supportsGroupImmersiveSpace`, the
+    /// system gives every spatial participant — nearby or a FaceTime Persona — one shared
+    /// immersive-space frame, in which identical transforms land in the same place. That is the
+    /// only frame every participant can resolve: a shared `WorldAnchor` never reaches a remote
+    /// participant, and its raw ARKit transform is not known to be a valid scene transform while
+    /// the immersive space is displaced (see `FrameDiagnostics`).
+    ///
+    /// This is the single seam between the room anchor and content. The anchor, the session
+    /// origin and the realignment handshake still run, but only as diagnostics. To pose content
+    /// relative to an anchor again, this is the property to change — together with a way to hold
+    /// back a pose until the receiver can resolve that anchor.
+    var currentPoseAnchorID: UUID? { nil }
+
     #if os(visionOS)
-    var currentPoseAnchorID: UUID? {
-        sessionOriginTransform == nil ? nil : sessionOriginID
-    }
-
-    /// A spatial SharePlay diagram can appear once both its pose and this device's origin
-    /// refer to the same physical anchor. Remote and iOS sessions can use local placement.
-    func requiresSharedOrigin(for diagram: SharedDiagram) -> Bool {
-        isSharePlayActive && (hasNearbyParticipants || worldAnchorSharingAvailable) &&
-        sharePlayReceivedDiagramIDs.contains(diagram.id)
-    }
-
     private func discardSharePlayDiagrams() {
         let removed = sharedDiagrams.filter {
             sharePlayReceivedDiagramIDs.contains($0.id) ||
@@ -896,8 +913,6 @@ class CollaborativeSessionManager: NSObject, ObservableObject {
         closedDiagramIDs.removeAll()
         for diagram in received { receivedDiagramRemoval.send(diagram.filename) }
     }
-    #else
-    private var currentPoseAnchorID: UUID? { nil }
     #endif
 
     func isLocallyShared(_ diagram: SharedDiagram) -> Bool {
@@ -1134,6 +1149,7 @@ private extension CollaborativeSessionManager {
 
         case .diagram(let sharedDiagram):
             guard !closedDiagramIDs.contains(sharedDiagram.id) else { return }
+            if sharedDiagram.poseAnchorID != nil, !peerUsesAnchorFrame { peerUsesAnchorFrame = true }
             // The same diagram can arrive over Multipeer before SharePlay. As soon as we
             // know it is in SharePlay, require the shared frame without overwriting its pose.
             if sharedDiagrams.contains(where: { $0.id == sharedDiagram.id }) {
@@ -1151,6 +1167,7 @@ private extension CollaborativeSessionManager {
             sharedDiagrams.append(sharedDiagram)
 
         case .transform(let updateMessage):
+            if updateMessage.poseAnchorID != nil, !peerUsesAnchorFrame { peerUsesAnchorFrame = true }
             guard let index = sharedDiagrams.firstIndex(where: {
                 $0.filename == updateMessage.filename &&
                 (updateMessage.diagramID == nil || $0.id == updateMessage.diagramID)
@@ -1349,11 +1366,12 @@ struct SharedDiagram: Codable, Identifiable {
     var is2D: Bool = false
     // MARK: Pose
     //
-    // The diagram's pose **relative to the shared session-origin anchor** (`SharedWorldRoot`),
-    // never world space. Producers use `ElementViewModel.getSharedTransform()`
-    // (`position(relativeTo: worldRoot)`); consumers apply them with
-    // `setPosition(_, relativeTo: worldRoot)`. A world-space value must never be put here — world
-    // coordinates are private to a device and are not comparable across participants.
+    // The diagram's pose in the **shared scene frame**: the group immersive space, which
+    // SharePlay makes common to every spatial participant. Producers use
+    // `ElementViewModel.getSharedTransform()` (`position(relativeTo: worldRoot)`); consumers apply
+    // them with `setPosition(_, relativeTo: worldRoot)`. `worldRoot` sits at the scene origin, so
+    // these are scene coordinates. The `anchorRelative` names and `poseAnchorID` date from when
+    // poses were relative to a shared room anchor; `poseAnchorID` is now always `nil`.
     //
     // Scale is frame-independent (`worldRoot` is rigid and unit-scale, asserted in
     // `SharedWorldRoot.apply`); it carries the `anchorRelative` prefix only so the three pose

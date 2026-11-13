@@ -27,38 +27,23 @@ struct ContentView: View {
     @Environment(AppModel.self) private var appModel
     var collaborativeSession: CollaborativeSessionManager? = nil
 
-    private struct SceneOrigin: Equatable {
-        let id: UUID?
-        let transform: simd_float4x4?
-    }
-
     var body: some View {
         if let session = collaborativeSession {
             mainContent
+                // Poses on the wire are plain scene coordinates: the group immersive space is the
+                // shared frame, so a received pose is applied as-is. The shared room anchor is
+                // deliberately not involved — see `FrameDiagnostics`.
                 .onReceive(session.receivedDiagramTransform) { diagram in
                     guard diagram.filename == filename else { return }
-                    if session.requiresSharedOrigin(for: diagram), !diagram.hasPose(relativeTo: session.currentPoseAnchorID) {
-                        return
-                    }
-                    viewModel.updateWorldRoot(originFromAnchor: session.sessionOriginTransform,
-                                              anchorID: session.currentPoseAnchorID)
                     viewModel.applySharedDiagramTransform(
                         position: diagram.anchorRelativePosition,
                         orientation: diagram.anchorRelativeOrientation,
                         scale: diagram.anchorRelativeScale
                     )
                 }
-                .onChange(of: SceneOrigin(id: session.currentPoseAnchorID,
-                                          transform: session.sessionOriginTransform), initial: true) { _, origin in
-                    if let diagram = session.sharedDiagrams.first(where: { $0.filename == filename }),
-                       session.requiresSharedOrigin(for: diagram),
-                       !diagram.hasPose(relativeTo: origin.id) {
-                        // Keep the last placement until a pose arrives in the replacement frame.
-                        return
-                    }
-                    viewModel.updateWorldRoot(originFromAnchor: origin.transform, anchorID: origin.id)
-                }
-                .onChange(of: appModel.debugWorldRootOffset, initial: true) { _, enabled in
+                // The forced offset puts this device in a private frame, so it must never be on
+                // while anything is shared: poses would be sent and applied in the wrong frame.
+                .onChange(of: appModel.debugWorldRootOffset && !session.isSessionActive, initial: true) { _, enabled in
                     viewModel.debugWorldRootOffsetEnabled = enabled
                 }
         } else {
@@ -70,8 +55,6 @@ struct ContentView: View {
         RealityView { content in
             logger.debug("RealityView make block called for: \(filename)")
             if let session = collaborativeSession {
-                viewModel.updateWorldRoot(originFromAnchor: session.sessionOriginTransform,
-                                          anchorID: session.currentPoseAnchorID)
                 if let shared = session.sharedDiagrams.first(where: { $0.filename == filename }),
                    !session.isLocallyShared(shared) {
                     viewModel.applySharedDiagramTransform(position: shared.anchorRelativePosition,

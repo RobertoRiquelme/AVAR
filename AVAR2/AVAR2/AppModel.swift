@@ -25,10 +25,17 @@ class AppModel {
 
     // Debug: plane visualization toggle (start disabled)
     var showPlaneVisualization = false
-    /// Shows the session-origin axis triad in the immersive space. Two co-located devices should
-    /// draw it at the same physical point — that is the alignment check, and it does not depend
-    /// on diagram rendering working.
+    /// Shows an axis triad at a fixed point of the shared space (see `SharedSpaceMarker`). Two
+    /// headsets in one session should see it at the same physical point — the direct check that
+    /// diagrams, which use the same frame, will line up. Needs no ARKit and no diagram.
+    var showSharedSpaceMarker = false
+    /// Shows a second triad at the shared room anchor's *raw ARKit* pose. Diagnostic only: it
+    /// tests whether raw ARKit transforms are valid scene transforms, not diagram alignment.
     var showSessionOriginMarker = false
+    #if os(visionOS)
+    /// Immersive-space displacement and ARKit → scene offset, for the diagnostics panel.
+    let frameDiagnostics = FrameDiagnostics()
+    #endif
     /// Forces `worldRoot` to a non-identity pose so the anchor-relative scene graph can be
     /// validated with one headset. See `SharedWorldRoot.debugOffsetPose`.
     /// Always compiled — see `includesTestAffordances`.

@@ -21,8 +21,13 @@ import OSLog
 /// unless opened. Flip this to `false` (or restore a `#if DEBUG`) before any App Store build.
 let includesTestAffordances = true
 
-/// Owns the `worldRoot` entity: the parent of every diagram, positioned at this device's own
-/// resolved transform for the session-origin shared `WorldAnchor`.
+/// Owns the `worldRoot` entity: the parent of every diagram.
+///
+/// It sits at the **scene origin**. The shared frame is the SharePlay group immersive space,
+/// which is the scene itself, so there is nothing to offset. It used to be positioned at a shared
+/// room anchor's raw ARKit transform; that assumed ARKit's origin and the scene origin coincide
+/// while sharing, which Apple's documentation does not state (see `FrameDiagnostics`). The only
+/// thing that still moves it is the single-device `debugOffsetPose` test.
 ///
 /// ## Why a parent entity rather than matrix math
 ///
@@ -30,7 +35,8 @@ let includesTestAffordances = true
 /// `container.position(relativeTo: worldRoot)`. Sending that value and applying it with
 /// `setPosition(_, relativeTo: worldRoot)` on the receiver is the whole synchronisation
 /// mechanism — no inverse matrices, no per-message conversion, and no way for the sender's and
-/// receiver's conventions to drift apart.
+/// receiver's conventions to drift apart. It also keeps one place to re-root every diagram if
+/// the shared frame ever needs to be something other than the scene.
 ///
 /// ## Why one root per RealityView
 ///
@@ -64,9 +70,9 @@ enum SharedWorldRoot {
     /// A deliberately awkward stand-in for a real session origin: offset on all three axes and
     /// rotated 37° about Y.
     ///
-    /// With a single headset no origin ever resolves, so `worldRoot` sits at identity and the
-    /// reparenting is only exercised in its trivial case — where parent-relative and world
-    /// coordinates happen to coincide and a frame-mixing bug is invisible. Forcing a non-identity
+    /// `worldRoot` normally sits at identity, so the reparenting is only exercised in its trivial
+    /// case — where parent-relative and world coordinates coincide and a frame-mixing bug is
+    /// invisible. Forcing a non-identity
     /// frame makes those bugs manifest on one device: the five sites fixed in `ElementViewModel`
     /// would each misplace content by this transform. The yaw is intentionally not a multiple of
     /// 90° so an axis swap cannot masquerade as correct.
@@ -76,11 +82,8 @@ enum SharedWorldRoot {
         return m
     }()
 
-    /// Points `worldRoot` at the session origin.
-    ///
-    /// Falls back to identity when no origin is resolved yet, so content is
-    /// **visible-but-unaligned** rather than invisible. Hiding it would read to users as
-    /// "sharing is broken" when the truth is "alignment is still pending".
+    /// Positions `worldRoot`. `nil` means the scene origin, which is the normal case; the only
+    /// other value passed today is `debugOffsetPose`.
     static func apply(originFromAnchor: simd_float4x4?, to root: Entity) {
         let matrix = originFromAnchor ?? matrix_identity_float4x4
         assertRigidUnitScale(matrix)

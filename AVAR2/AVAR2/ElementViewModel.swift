@@ -61,8 +61,8 @@ class ElementViewModel: ObservableObject {
     /// normalization context and scene content).
     private var pendingSharedTransform: (position: SIMD3<Float>?, orientation: simd_quatf?, scale: Float?)?
 
-    /// This device's resolved transform for the session-origin anchor, mirrored from the
-    /// collaboration session so `worldRoot` can be positioned at build time.
+    /// A non-identity frame for `worldRoot`, if one was ever supplied. Always `nil` today: the
+    /// shared frame is the scene itself, and the single-device test uses `debugOffsetPose`.
     private var sessionOriginTransform: simd_float4x4?
     private var sessionOriginID: UUID?
     private var appliedOriginTransform: simd_float4x4?
@@ -128,10 +128,13 @@ class ElementViewModel: ObservableObject {
         }
     }
 
-    /// Points this diagram's `worldRoot` at the session origin.
+    /// Moves this diagram's `worldRoot`.
     ///
-    /// Called whenever the resolved anchor transform appears or is refined by ARKit. What should
-    /// happen to the diagram depends on **who owns its pose**, and the two cases are opposites:
+    /// Only the single-device offset test calls this now (`debugWorldRootOffsetEnabled`); the
+    /// shared frame is the scene, so no session event moves `worldRoot`. The rules below are what
+    /// keep that test meaningful, and what any future non-scene frame would have to obey. What
+    /// should happen to the diagram depends on **who owns its pose**, and the two cases are
+    /// opposites:
     ///
     /// - **Peer-originated**: the anchor-relative pose from the wire is authoritative. The
     ///   container must therefore keep its parent-relative pose and *move with* `worldRoot` —

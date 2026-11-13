@@ -12,8 +12,10 @@
 //  yet" from "anchor created but our device hasn't resolved it" is on screen, and
 //  "Copy diagnostics" produces a text blob you can diff between the two devices afterwards.
 //
-//  Compare the UUID and physical marker across devices. ARKit expresses each reported pose
-//  in that device's own coordinate system.
+//  Diagrams are placed in the SharePlay shared space (scene coordinates), not relative to the
+//  shared room anchor. The anchor sections below are kept as instruments: they measure how ARKit
+//  positions relate to that shared space, which decides whether ARKit-derived content (plane
+//  overlays, surface snapping, a room anchor) can be trusted while sharing.
 
 import SwiftUI
 import simd
@@ -21,9 +23,22 @@ import simd
 import UIKit
 #endif
 
-// MARK: - Alignment diagnostic
+// MARK: - Shared space status
 
-/// Why content is (or isn't) aligned right now, in the order these conditions resolve.
+/// What the launcher shows about the session. It describes state; it does not claim that
+/// diagrams line up, which only a two-headset look at the shared-space marker can establish.
+struct SharedSpaceStatus: Equatable {
+    var label: String
+    var detail: String
+    /// Whether this headset is in a spatial session, and so shares a coordinate space.
+    var isShared: Bool
+    var color: Color { isShared ? .green : .orange }
+}
+
+// MARK: - Room anchor diagnostic
+
+/// State of the shared room anchor, in the order these conditions resolve. Diagnostic only:
+/// diagram placement does not depend on it.
 enum AlignmentDiagnostic: Equatable {
     /// No group session at all.
     case noSession
@@ -53,7 +68,7 @@ enum AlignmentDiagnostic: Equatable {
         case .waitingForOwnerAnnounce: return "Waiting for origin anchor"
         case .waitingForLocalResolve: return "Resolving origin locally"
         case .creationFailed: return "Anchor creation failed"
-        case .aligned: return "Aligned"
+        case .aligned: return "Anchor resolved"
         }
     }
 
@@ -76,7 +91,7 @@ enum AlignmentDiagnostic: Equatable {
         case .creationFailed(let why):
             return "Could not create the shared anchor: \(why)"
         case .aligned:
-            return "Session origin resolved and tracked on this device."
+            return "Room anchor resolved and tracked on this device."
         }
     }
 
@@ -121,6 +136,7 @@ struct CollabDiagnosticsView: View {
                 }
                 #endif
 
+                framesSection
                 originSection
                 diagramsSection
                 trafficSection
@@ -140,7 +156,10 @@ struct CollabDiagnosticsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if includesTestAffordances { loopbackSection }
+                if includesTestAffordances {
+                    frameTestSection
+                    loopbackSection
+                }
 
                 if let error = session.lastError {
                     DiagRow(label: "Last error", value: error, tint: .red)
@@ -166,12 +185,56 @@ struct CollabDiagnosticsView: View {
         }
     }
 
-    // MARK: Session origin
+    // MARK: Coordinate frames
+
+    private var framesSection: some View {
+        DiagSection("Shared space") {
+            let frames = appModel.frameDiagnostics
+            let status = session.sharedSpaceStatus
+            DiagRow(label: "Diagram frame", value: "SharePlay shared space", tint: .blue)
+            DiagRow(label: "This headset", value: status.label, tint: status.color)
+
+            Toggle("Show shared-space marker", isOn: Binding(
+                get: { appModel.showSharedSpaceMarker },
+                set: { appModel.showSharedSpaceMarker = $0 }
+            ))
+            .font(.caption)
+            caption("Turn on for BOTH headsets. Each draws a white-hubbed triad 1 m above the shared origin. If both people see it at the same physical point, diagrams will line up — this is the test of diagram alignment.")
+
+            DiagRow(label: "Immersive space displacement", value: frames.displacementSummary, mono: true)
+            caption("How far the system moved this headset's immersive space to share it. \"none\" when not in a spatial session.")
+
+            DiagRow(label: "ARKit → scene offset", value: frames.renderedOffset.summary, mono: true,
+                    tint: Self.tint(for: frames.renderedOffset))
+            if case .measured = frames.metricOffset, frames.metricOffset != frames.renderedOffset {
+                DiagRow(label: "…without display correction", value: frames.metricOffset.summary, mono: true)
+            }
+            caption("Difference between an ARKit position as reported and the same position converted into the scene by the system. Check it reads \"none\" when NOT sharing — that confirms the measurement. If it becomes non-zero while sharing, ARKit positions (plane overlay, surface snapping, room anchor) are offset from the shared space by that amount.")
+        }
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private static func tint(for measurement: FrameOffsetMeasurement) -> Color {
+        switch measurement {
+        case .unavailable: return .secondary
+        case .measured(let offset): return offset.isNegligible ? .green : .orange
+        }
+    }
+
+    // MARK: Room anchor
 
     private var originSection: some View {
-        DiagSection("Session origin (shared WorldAnchor)") {
-            let diagnostic = session.alignmentDiagnostic
-            DiagRow(label: "Alignment", value: diagnostic.label, tint: diagnostic.color)
+        DiagSection("Shared room anchor (diagnostic only)") {
+            caption("Not used to place diagrams. ARKit shares this anchor between nearby headsets only; it is kept to measure how ARKit positions relate to the shared space.")
+
+            let diagnostic = session.anchorDiagnostic
+            DiagRow(label: "Anchor state", value: diagnostic.label, tint: diagnostic.color)
             Text(diagnostic.detail)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -200,37 +263,55 @@ struct CollabDiagnosticsView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Text("Compare the anchor UUID and the physical origin marker across devices. The translation is expressed in this device's local coordinates.")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
+                DiagRow(label: "Anchor in scene space",
+                        value: appModel.frameDiagnostics.roomAnchorInScene.map {
+                            String(format: "[%.2f, %.2f, %.2f]", $0.x, $0.y, $0.z)
+                        } ?? "—",
+                        mono: true)
+                caption("Compare both rows between the two headsets. Matching \"scene space\" values mean the shared space is physically the same for both. Matching raw values would mean ARKit already reports in the shared space.")
             } else {
-                DiagRow(label: "Origin anchor", value: "none", tint: .orange)
+                DiagRow(label: "Room anchor", value: "none", tint: .secondary)
+                caption("Expected unless another Vision Pro is nearby in the same SharePlay session.")
             }
 
-            Toggle("Show origin marker in space", isOn: Binding(
+            Toggle("Show room-anchor marker (raw ARKit pose)", isOn: Binding(
                 get: { appModel.showSessionOriginMarker },
                 set: { appModel.showSessionOriginMarker = $0 }
             ))
             .font(.caption)
             .disabled(session.sessionOriginTransform == nil)
+            caption("Yellow-hubbed triad at the anchor's raw ARKit pose. If two headsets see it at the same physical point, raw ARKit positions are valid in the shared space; if not, they need converting. Either way diagrams are unaffected.")
 
-            Text("Turn this on on BOTH devices: each draws an axis triad at its own resolved transform. If the two triads occupy the same physical point, alignment works — independently of diagram rendering.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if session.canRealign || session.isRealigning {
+                HStack {
+                    Button(session.isRealigning ? "Checking…" : "Re-check anchor") {
+                        session.requestRealignment()
+                    }
+                    Button("Replace anchor") {
+                        session.requestRealignment(replaceAnchor: true)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .font(.caption)
+                .disabled(session.isRealigning)
+            }
+            if let result = session.realignmentStatus {
+                caption(result)
+            }
+        }
+    }
 
-            Toggle("Force offset worldRoot (single-device test)", isOn: Binding(
+    // MARK: Single-device frame test
+
+    private var frameTestSection: some View {
+        DiagSection("Single-device frame test") {
+            Toggle("Force offset worldRoot", isOn: Binding(
                 get: { appModel.debugWorldRootOffset },
                 set: { appModel.debugWorldRootOffset = $0 }
             ))
             .font(.caption)
-            .disabled(session.sessionOriginTransform != nil)
-
-            Text("With one headset worldRoot sits at identity, where parent-relative and world coordinates coincide and a frame-mixing bug cannot show. This forces a non-identity frame (offset + 37° yaw) so drag, pinch-zoom, snap and unsnap exercise the real code path. Locally placed diagrams should NOT move when you toggle it — that is the jump fix working. Disabled once a real session origin exists.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .disabled(session.isSessionActive)
+            caption("Puts diagrams under a parent that is offset and yawed 37°, so drag, pinch-zoom, snap and unsnap run with parent-relative and world coordinates no longer equal. Locally placed diagrams should NOT move when you toggle it. Unavailable, and forced off, while anything is shared: it would put this headset in a private frame.")
         }
     }
 
@@ -333,7 +414,7 @@ struct CollabDiagnosticsView: View {
 
     private func copyDiagnostics() {
         #if canImport(UIKit)
-        UIPasteboard.general.string = session.diagnosticsReport()
+        UIPasteboard.general.string = session.diagnosticsReport(extra: appModel.frameDiagnostics.reportLines())
         #endif
         didCopy = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { didCopy = false }
@@ -462,8 +543,41 @@ private struct DiagRow: View {
 // MARK: - Report + diagnostic derivation
 
 extension CollaborativeSessionManager {
-    /// Current alignment state, derived from the signals available on this device.
-    var alignmentDiagnostic: AlignmentDiagnostic {
+    /// What the launcher shows about the SharePlay session.
+    var sharedSpaceStatus: SharedSpaceStatus {
+        #if canImport(GroupActivities)
+        guard isSharePlayActive, let coordinator = sharePlayCoordinator else {
+            return SharedSpaceStatus(label: "No session", detail: "Start SharePlay to share diagrams.", isShared: false)
+        }
+        guard coordinator.participantIDs.count > 1 else {
+            return SharedSpaceStatus(label: "Waiting for others",
+                                     detail: "SharePlay is on. Diagrams appear for others as soon as they join.",
+                                     isShared: false)
+        }
+        if peerUsesAnchorFrame {
+            return SharedSpaceStatus(
+                label: "Other headset needs updating",
+                detail: "Another participant is on an older AVAR2 build that places diagrams relative to a room anchor. Their diagrams will be misplaced here and yours will not appear there. Install the same build on every headset.",
+                isShared: false)
+        }
+        // A nearby participant shares the space without a spatial Persona, so either signal counts.
+        guard coordinator.isSpatial || hasNearbyParticipants else {
+            return SharedSpaceStatus(
+                label: "Sharing, not spatial",
+                detail: "Diagrams are shared, but this headset is not in a spatial session, so they will not appear in the same place for everyone. Turn on your spatial Persona, or have the other Vision Pro join as a nearby participant.",
+                isShared: false)
+        }
+        return SharedSpaceStatus(
+            label: "Sharing one space",
+            detail: "Diagrams are placed in the SharePlay shared space, so everyone in it should see them in the same place. Check with the shared-space marker in Diagnostics.",
+            isShared: true)
+        #else
+        return SharedSpaceStatus(label: "No session", detail: "SharePlay is unavailable on this platform.", isShared: false)
+        #endif
+    }
+
+    /// State of the shared room anchor. Diagnostic only — see `currentPoseAnchorID`.
+    var anchorDiagnostic: AlignmentDiagnostic {
         guard isSharePlayActive, let coordinator = sharePlayCoordinator else { return .noSession }
         guard hasNearbyParticipants || worldAnchorSharingAvailable else {
             return coordinator.participantIDs.count > 1 ? .notSpatial : .alignmentNotAchievable
@@ -488,12 +602,14 @@ extension CollaborativeSessionManager {
     }
 
     /// Plain-text snapshot for "Copy diagnostics". Two devices produce two blobs you can diff.
-    func diagnosticsReport() -> String {
+    func diagnosticsReport(extra: [String] = []) -> String {
         var lines: [String] = []
         lines.append("=== AVAR2 collaboration diagnostics ===")
         lines.append("platform: \(deviceModelDescription)")
         lines.append("osVersion: \(ProcessInfo.processInfo.operatingSystemVersionString)")
-        lines.append("alignment: \(alignmentDiagnostic.label) — \(alignmentDiagnostic.detail)")
+        lines.append("diagramFrame: SharePlay shared space (scene coordinates)")
+        lines.append("sharedSpace: \(sharedSpaceStatus.label)")
+        lines.append("roomAnchor (diagnostic only): \(anchorDiagnostic.label) — \(anchorDiagnostic.detail)")
         lines.append("sessionActive: \(isSessionActive)  sharePlayActive: \(isSharePlayActive)")
         lines.append("worldAnchorSharingAvailable: \(worldAnchorSharingAvailable)")
 
@@ -527,6 +643,7 @@ extension CollaborativeSessionManager {
         }
         #endif
 
+        lines.append(contentsOf: extra)
         lines.append("multipeerPeers: \(connectedPeers.map(\.displayName).joined(separator: ", "))")
 
         lines.append("--- diagrams (\(sharedDiagrams.count)) ---")

@@ -739,11 +739,11 @@ struct VisionOSMainView: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     if session.isSharePlayActive {
-                        let status = session.alignmentDiagnostic
+                        let status = session.sharedSpaceStatus
                         HStack {
-                            Label(status.label, systemImage: status.isHealthy ? "checkmark.circle.fill" : "person.2")
+                            Label(status.label, systemImage: status.isShared ? "person.2.fill" : "person.2")
                                 .foregroundStyle(status.color)
-                                .accessibilityLabel("SharePlay alignment: \(status.label)")
+                                .accessibilityLabel("SharePlay: \(status.label)")
                             Spacer()
                             Button("Leave SharePlay") { session.stopSharePlay() }
                                 .buttonStyle(.bordered)
@@ -751,21 +751,6 @@ struct VisionOSMainView: View {
                         Text(status.detail)
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                        if session.canRealign || session.isRealigning {
-                            Button {
-                                session.requestRealignment()
-                            } label: {
-                                Label(session.isRealigning ? "Realigning…" : "Realign Space",
-                                      systemImage: "arrow.trianglehead.clockwise.rotate.90")
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(session.isRealigning)
-                        }
-                        if let result = session.realignmentStatus {
-                            Text(result)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
                     } else {
                         Button {
                             Task { await session.startSharePlay() }
@@ -799,14 +784,6 @@ struct VisionOSMainView: View {
                     .buttonStyle(.bordered)
 
                     DisclosureGroup("Diagnostics") {
-                        if session.canRealign {
-                            Button("Replace Shared Anchor") {
-                                session.requestRealignment(replaceAnchor: true)
-                            }
-                            .disabled(session.isRealigning)
-                            Text("Use this if the two origin markers appear in different places.")
-                                .foregroundStyle(.secondary)
-                        }
                         CollabDiagnosticsView(session: session)
                             .frame(maxHeight: 420)
                     }
@@ -908,6 +885,8 @@ struct VisionOSImmersiveView: View {
     let immersionStyle: ImmersionStyle
     @State private var showBackgroundOverlay = false
     @State private var savedPlaneViz: Bool? = nil
+    /// Only meaningful inside the immersive space; anywhere else it reads as identity.
+    @Environment(\.immersiveSpaceDisplacement) private var immersiveSpaceDisplacement
 
     var body: some View {
         ImmersiveSpaceWrapper(
@@ -922,9 +901,14 @@ struct VisionOSImmersiveView: View {
         .environment(sharedState.appModel)
         .onAppear {
             showBackgroundOverlay = false
-            // Deliberately no anchor broadcast here. The shared world anchor is created by the
-            // elected owner once SharePlay reports nearby participants, and every device
-            // resolves its transform locally from its own ARKit anchorUpdates.
+        }
+        // Published for the diagnostics panel, which lives in the launcher window where this
+        // environment value is always identity.
+        .onChange(of: immersiveSpaceDisplacement, initial: true) { _, pose in
+            sharedState.appModel.frameDiagnostics.displacement = simd_float4x4(pose)
+        }
+        .onDisappear {
+            sharedState.appModel.frameDiagnostics.displacement = nil
         }
         .onChange(of: String(describing: immersionStyle)) { _, newKey in
             if newKey.localizedCaseInsensitiveContains("Full") {
@@ -946,21 +930,16 @@ struct VisionOSImmersiveView: View {
         .overlay(alignment: .topTrailing) {
             if collaborativeSession.isSessionActive || collaborativeSession.isSharePlayActive {
                 HStack(spacing: 12) {
-                    dot(collaborativeSession.sessionOriginIsTracked,
-                        label: collaborativeSession.sharedAnchor
-                            .map { String($0.id.prefix(6)) } ?? "no origin")
-                    dot(collaborativeSession.hasNearbyParticipants, label: "nearby")
-                    if collaborativeSession.sharedDiagrams.contains(where: {
-                        collaborativeSession.requiresSharedOrigin(for: $0) &&
-                        !$0.hasPose(relativeTo: collaborativeSession.currentPoseAnchorID)
-                    }) {
-                        Text("Waiting for diagram alignment")
-                            .font(.caption2)
-                    } else {
-                        Text("\(sharedState.activeFiles.count) diagrams")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    // Whether this headset is in a shared space at all — the thing diagram
+                    // placement depends on. The room anchor is no longer shown here: it does
+                    // not place diagrams, and "no origin" read as a failure when it is not one.
+                    if collaborativeSession.isSharePlayActive {
+                        dot(collaborativeSession.sharedSpaceStatus.isShared, label: "shared space")
                     }
+                    dot(collaborativeSession.hasNearbyParticipants, label: "nearby")
+                    Text("\(sharedState.activeFiles.count) diagrams")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)

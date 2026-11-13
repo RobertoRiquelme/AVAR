@@ -5,7 +5,7 @@ AVAR2 is a SwiftUI + RealityKit app that loads diagram JSON (2D/3D layouts) and 
 - visionOS immersive space (primary experience)
 - iOS AR companion view (receive-only for collaboration)
 - diagram input from bundled files, pasted JSON, or a local HTTP server
-- SharePlay / GroupActivities collaboration with spatial anchor alignment
+- SharePlay / GroupActivities collaboration in a shared immersive space (nearby or FaceTime)
 
 Primary goal: visualize nodes (boxes/spheres/cylinders/cones/RS/RT shapes) and edges in 3D, allow dragging/positioning, and sync across devices.
 
@@ -61,39 +61,66 @@ Element fields (subset):
 
 ## Collaboration
 
-### THE ALIGNMENT INVARIANT — read this before touching collaboration code
+### THE SHARED FRAME — read this before touching collaboration code
 
-**A `WorldAnchor`'s `originFromAnchorTransform` must never be transmitted between visionOS
-devices. Only its UUID crosses the wire.**
+**Diagram poses cross the wire as plain RealityKit scene coordinates. Nothing from ARKit is
+involved in placing a shared diagram.**
 
-Every device has a private, unrelated ARKit world origin. visionOS 26's shared-anchor mechanism
-guarantees that the same anchor UUID resolves to the same *physical* point on every nearby
-participant, expressed in that participant's own origin. The transform is therefore already
-correct locally and **already different** on each device. Transmitting it overwrites a correct
-value with a meaningless foreign one — this was the root cause of "diagrams appear everywhere,
-nothing aligned", and it is very easy to reintroduce with a well-meaning "send the transform
-too" change. `Tests/WireFormatTests.swift` asserts it (JSON key inspection), so a regression
-fails the tests rather than only misbehaving on hardware.
+The SharePlay session sets `supportsGroupImmersiveSpace`, so the system gives every spatial
+participant — a nearby Vision Pro *or* a FaceTime spatial Persona — one shared immersive-space
+frame; Apple documents that entities with identical transforms then appear in the same relative
+place for all of them. That is the only frame every participant can resolve, which is why it is
+the wire frame. `CollaborativeSessionManager.currentPoseAnchorID` (always `nil`) is the single
+seam, and `worldRoot` stays at the scene origin.
+
+Until November 2026 the app instead posed diagrams relative to a shared `WorldAnchor` and set
+`worldRoot` to that anchor's raw `originFromAnchorTransform`. Two things are wrong with that, and
+both are easy to walk back into:
+- **It cannot serve FaceTime.** ARKit shares world anchors with nearby participants only, so a
+  remote participant received anchor-relative poses it had no anchor for.
+- **It assumes ARKit's origin is the scene origin while sharing.** Apple documents that the system
+  *moves* the immersive space when a shared activity starts (`immersiveSpaceDisplacement`) and
+  says nothing about ARKit moving with it; forum reports describe ARKit transforms offset from
+  immersive content in that state. If so, each headset misplaced content by its own displacement.
+  **This is a hypothesis, not a measured fact** — `FrameDiagnostics` exists to measure it.
+
+**Every headset in a session must run a build with this frame.** Commit `49fbf9a` (on TestFlight)
+sends anchor-relative poses and hides received diagrams until an anchor id matches, so against a
+newer build it shows nothing and the newer one misplaces its diagrams. An incoming non-nil
+`poseAnchorID` sets `peerUsesAnchorFrame`, and the status then reads "Other headset needs updating".
+
+That the scene frame lines up *physically* for two nearby headsets is Apple's documented
+behaviour and **has not been confirmed on hardware here**. The shared-space marker (below) is the
+test.
+
+**Still true of the room anchor:** a `WorldAnchor`'s `originFromAnchorTransform` must never be
+transmitted between visionOS devices — only its UUID. Each device resolves the transform from its
+own `anchorUpdates`. `Tests/WireFormatTests.swift` asserts it by JSON key inspection.
 
 ### How it works
 - `AVAR2/CollaborativeSessionManager.swift`: transports, message types, `SharePlayCoordinator`.
 - `AVAR2/SharedWorldAnchorManager.swift`: creates `WorldAnchor(sharedWithNearbyParticipants:)`.
-  Shared anchors are **never persisted** — ARKit limits their lifetime to the SharePlay session,
+  **Diagnostic only** — the anchor no longer places anything. Shared anchors are **never
+  persisted** — ARKit limits their lifetime to the SharePlay session,
   so re-creating one per session is the normal path, not an error path. Do not add a disk cache.
 - `AVAR2/SessionOriginLogic.swift`: pure, tested logic for owner election and the gravity-aligned
   anchor pose. Election is "lowest participant UUID wins" over the *whole* participant list, so
   every device computes the same answer. Never derive an owner from `activeParticipants.first` —
   it is an unordered `Set`.
-- `AVAR2/SharedWorldRoot.swift`: the `worldRoot` entity every diagram is parented to, positioned
-  at this device's own resolved anchor transform. Diagram poses on the wire are therefore plain
-  `position(relativeTo: worldRoot)` values — no matrix math at either end.
+- `AVAR2/SharedWorldRoot.swift`: the `worldRoot` entity every diagram is parented to. It sits at
+  the scene origin; diagram poses on the wire are `position(relativeTo: worldRoot)` values, which
+  are therefore scene coordinates. Only the single-device offset test moves it.
+- `AVAR2/FrameDiagnostics.swift`: measures the immersive-space displacement and the ARKit → scene
+  offset (visionOS 27 `coordinateSpace(correction:)` converted into the RealityKit `Scene`). Its
+  arithmetic is pure and tested; the live sampler runs for the lifetime of the immersive space.
 - Transports: SharePlay for visionOS↔visionOS; MultipeerConnectivity for the iOS companion.
 - iOS is receive-only and cannot resolve a visionOS `WorldAnchor`, so it keeps its own legacy
   `SharedAnchorMessage` handshake (built from an `ARFrame` camera transform). visionOS ignores
   inbound anchor transforms entirely.
 - `SharedDiagram` / `UpdateDiagramTransformMessage` carry `anchorRelativePosition`,
-  `anchorRelativeOrientation` and `anchorRelativeScale` — poses in the session-origin frame, never
-  world space. **The JSON keys are still `worldPositionX`, `worldOrientationW`, `worldScale` etc.**
+  `anchorRelativeOrientation` and `anchorRelativeScale` — poses in the shared scene frame. The
+  `anchorRelative` names and the `poseAnchorID` field (now always `nil`) are left over from the
+  anchor-relative design. **The JSON keys are still `worldPositionX`, `worldOrientationW`, `worldScale` etc.**
   and must stay that way: the iOS lane and any build predating the rename speak those keys.
   `Tests/WireFormatTests.swift` pins the emitted key names.
 - Scale is frame-independent (`worldRoot` is rigid, unit-scale); it carries the `anchorRelative`
@@ -101,9 +128,11 @@ fails the tests rather than only misbehaving on hardware.
 - A local named `world*` in `ElementViewModel`/`WorldRootTests` genuinely *is* world space (see
   `preservedWorldPosition` in `updateWorldRoot`) — do not blanket-rename those.
 
-### Realignment
-When the two headsets end up on anchors that do not agree, **Realign Space** (launcher window →
-Collaboration) renegotiates the shared origin. The decision rules live in
+### Realignment (room anchor only)
+**This no longer affects where diagrams appear.** It renegotiates the diagnostic room anchor, and
+its controls (*Re-check anchor*, *Replace anchor*) live under Collaboration → Diagnostics. It is
+kept because it is tested and because the anchor is the measuring instrument for the frame
+question. The decision rules live in
 `AVAR2/RealignmentProtocol.swift` as a pure function; `CollaborativeSessionManager` performs the
 effects (minting anchors, adoption, pose resend, timeouts, status text).
 
@@ -132,7 +161,7 @@ effects (minting anchors, adoption, pose resend, timeouts, status text).
   every second once `isRealigning` clears, and the peer's `handleSessionOriginAnnouncement`
   yields to the coordinator (lowest UUID) and adopts it when it can track it. That recovery is
   **untested and unverified on hardware**; if the status says realignment failed, compare the
-  origin markers before assuming either outcome.
+  room-anchor markers before assuming either outcome.
 - Several guards are asymmetric (a phase the coordinator must act on is one the peer must refuse,
   and vice versa). `Tests/RealignmentTests.swift` covers the table, and was checked by deleting or
   loosening each condition in `RealignmentProtocol.swift` in turn and confirming a test fails.
@@ -153,14 +182,12 @@ removed from `MultipeerConnectivityService`), so the steps are explicit on both 
   headset. The strings live in `CollaborativeSessionView.swift` and are the user-facing contract —
   keep them in step with any change to the flow.
 
-### Diagram gating on the session origin
-`AlignedDiagramView` (in `AVAR2App.swift`) withholds a received diagram until its pose and this
-device's origin name the same anchor (`SharedDiagram.hasPose(relativeTo:)` vs
-`currentPoseAnchorID`), so it is not drawn at coordinates from a frame this device has not
-resolved. `hasDisplayed` latches: once shown, a diagram stays mounted when the anchors stop
-matching (during a realignment, say), but `.allowsHitTesting(canDisplay)` makes it
-non-interactive until they match again. `requiresSharedOrigin` restricts the gate to diagrams
-received over SharePlay while co-located; local and iOS-lane content is never withheld.
+### Diagram identity and display
+A received diagram is shown as soon as it exists; there is no gate. An earlier build withheld
+received diagrams until the room anchor resolved on both headsets, which turned any anchor failure
+into "nothing appears" — do not reintroduce a wait on anything ARKit provides. If content ever
+needs to be posed relative to an anchor again, `currentPoseAnchorID` is the seam, and it needs a
+way to hold a *pose* back, not the diagram.
 
 `UpdateDiagramTransformMessage` and `RemoveDiagramMessage` carry an optional `diagramID` (the
 `SharedDiagram.id` of the instance they refer to) alongside the filename. Receivers match on
@@ -169,16 +196,36 @@ senders still work. A remove also records the id in `closedDiagramIDs`, which st
 snapshot that was already in flight from reopening what the sender just closed.
 
 ### Diagnostics
-`AVAR2/CollabDiagnosticsView.swift` is the panel to use when debugging a two-device session
-(launcher window → Collaboration → Diagnostics). It shows SharePlay state, elected owner vs local
-participant, `isSpatial` (co-location), anchor sharing availability, the resolved origin, and
-per-envelope traffic counters with the last send error. Note the displayed
-`originFromAnchor` translation **must differ** between the two devices — identical values mean a
-transform leaked onto the wire. `showSessionOriginMarker` draws an axis triad at the origin on
-each device; if the two triads occupy the same physical point, alignment works, independently of
-whether diagram rendering works. Loopback buttons inject a local example through the real receive
-path, so "does a remote diagram render?" is answerable on one device — they are gated on
-`includesTestAffordances`, **not** `#if DEBUG`, so they survive into the TestFlight build.
+`AVAR2/CollabDiagnosticsView.swift` is the panel to use when debugging a session (launcher window
+→ Collaboration → Diagnostics). In reading order:
+
+- **Shared space.** *Show shared-space marker* draws a white-hubbed triad at a fixed scene pose
+  (1 m above the origin). **Two headsets seeing it at the same physical point is the test of
+  diagram alignment** — it needs no ARKit and no diagram. Below it: *Immersive space
+  displacement* (how far the system moved this headset's immersive space; "none" outside a
+  spatial session) and *ARKit → scene offset* (raw ARKit position versus the same position
+  converted into the scene by the system).
+  - Calibrate first: **not sharing, the offset must read "none"**. It does in the simulator, with
+    the device pose at [0, 1.6, 0], so the conversion resolves and agrees with the raw transform
+    in a real scene. Rotation was not exercised there.
+  - A non-zero offset while sharing means ARKit-derived content — the plane overlay, surface
+    snapping, the room anchor — is displaced from the shared space by that amount and must be
+    converted before use. Diagram sharing is unaffected either way.
+- **Shared room anchor (diagnostic only).** Anchor state, raw `originFromAnchor`, and *Anchor in
+  scene space*. Compare both between headsets: matching scene-space values mean the shared space
+  is physically common; matching raw values would mean ARKit already reports in the shared frame.
+  (The old advice that identical raw values prove a transform leaked onto the wire is withdrawn —
+  under one live hypothesis identical values are correct.) The yellow-hubbed marker shows the
+  anchor's raw pose.
+- **SharePlay**, **shared diagrams**, and per-envelope **traffic** with the last send error. A
+  `.diagram` larger than SharePlay's 256 KB message limit fails here: `Ejemplo03-1000` encodes to
+  about 660 KB.
+- **Single-device frame test** (*Force offset worldRoot*) and **loopback** injection, both gated on
+  `includesTestAffordances`, **not** `#if DEBUG`, so they survive into the TestFlight build. The
+  offset is unavailable and forced off while anything is shared: it would put that headset in a
+  private frame.
+
+*Copy diagnostics* includes the full vectors for all of the above, for diffing two headsets.
 
 ## Surface detection and snapping
 - `AVAR2/ARKitSurfaceDetector.swift` uses `PlaneDetectionProvider` on visionOS.
@@ -214,6 +261,7 @@ path, so "does a remote diagram render?" is answerable on one device — they ar
 - `AVAR2/Constants.swift`: placement and interaction constants
 - `AVAR2/SessionOriginLogic.swift`: pure election + anchor-pose logic (tested)
 - `AVAR2/RealignmentProtocol.swift`: pure realignment decision logic (tested)
+- `AVAR2/FrameDiagnostics.swift`: displacement and ARKit → scene offset measurement
 - `AVAR2/SharedWorldRoot.swift`: shared session-origin frame for the scene graph
 - `AVAR2/CollabDiagnosticsView.swift`: two-device diagnostics panel
 - `Packages/RealityKitContent/`: RealityKit assets and materials
@@ -273,6 +321,12 @@ against the app sources:
   xrsimulator (it links `CollaborativeSessionManager.swift` for the message types).
   **Any suite that compiles `CollaborativeSessionManager.swift` must now also be given
   `AVAR2/RealignmentProtocol.swift`** — that includes `WireFormatTests` and `DataLoaderTests`.
+- `Tests/FrameOffsetTests.swift` — the arithmetic behind the ARKit → scene offset: a known offset
+  is recovered whichever anchor is used as the probe, and a conversion that silently did nothing
+  is reported as unavailable rather than as a large offset. Pure; runs natively on macOS with
+  `AVAR2/FrameDiagnostics.swift`. The system conversion itself cannot run outside an immersive
+  space; check it by launching the app in the simulator with `AVAR_VERBOSE_LOGS=1` and reading the
+  `🧭` lines (the app opens its immersive space at launch, so no tap is needed).
 - `Tests/SurfaceClassificationTests.swift` — the snap-critical classification mapping.
 - `Tests/ResourceIntegrityTests.swift` — decodes all 37 bundled diagrams and builds a real mesh
   and material for **every** element (~8000), asserting finite geometry. Also reports the slowest
@@ -334,29 +388,32 @@ Asserts are the mechanism, so build with `-Onone` (release strips them).
   rather than a bare `.position =`, which would be interpreted in `worldRoot`'s frame.
 - `worldRoot` must stay rigid with unit scale; a few call sites pass parent-relative scale into
   `relativeTo: nil` transforms. `SharedWorldRoot.apply` asserts this in DEBUG.
-- **Pose ownership decides what happens when `worldRoot` moves** — the origin first appearing,
-  being replaced by a different anchor, or being lost — and the two cases are opposites
-  (`ElementViewModel.updateWorldRoot`):
+- **Pose ownership decides what happens when `worldRoot` moves** (`ElementViewModel.updateWorldRoot`).
+  Today only the single-device offset test moves it — no session event does — but the rule is what
+  makes that test meaningful, and any future non-scene frame must obey it. The two cases are
+  opposites:
   - *Peer-originated* (`DiagramDataLoader.isReceived(filename)`): the wire pose is authoritative,
-    so the container keeps its parent-relative pose and moves with `worldRoot`. That movement is
-    what lands it on the same physical spot as the owner's copy.
+    so the container keeps its parent-relative pose and moves with `worldRoot`.
   - *Locally authored*: the user chose a physical place, so the world pose is preserved across the
-    frame change and the recomputed anchor-relative pose is re-broadcast. Without this, local
-    content jumped by the whole anchor transform the moment an origin was established.
+    frame change and the recomputed pose is re-broadcast.
   Ownership cannot be inferred from "did we receive a transform for it" — `shareDiagram` appends
-  our own diagrams to `sharedDiagrams`, so the update handler fires for local ones too.
-
-  The exception is `sameSharedAnchor`: when the update carries the *same* anchor UUID as before
-  and only its transform differs, locally authored content takes the peer branch too — it moves
-  with the frame and nothing is re-broadcast. Before this, every transform update re-pinned local
-  content in world space and sent a correction. That is the behaviour as traced in the code; the
-  apparent intent (content should follow an anchor ARKit has re-estimated) has **not** been
-  verified on two headsets.
+  our own diagrams to `sharedDiagrams`, so the update handler fires for local ones too. The
+  `sameSharedAnchor` branch (same anchor UUID, new transform: everything moves with the frame) is
+  unreachable while `currentPoseAnchorID` is `nil`.
+- **ARKit transforms are not known to be scene transforms while sharing.** `ARKitSurfaceDetector`
+  and the snapping code in `ElementViewModel` assign `originFromAnchorTransform` straight to
+  entities. That is correct when the ARKit → scene offset is zero (verified not sharing, in the
+  simulator) and unverified in a spatial session. If the diagnostics panel shows a non-zero offset
+  there, convert through `FrameOffset.sceneFromARKit` or the system conversion before using any
+  ARKit pose. Do not "fix" this blind.
+- **The immersive space opens at launch**, before any SharePlay session, so the scene shifts when
+  a shared space is established and locally placed diagrams shift with it. They stay consistent
+  between participants; they are just not where the user left them. Apple's advice is to open the
+  immersive space after the session starts.
 - Pose corrections go through `onAuthoritativeTransform`. The throttled `onTransformChanged`
   drag-stream channel is **gone**: peers now learn a new pose only when a gesture ends or a
   correction fires, so every remaining send must actually arrive. Do not reintroduce throttling on
-  this callback — the origin-resolved correction is one-shot and has no follow-up to cover for a
-  dropped frame.
+  this callback — a correction is one-shot and has no follow-up to cover for a dropped frame.
 - Decoder logging in `ElementDTO.swift` is gated behind `AVAR_VERBOSE_LOGS` because it runs once
   per element (a 1000-node diagram otherwise emits ~5000 synchronous stdout writes per load).
   Keep new per-element logging behind that flag.
